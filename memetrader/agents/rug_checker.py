@@ -10,8 +10,13 @@ it is refusing to hold things that go to zero by design.
 """
 from __future__ import annotations
 
-from ..config import StrategyParams
+import json
+import os
+
+from ..config import DATA_DIR, StrategyParams
 from ..models import SafetyReport, TokenSnapshot
+
+REPUTATION_PATH = os.path.join(DATA_DIR, "deployer_reputation.json")
 
 
 class RugChecker:
@@ -20,6 +25,43 @@ class RugChecker:
     def __init__(self, params: StrategyParams):
         self.params = params
         self._cache: dict[str, SafetyReport] = {}
+        # deployer address -> {"rugs": n, "runners": n} — learned from every
+        # closed trade and persisted, so "trusted source" status is earned
+        self.reputation: dict[str, dict] = {}
+        if os.path.exists(REPUTATION_PATH):
+            try:
+                with open(REPUTATION_PATH) as f:
+                    self.reputation = json.load(f)
+            except json.JSONDecodeError:
+                pass
+
+    # ---------------------- deployer reputation -----------------------
+    def record_outcome(self, deployer: str, rugged: bool, ran: bool) -> None:
+        if not deployer:
+            return
+        rep = self.reputation.setdefault(deployer, {"rugs": 0, "runners": 0})
+        if rugged:
+            rep["rugs"] += 1
+        if ran:
+            rep["runners"] += 1
+        try:
+            os.makedirs(DATA_DIR, exist_ok=True)
+            with open(REPUTATION_PATH, "w") as f:
+                json.dump(self.reputation, f, indent=2)
+        except OSError:
+            pass
+
+    def _deployer_adjustment(self, t: TokenSnapshot) -> tuple[int, str | None]:
+        rep = self.reputation.get(t.deployer)
+        if not rep:
+            return 0, None
+        if rep["rugs"] >= 2 and rep["runners"] == 0:
+            return -45, f"deployer rugged {rep['rugs']} previous launch(es)"
+        if rep["rugs"] >= 1 and rep["rugs"] > rep["runners"]:
+            return -20, "deployer has a rug on record"
+        if rep["runners"] >= 2 and rep["rugs"] == 0:
+            return +12, f"trusted deployer ({rep['runners']} previous runners)"
+        return 0, None
 
     def check(self, t: TokenSnapshot) -> SafetyReport:
         score = 100
@@ -61,6 +103,12 @@ class RugChecker:
         if t.holders < 20 and t.age_minutes > 30:
             score -= 10
             flags.append("holder count not growing")
+
+        # --- creator background check: earned trust, earned distrust ---
+        adj, flag = self._deployer_adjustment(t)
+        score += adj
+        if flag:
+            flags.append(flag)
 
         score = max(0, min(100, score))
         report = SafetyReport(

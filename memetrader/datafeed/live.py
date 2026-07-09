@@ -138,6 +138,7 @@ def pumpfun_new_coins(limit: int = 50) -> list[TokenSnapshot]:
                 bonding_progress=min(1.0, mcap / 69_000.0),
                 graduated=bool(c.get("complete")),
                 smart_wallet_buys_30m=0,
+                deployer=c.get("creator", "") or "",
             ))
         except (KeyError, TypeError, ValueError):
             continue

@@ -60,6 +60,7 @@ class SimToken:
     name: str
     narrative: str
     archetype: str
+    deployer: str
     created_tick: int
     price: float
     supply: float
@@ -103,6 +104,7 @@ class SimToken:
             bonding_progress=self.bonding_progress,
             graduated=self.graduated,
             smart_wallet_buys_30m=self.smart_buys_30m,
+            deployer=self.deployer,
             price_high=self.price_high,
             ts=now_ts,
         )
@@ -119,6 +121,10 @@ class SimMarket:
         self.hot_narrative = self.rng.choice(NARRATIVES)
         self._narrative_ttl = self.rng.randint(180, 720)
         self.smart_wallets = [f"SMART{i:02d}" for i in range(12)]
+        # deployer pools: serial ruggers grind out scam after scam, a small
+        # set of credible builders launch most of the real runners
+        self.rug_devs = [f"RUGDEV{i:03d}" for i in range(40)]
+        self.builder_devs = [f"GOODDEV{i:02d}" for i in range(15)]
 
     # ------------------------------------------------------------------
     @property
@@ -141,11 +147,19 @@ class SimMarket:
         top10 = rng.uniform(0.10, 0.30) if good else rng.uniform(0.25, 0.85)
         deployer = rng.uniform(0.0, 0.04) if good else rng.uniform(0.02, 0.30)
 
+        if good:
+            deployer_addr = rng.choice(self.builder_devs) if rng.random() < 0.5 \
+                else "DEV" + _rand_address(rng)[-8:]
+        else:
+            deployer_addr = rng.choice(self.rug_devs) if rng.random() < 0.65 \
+                else "DEV" + _rand_address(rng)[-8:]
+
         supply = 1_000_000_000.0
         price = rng.uniform(6e-6, 3.5e-5)        # ~$6-35k FDV at launch
         tok = SimToken(
             address=_rand_address(rng), symbol=symbol, name=name,
-            narrative=narrative, archetype=archetype, created_tick=self.tick,
+            narrative=narrative, archetype=archetype, deployer=deployer_addr,
+            created_tick=self.tick,
             price=price, supply=supply,
             liquidity=rng.uniform(4_000, 15_000),
             holders=rng.randint(5, 40),

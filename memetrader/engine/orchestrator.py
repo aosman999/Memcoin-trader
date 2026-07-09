@@ -127,6 +127,13 @@ class Orchestrator:
                 if snap.smart_wallet_buys_30m > 0 or rec.multiple > 1:
                     self.whales.record_wallet_trade(
                         f"cohort:{rec.strategy}", rec.multiple, rec.pnl_usd)
+                # feed outcome back to deployer reputation: creators earn
+                # trusted/blacklisted status from what their coins DO
+                self.rug_checker.record_outcome(
+                    snap.deployer,
+                    rugged=(rec.exit_reason == "rug_exit" or rec.multiple < 0.35),
+                    ran=(rec.multiple >= 2.0),
+                )
                 if self.verbose:
                     print(f"  CLOSE [{rec.exit_reason:>17}] {rec.symbol:<8} "
                           f"{rec.multiple:>5.2f}x  pnl ${rec.pnl_usd:>+8.2f}  "
