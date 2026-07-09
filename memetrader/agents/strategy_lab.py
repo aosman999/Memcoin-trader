@@ -40,8 +40,8 @@ RISK_SPACE = [
     ("max_concurrent_positions", 3, 15, True),
     ("max_per_strategy", 2, 8, True),
     ("spike_sell_threshold", 0.10, 0.50, False),
-    ("spike_sell_fraction", 0.30, 1.00, False),
     ("spike_min_multiple", 1.02, 1.50, False),
+    # spike_sell_fraction is deliberately NOT evolvable: exits are 100% out
 ]
 
 

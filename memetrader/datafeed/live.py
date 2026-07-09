@@ -110,39 +110,47 @@ def enrich_with_rugcheck(snap: TokenSnapshot) -> TokenSnapshot:
 PUMP_API = "https://frontend-api.pump.fun"
 
 
+def _pump_coin_to_snapshot(c: dict) -> TokenSnapshot | None:
+    try:
+        mcap = float(c.get("usd_market_cap") or 0)
+        return TokenSnapshot(
+            address=c["mint"],
+            symbol=c.get("symbol", "?"),
+            name=c.get("name", "?"),
+            source=TokenSource.PUMPFUN,
+            created_at=(c.get("created_timestamp") or 0) / 1000.0,
+            price=mcap / 1_000_000_000.0,
+            market_cap=mcap,
+            liquidity=float(c.get("virtual_sol_reserves") or 0) / 1e9 * 150.0,
+            volume_5m=0.0, volume_1h=0.0,
+            holders=0,
+            top10_holder_pct=0.0,
+            deployer_holds_pct=0.0,
+            mint_revoked=True,           # pump.fun revokes by design
+            freeze_revoked=True,
+            lp_locked_or_burned=True,    # bonding curve = no pullable LP
+            has_socials=bool(c.get("twitter") or c.get("telegram") or c.get("website")),
+            bonding_progress=min(1.0, mcap / 69_000.0),
+            graduated=bool(c.get("complete")),
+            smart_wallet_buys_30m=0,
+            deployer=c.get("creator", "") or "",
+        )
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def pumpfun_new_coins(limit: int = 50) -> list[TokenSnapshot]:
     data = _get(f"{PUMP_API}/coins?offset=0&limit={limit}&sort=created_timestamp&order=DESC")
-    out: list[TokenSnapshot] = []
     if not isinstance(data, list):
-        return out
-    for c in data:
-        try:
-            mcap = float(c.get("usd_market_cap") or 0)
-            out.append(TokenSnapshot(
-                address=c["mint"],
-                symbol=c.get("symbol", "?"),
-                name=c.get("name", "?"),
-                source=TokenSource.PUMPFUN,
-                created_at=(c.get("created_timestamp") or 0) / 1000.0,
-                price=mcap / 1_000_000_000.0,
-                market_cap=mcap,
-                liquidity=float(c.get("virtual_sol_reserves") or 0) / 1e9 * 150.0,
-                volume_5m=0.0, volume_1h=0.0,
-                holders=0,
-                top10_holder_pct=0.0,
-                deployer_holds_pct=0.0,
-                mint_revoked=True,           # pump.fun revokes by design
-                freeze_revoked=True,
-                lp_locked_or_burned=True,    # bonding curve = no pullable LP
-                has_socials=bool(c.get("twitter") or c.get("telegram") or c.get("website")),
-                bonding_progress=min(1.0, mcap / 69_000.0),
-                graduated=bool(c.get("complete")),
-                smart_wallet_buys_30m=0,
-                deployer=c.get("creator", "") or "",
-            ))
-        except (KeyError, TypeError, ValueError):
-            continue
-    return out
+        return []
+    return [s for s in (_pump_coin_to_snapshot(c) for c in data) if s]
+
+
+def pumpfun_coin(mint: str) -> TokenSnapshot | None:
+    """Single-coin refresh — the only price source for tokens still on the
+    bonding curve (no DEX pair exists until graduation)."""
+    data = _get(f"{PUMP_API}/coins/{mint}")
+    return _pump_coin_to_snapshot(data) if isinstance(data, dict) else None
 
 
 class LiveFeed:
@@ -170,10 +178,10 @@ class LiveFeed:
         return out
 
     def snapshot(self, address: str) -> TokenSnapshot | None:
+        prev = self._known.get(address)
         for p in dexscreener_token_pairs(self.chain, address):
             snap = pair_to_snapshot(p)
             if snap:
-                prev = self._known.get(address)
                 if prev:
                     snap.price_high = max(prev.price_high, snap.price)
                     # keep safety fields we already paid a request for
@@ -181,9 +189,17 @@ class LiveFeed:
                     snap.freeze_revoked = prev.freeze_revoked
                     snap.lp_locked_or_burned = prev.lp_locked_or_burned
                     snap.top10_holder_pct = prev.top10_holder_pct
+                    snap.deployer = snap.deployer or prev.deployer
                 self._known[address] = snap
                 return snap
-        prev = self._known.get(address)
+        # no DEX pair yet — token is still on the bonding curve, so
+        # pump.fun itself is the only live price source
+        if prev is not None and not prev.graduated:
+            fresh = pumpfun_coin(address)
+            if fresh is not None:
+                fresh.price_high = max(prev.price_high, fresh.price)
+                self._known[address] = fresh
+                return fresh
         return prev
 
     def current_narrative(self) -> str:

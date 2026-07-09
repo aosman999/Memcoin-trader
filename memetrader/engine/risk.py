@@ -77,7 +77,9 @@ class RiskEngine:
                 and t.price >= pos.last_price * (1.0 + r.spike_sell_threshold)
                 and mult >= r.spike_min_multiple):
             sell_tokens = pos.tokens * r.spike_sell_fraction
-            pf.cash += self.broker.sell(t, sell_tokens)
+            proceeds = self.broker.sell(t, sell_tokens)
+            pf.cash += proceeds
+            pos.realized_usd += proceeds
             pos.tokens -= sell_tokens
             pos.remaining_fraction *= (1.0 - r.spike_sell_fraction)
             if pos.tokens <= 0 or pos.remaining_fraction <= 0.02:
@@ -92,6 +94,7 @@ class RiskEngine:
             sell_tokens = min(sell_tokens, pos.tokens)
             proceeds = self.broker.sell(t, sell_tokens)
             pf.cash += proceeds
+            pos.realized_usd += proceeds
             pos.tokens -= sell_tokens
             pos.remaining_fraction = max(0.0, pos.remaining_fraction - frac)
             pos.tp_levels_hit += 1
@@ -116,36 +119,24 @@ class RiskEngine:
                    now: float, reason: str) -> TradeRecord:
         proceeds = self.broker.sell(t, pos.tokens)
         pf.cash += proceeds
+        pos.realized_usd += proceeds
         pos.tokens = 0.0
         return self._finalize(pos, t, pf, now, reason)
 
     def _finalize(self, pos: Position, t: TokenSnapshot, pf: Portfolio,
                   now: float, reason: str) -> TradeRecord:
         pf.positions.pop(pos.address, None)
-        # reconstruct realized pnl from cash flows: approximate via multiple
-        # of what was sold across the lifetime of the position
-        realized = self._realized_estimate(pos, t)
+        # exact accounting: every sell credited pos.realized_usd, so per-trade
+        # pnl is measured cash out minus cash in — no estimation
+        pnl = pos.realized_usd - pos.size_usd
         rec = TradeRecord(
             address=pos.address, symbol=pos.symbol, strategy=pos.strategy,
             entry_price=pos.entry_price, exit_price=t.price,
             entry_mcap=pos.entry_mcap, size_usd=pos.size_usd,
-            pnl_usd=realized, multiple=t.price / pos.entry_price if pos.entry_price else 0.0,
+            pnl_usd=pnl,
+            multiple=pos.realized_usd / pos.size_usd if pos.size_usd else 0.0,
             hold_minutes=(now - pos.opened_at) / 60.0, exit_reason=reason,
             opened_at=pos.opened_at, closed_at=now,
         )
         pf.trades.append(rec)
         return rec
-
-    def _realized_estimate(self, pos: Position, t: TokenSnapshot) -> float:
-        """Estimate lifetime pnl of the position from its ladder history.
-
-        Cash accounting is exact in the Portfolio (cash was credited on
-        every partial sell); this per-trade figure is for reporting."""
-        r = self.risk
-        r_mult = t.price / pos.entry_price if pos.entry_price else 0.0
-        realized, sold = 0.0, 0.0
-        for i in range(pos.tp_levels_hit):
-            realized += pos.size_usd * r.tp_fractions[i] * r.tp_multiples[i]
-            sold += r.tp_fractions[i]
-        realized += pos.size_usd * max(0.0, 1.0 - sold) * r_mult
-        return realized - pos.size_usd

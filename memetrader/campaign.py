@@ -68,6 +68,7 @@ def run_campaign_day(bankroll: float = 20.0, hours: float = 24.0,
             orch.risk._close_all(pos, snap, pf, market.now_ts, "campaign_day_end")
         else:
             pf.positions.pop(pos.address, None)
+    orch.rug_checker.flush_reputation()   # persist what today taught us
 
     end_equity = pf.cash
     stats = pf.stats()

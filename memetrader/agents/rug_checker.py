@@ -44,6 +44,12 @@ class RugChecker:
             rep["rugs"] += 1
         if ran:
             rep["runners"] += 1
+        self._dirty = getattr(self, "_dirty", 0) + 1
+        if self._dirty >= 20:           # batch writes: 1 file write per ~20 trades
+            self.flush_reputation()
+
+    def flush_reputation(self) -> None:
+        self._dirty = 0
         try:
             os.makedirs(DATA_DIR, exist_ok=True)
             with open(REPUTATION_PATH, "w") as f:
@@ -115,6 +121,9 @@ class RugChecker:
             address=t.address, score=score, flags=flags,
             passed=score >= self.params.min_safety_score,
         )
+        if len(self._cache) > 20_000:   # bound memory on long live runs
+            for k in list(self._cache)[:10_000]:
+                del self._cache[k]
         self._cache[t.address] = report
         return report
 

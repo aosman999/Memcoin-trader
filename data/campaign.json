@@ -1,6 +1,6 @@
 {
-  "day": 3,
-  "equity": 25544.19651891295,
+  "day": 4,
+  "equity": 48529.381556277534,
   "starting_bankroll": 20.0,
   "history": [
     {
@@ -38,6 +38,18 @@
       "win_rate": 87,
       "best_trade": "PEKIMO 455.4x (+$4,634)",
       "avg_hold_minutes": 78.7
+    },
+    {
+      "date": "2026-07-09",
+      "day": 4,
+      "start_equity": 25544.2,
+      "end_equity": 48529.38,
+      "pnl": 22985.19,
+      "pnl_pct": 90.0,
+      "trades": 369,
+      "win_rate": 89,
+      "best_trade": "ZAPE 1.6x (+$120)",
+      "avg_hold_minutes": 30.0
     }
   ]
 }
