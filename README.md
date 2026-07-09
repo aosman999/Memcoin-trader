@@ -68,7 +68,21 @@ python3 -m memetrader paper --minutes 120
 
 # 5. Inspect the saved live-paper portfolio anytime
 python3 -m memetrader report
+
+# 6. Quick-flip mode (buy, take profit immediately, move on) + tiny bankroll
+python3 -m memetrader backtest --scalp --bankroll 20 --hours 24
+
+# 7. The persistent $20 campaign: one simulated trading day per run,
+#    equity carries over, dated ledger written to data/pnl_log.md
+python3 -m memetrader campaign
 ```
+
+### Quick-flip (scalp) profile
+
+`--scalp` switches the exit ladder to fast profit-taking: **sell 60% at
++30%, 25% at +60%, 10% at +120%**, 25% stop, 18% trailing stop, nothing
+held past ~2 hours. `python3 -m memetrader evolve --scalp` evolves this
+profile separately (champion: `data/best_params_scalp.json`).
 
 Example simulator results (72h, $1,000 start — **simulator numbers do not
 promise live results**):

@@ -88,6 +88,7 @@ class Position:
     high_water_price: float
     tp_levels_hit: int = 0       # how many take-profit rungs already executed
     remaining_fraction: float = 1.0
+    last_price: float = 0.0      # previous tick's price (spike detection)
 
     def unrealized_multiple(self, price: float) -> float:
         if self.entry_price <= 0:

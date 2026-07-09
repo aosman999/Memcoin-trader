@@ -39,9 +39,9 @@ class RiskEngine:
         if same_strat >= r.max_per_strategy:
             return None
         equity = pf.equity({})
-        usd = min(equity * r.risk_per_trade * (0.5 + sig.confidence),
-                  r.max_position_usd, pf.cash * 0.5)
-        if usd < 10.0 or usd > pf.cash:
+        usd = equity * r.risk_per_trade * (0.5 + sig.confidence)
+        usd = min(max(usd, r.min_position_usd), r.max_position_usd, pf.cash * 0.5)
+        if usd < r.min_position_usd or usd > pf.cash:
             return None
         tokens, spent = self.broker.buy(t, usd)
         if tokens <= 0:
@@ -71,7 +71,20 @@ class RiskEngine:
         if mult <= (1.0 - r.stop_loss):
             return self._close_all(pos, t, pf, now, "stop_loss")
 
-        # 3. take-profit ladder
+        # 3. spike exit — memecoin verticals retrace; sell INTO the spike,
+        #    the second it happens, while someone is still paying up
+        if (pos.last_price > 0
+                and t.price >= pos.last_price * (1.0 + r.spike_sell_threshold)
+                and mult >= r.spike_min_multiple):
+            sell_tokens = pos.tokens * r.spike_sell_fraction
+            pf.cash += self.broker.sell(t, sell_tokens)
+            pos.tokens -= sell_tokens
+            pos.remaining_fraction *= (1.0 - r.spike_sell_fraction)
+            if pos.tokens <= 0 or pos.remaining_fraction <= 0.02:
+                pos.last_price = t.price
+                return self._close_all(pos, t, pf, now, "spike_exit")
+
+        # 4. take-profit ladder
         while (pos.tp_levels_hit < len(r.tp_multiples)
                and mult >= r.tp_multiples[pos.tp_levels_hit]):
             frac = r.tp_fractions[pos.tp_levels_hit]
@@ -85,15 +98,17 @@ class RiskEngine:
             if pos.tokens <= 0 or pos.remaining_fraction <= 0.001:
                 return self._finalize(pos, t, pf, now, "tp_ladder_complete")
 
-        # 4. trailing stop on the moonbag (armed after first TP)
-        if pos.tp_levels_hit > 0 and pos.high_water_price > 0:
+        # 5. trailing stop on the moonbag (armed after first TP or spike sell)
+        if ((pos.tp_levels_hit > 0 or pos.remaining_fraction < 0.999)
+                and pos.high_water_price > 0):
             if t.price <= pos.high_water_price * (1.0 - r.trailing_stop):
                 return self._close_all(pos, t, pf, now, "trailing_stop")
 
-        # 5. time stop for dead money
+        # 6. time stop for dead money
         if hold_min >= r.max_hold_minutes and mult < r.stale_exit_multiple:
             return self._close_all(pos, t, pf, now, "time_stop")
 
+        pos.last_price = t.price
         return None
 
     # ------------------------------------------------------------------

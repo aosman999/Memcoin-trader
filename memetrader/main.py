@@ -23,7 +23,7 @@ import argparse
 import time
 
 from .agents.strategy_lab import StrategyLab
-from .config import StrategyParams
+from .config import BEST_PARAMS_PATH, SCALP_PARAMS_PATH, StrategyParams, load_scalp
 from .engine.orchestrator import Orchestrator
 from .engine.portfolio import Portfolio
 
@@ -54,7 +54,9 @@ def _print_report(pf: Portfolio) -> None:
 
 def cmd_backtest(args: argparse.Namespace) -> None:
     from .datafeed.simulator import SimMarket
-    params = StrategyParams.load()
+    params = load_scalp() if args.scalp else StrategyParams.load()
+    if args.bankroll:
+        params.risk.starting_bankroll_usd = args.bankroll
     market = SimMarket(seed=args.seed)
     orch = Orchestrator(params, market, verbose=args.verbose)
     ticks = int(args.hours * 60)
@@ -74,15 +76,31 @@ def cmd_backtest(args: argparse.Namespace) -> None:
 
 
 def cmd_evolve(args: argparse.Namespace) -> None:
-    print("Strategy Lab: evolving parameters on the market simulator...")
-    lab = StrategyLab(base=StrategyParams.load(), seed=args.seed)
+    mode = "scalp (quick-flip)" if args.scalp else "swing"
+    print(f"Strategy Lab: evolving {mode} parameters on the market simulator...")
+    base = load_scalp() if args.scalp else StrategyParams.load()
+    lab = StrategyLab(base=base, seed=args.seed)
     lab.evolve(generations=args.generations, population=args.population,
-               ticks=int(args.hours * 60))
+               ticks=int(args.hours * 60),
+               save_path=SCALP_PARAMS_PATH if args.scalp else BEST_PARAMS_PATH)
+
+
+def cmd_campaign(args: argparse.Namespace) -> None:
+    from .campaign import run_campaign_day, summary
+    row = run_campaign_day(bankroll=args.bankroll, hours=args.hours,
+                           verbose=args.verbose)
+    print(f"day {row['day']} ({row['date']}): "
+          f"${row['start_equity']:,.2f} -> ${row['end_equity']:,.2f} "
+          f"({row['pnl_pct']:+.1f}%) | {row['trades']} trades, "
+          f"win {row['win_rate']}%, avg hold {row['avg_hold_minutes']}m")
+    print(summary())
 
 
 def cmd_paper(args: argparse.Namespace) -> None:
     from .datafeed.live import LiveFeed
-    params = StrategyParams.load()
+    params = load_scalp() if args.scalp else StrategyParams.load()
+    if args.bankroll:
+        params.risk.starting_bankroll_usd = args.bankroll
     pf = Portfolio.load() or Portfolio(params.risk.starting_bankroll_usd)
     orch = Orchestrator(params, LiveFeed(), portfolio=pf, verbose=True)
     end = time.time() + args.minutes * 60
@@ -115,6 +133,8 @@ def main() -> None:
     b = sub.add_parser("backtest", help="paper trade on the offline simulator")
     b.add_argument("--hours", type=float, default=48.0)
     b.add_argument("--seed", type=int, default=7)
+    b.add_argument("--scalp", action="store_true", help="quick-flip profile")
+    b.add_argument("--bankroll", type=float, default=0.0)
     b.add_argument("--verbose", action="store_true")
     b.set_defaults(fn=cmd_backtest)
 
@@ -123,11 +143,22 @@ def main() -> None:
     e.add_argument("--population", type=int, default=10)
     e.add_argument("--hours", type=float, default=24.0)
     e.add_argument("--seed", type=int, default=42)
+    e.add_argument("--scalp", action="store_true",
+                   help="evolve the quick-flip profile (saved separately)")
     e.set_defaults(fn=cmd_evolve)
+
+    c = sub.add_parser("campaign", help="run one day of the persistent $20 "
+                                        "quick-flip paper campaign")
+    c.add_argument("--hours", type=float, default=24.0)
+    c.add_argument("--bankroll", type=float, default=20.0)
+    c.add_argument("--verbose", action="store_true")
+    c.set_defaults(fn=cmd_campaign)
 
     p = sub.add_parser("paper", help="live paper trading on real market data")
     p.add_argument("--minutes", type=float, default=60.0)
     p.add_argument("--interval", type=float, default=30.0)
+    p.add_argument("--scalp", action="store_true", help="quick-flip profile")
+    p.add_argument("--bankroll", type=float, default=0.0)
     p.set_defaults(fn=cmd_paper)
 
     r = sub.add_parser("report", help="show saved paper portfolio performance")

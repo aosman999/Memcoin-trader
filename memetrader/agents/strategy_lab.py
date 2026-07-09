@@ -39,6 +39,9 @@ RISK_SPACE = [
     ("max_hold_minutes", 180, 1440, False),
     ("max_concurrent_positions", 3, 15, True),
     ("max_per_strategy", 2, 8, True),
+    ("spike_sell_threshold", 0.10, 0.50, False),
+    ("spike_sell_fraction", 0.30, 1.00, False),
+    ("spike_min_multiple", 1.02, 1.50, False),
 ]
 
 
@@ -99,7 +102,7 @@ class StrategyLab:
     # ------------------------------------------------------------------
     def evolve(self, generations: int = 6, population: int = 10,
                ticks: int = 1440, eval_seeds: tuple = (101, 202, 303),
-               verbose: bool = True) -> StrategyParams:
+               verbose: bool = True, save_path: str = BEST_PARAMS_PATH) -> StrategyParams:
         pop = [self.base] + [self._mutate(self.base, 0.6) for _ in range(population - 1)]
         best, best_fit = self.base, float("-inf")
 
@@ -130,7 +133,7 @@ class StrategyLab:
                         for _ in range(population - len(elite))]
             pop = elite + [self._mutate(c) for c in children]
 
-        best.save(BEST_PARAMS_PATH)
+        best.save(save_path)
         if verbose:
-            print(f"\nchampion saved -> {BEST_PARAMS_PATH}")
+            print(f"\nchampion saved -> {save_path}")
         return best

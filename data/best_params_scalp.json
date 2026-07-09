@@ -1,0 +1,42 @@
+{
+  "min_mcap": 15000.0,
+  "max_mcap": 100000,
+  "min_liquidity": 8000.0,
+  "max_age_minutes": 2880.0,
+  "min_safety_score": 60,
+  "grad_min_bonding": 0.7673950273060718,
+  "grad_min_holders": 65,
+  "grad_max_top10_pct": 0.388849582386231,
+  "mom_vol_spike": 2.0400169179118497,
+  "mom_min_holders": 54,
+  "mom_min_volume_5m": 6000.0,
+  "copy_min_smart_buys": 2,
+  "copy_max_mcap": 800000.0,
+  "dip_min_age_minutes": 2880.0,
+  "dip_min_mcap": 300000.0,
+  "dip_drawdown_low": 0.3413959255775006,
+  "dip_drawdown_high": 0.6575736154070745,
+  "news_boost": 0.2009869718005134,
+  "risk": {
+    "starting_bankroll_usd": 1000.0,
+    "risk_per_trade": 0.04671496576627979,
+    "max_concurrent_positions": 11,
+    "max_per_strategy": 5,
+    "max_position_usd": 200.0,
+    "min_position_usd": 2.0,
+    "stop_loss": 0.27157039509134967,
+    "trailing_stop": 0.2011987430292082,
+    "tp_multiples": [
+      1.3,
+      1.6,
+      2.2
+    ],
+    "tp_fractions": [
+      0.6,
+      0.25,
+      0.1
+    ],
+    "max_hold_minutes": 458.0866771011348,
+    "stale_exit_multiple": 1.08
+  }
+}

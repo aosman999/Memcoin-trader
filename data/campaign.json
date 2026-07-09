@@ -1,0 +1,19 @@
+{
+  "day": 1,
+  "equity": 244.94986150827734,
+  "starting_bankroll": 20.0,
+  "history": [
+    {
+      "date": "2026-07-09",
+      "day": 1,
+      "start_equity": 20.0,
+      "end_equity": 244.95,
+      "pnl": 224.95,
+      "pnl_pct": 1124.7,
+      "trades": 178,
+      "win_rate": 87,
+      "best_trade": "ROPE 92.4x (+$14)",
+      "avg_hold_minutes": 66.7
+    }
+  ]
+}

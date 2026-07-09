@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 BEST_PARAMS_PATH = os.path.join(DATA_DIR, "best_params.json")
+SCALP_PARAMS_PATH = os.path.join(DATA_DIR, "best_params_scalp.json")
 
 
 @dataclass
@@ -19,12 +20,17 @@ class RiskParams:
     max_concurrent_positions: int = 8
     max_per_strategy: int = 3            # no single strategy may hog the book
     max_position_usd: float = 200.0
+    min_position_usd: float = 2.0        # floor so tiny bankrolls ($20) still trade
     stop_loss: float = 0.45               # exit if price falls this fraction from entry
     trailing_stop: float = 0.35           # after first TP, trail the high by this
     tp_multiples: tuple = (2.0, 4.0, 10.0)   # take-profit ladder (price multiples)
     tp_fractions: tuple = (0.50, 0.25, 0.15) # fraction of ORIGINAL size sold at each rung
     max_hold_minutes: float = 720.0       # time-stop: memecoins that go nowhere bleed
     stale_exit_multiple: float = 1.15     # if below this at time-stop, dump it
+    # spike exit: the second price goes vertical while in profit, sell into it
+    spike_sell_threshold: float = 0.20    # 1-tick jump that counts as a spike
+    spike_sell_fraction: float = 0.75     # fraction of remaining sold into the spike
+    spike_min_multiple: float = 1.10      # only spike-sell if actually in profit
 
 
 @dataclass
@@ -94,3 +100,26 @@ class StrategyParams:
             with open(path) as f:
                 return cls.from_dict(json.load(f))
         return cls()
+
+
+def apply_scalp(p: StrategyParams) -> StrategyParams:
+    """Quick-flip profile: buy, take profit IMMEDIATELY into strength, move on.
+
+    Sells 60% at +30%, 25% at +60%, 10% at +120%; tight stop and trail;
+    nothing is held longer than ~2 hours. The remaining ~5% moonbag rides
+    the trailing stop so a freak runner still pays."""
+    p.risk.tp_multiples = (1.30, 1.60, 2.20)
+    p.risk.tp_fractions = (0.60, 0.25, 0.10)
+    p.risk.stop_loss = 0.25
+    p.risk.trailing_stop = 0.18
+    p.risk.max_hold_minutes = 120.0
+    p.risk.stale_exit_multiple = 1.08
+    return p
+
+
+def load_scalp() -> StrategyParams:
+    """Scalp params: evolved scalp champion if present, else scalp overlay
+    on the current swing champion."""
+    if os.path.exists(SCALP_PARAMS_PATH):
+        return StrategyParams.load(SCALP_PARAMS_PATH)
+    return apply_scalp(StrategyParams.load())
