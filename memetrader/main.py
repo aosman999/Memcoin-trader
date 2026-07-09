@@ -104,13 +104,24 @@ def cmd_paper(args: argparse.Namespace) -> None:
     pf = Portfolio.load() or Portfolio(params.risk.starting_bankroll_usd)
     orch = Orchestrator(params, LiveFeed(), portfolio=pf, verbose=True)
     end = time.time() + args.minutes * 60
-    print(f"LIVE paper trading for {args.minutes} min "
-          f"(tick every {args.interval}s). Ctrl-C to stop; state is saved.")
+    print(f"LIVE paper trading for {args.minutes} min — positions watched "
+          f"every {args.fast_interval}s, discovery every {args.interval}s. "
+          f"Ctrl-C to stop; state is saved.")
+    next_discovery = 0.0
     try:
         while time.time() < end:
-            orch.tick(time.time())
-            pf.save()
-            time.sleep(args.interval)
+            now = time.time()
+            # fast clock: every open position, every few seconds — memecoins
+            # go 2k -> 400k mcap (and back) in the blink of an eye
+            if orch.manage_positions(now):
+                pf.save()
+            # slow clock: hunt for new entries
+            if now >= next_discovery:
+                orch.news.update()
+                orch.discover_and_enter(now)
+                next_discovery = now + args.interval
+                pf.save()
+            time.sleep(args.fast_interval)
     except KeyboardInterrupt:
         pass
     pf.save()
@@ -156,7 +167,10 @@ def main() -> None:
 
     p = sub.add_parser("paper", help="live paper trading on real market data")
     p.add_argument("--minutes", type=float, default=60.0)
-    p.add_argument("--interval", type=float, default=30.0)
+    p.add_argument("--interval", type=float, default=45.0,
+                   help="seconds between discovery sweeps")
+    p.add_argument("--fast-interval", type=float, default=5.0, dest="fast_interval",
+                   help="seconds between open-position checks (the fast clock)")
     p.add_argument("--scalp", action="store_true", help="quick-flip profile")
     p.add_argument("--bankroll", type=float, default=0.0)
     p.set_defaults(fn=cmd_paper)

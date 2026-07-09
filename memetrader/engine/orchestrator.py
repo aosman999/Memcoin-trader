@@ -49,9 +49,15 @@ class Orchestrator:
 
     # ------------------------------------------------------------------
     def tick(self, now: float) -> list[TradeRecord]:
-        closed: list[TradeRecord] = []
+        """Full cycle: discovery + entries, then position management.
+        Live mode calls the two halves on separate clocks instead — see
+        discover_and_enter / manage_positions."""
         self.news.update()
+        self.discover_and_enter(now)
+        return self.manage_positions(now)
 
+    # ------------------------------------------------------------------
+    def discover_and_enter(self, now: float) -> None:
         # --- discovery + evaluation ---
         candidates = self.scout.discover()
         # keep a rolling watchlist of survivors for the dip buyer
@@ -99,7 +105,12 @@ class Orchestrator:
                     print(f"  OPEN  [{sig.strategy:>17}] {t.symbol:<8} "
                           f"${pos.size_usd:>7.2f} @ mcap ${t.market_cap:,.0f} — {sig.reason}")
 
-        # --- manage open positions ---
+    # ------------------------------------------------------------------
+    def manage_positions(self, now: float) -> list[TradeRecord]:
+        """The fast path: re-check every OPEN position (price, rug score,
+        spike/stop/ladder exits). Memecoins move in seconds — live mode
+        runs this on a much faster clock than discovery."""
+        closed: list[TradeRecord] = []
         marks: dict[str, TokenSnapshot] = {}
         for addr, pos in list(self.portfolio.positions.items()):
             snap = self.feed.snapshot(addr)
