@@ -1,6 +1,6 @@
 {
-  "day": 1,
-  "equity": 244.94986150827734,
+  "day": 3,
+  "equity": 25544.19651891295,
   "starting_bankroll": 20.0,
   "history": [
     {
@@ -14,6 +14,30 @@
       "win_rate": 87,
       "best_trade": "ROPE 92.4x (+$14)",
       "avg_hold_minutes": 66.7
+    },
+    {
+      "date": "2026-07-09",
+      "day": 2,
+      "start_equity": 244.95,
+      "end_equity": 6206.77,
+      "pnl": 5961.82,
+      "pnl_pct": 2433.9,
+      "trades": 174,
+      "win_rate": 90,
+      "best_trade": "GIWIF 34.4x (+$100)",
+      "avg_hold_minutes": 83.8
+    },
+    {
+      "date": "2026-07-09",
+      "day": 3,
+      "start_equity": 6206.77,
+      "end_equity": 25544.2,
+      "pnl": 19337.43,
+      "pnl_pct": 311.6,
+      "trades": 188,
+      "win_rate": 87,
+      "best_trade": "PEKIMO 455.4x (+$4,634)",
+      "avg_hold_minutes": 78.7
     }
   ]
 }
