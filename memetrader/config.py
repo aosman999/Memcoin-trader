@@ -33,10 +33,12 @@ class RiskParams:
     spike_sell_threshold: float = 0.20    # 1-tick jump that counts as a spike
     spike_sell_fraction: float = 1.00     # 100% out — no partials, no trailing trust
     spike_min_multiple: float = 1.05      # only spike-sell if actually in profit
-    # day guard: trade as often as it wants, but protect the day's result
+    # day guard: trade as often as it wants, but protect the day's result.
+    # A/B tested: arming too early banks $2 days; +50%/keep-50% maximizes
+    # profit while still ending green. Fixed policy — not evolvable.
     daily_loss_limit: float = 0.10        # stop the day if down this much from start
-    profit_lock_trigger: float = 0.10     # day counts as "green" once up this much
-    profit_lock_keep: float = 0.60        # then never give back more than this
+    profit_lock_trigger: float = 0.50     # arm once the day is up this much
+    profit_lock_keep: float = 0.50        # then never give back more than this
                                           # fraction of the day's peak profit
 
 
@@ -126,6 +128,9 @@ def apply_scalp(p: StrategyParams) -> StrategyParams:
     p.risk.trailing_stop = 0.18       # safety net between entry and exit rungs
     p.risk.max_hold_minutes = 120.0
     p.risk.stale_exit_multiple = 1.08
+    p.risk.daily_loss_limit = 0.10    # day-guard policy, fixed by A/B test
+    p.risk.profit_lock_trigger = 0.50
+    p.risk.profit_lock_keep = 0.50
     return p
 
 

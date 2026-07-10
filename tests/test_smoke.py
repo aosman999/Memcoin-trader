@@ -69,7 +69,7 @@ class TestDayGuard(unittest.TestCase):
         from memetrader.engine.day_guard import DayGuard
         from memetrader.config import RiskParams
         g = DayGuard(RiskParams(), 100.0)
-        self.assertFalse(g.check(150.0))      # nice run: peak 150, floor 130
+        self.assertFalse(g.check(160.0))      # +60% arms the lock, floor 130
         self.assertFalse(g.check(140.0))      # giveback above floor: fine
         self.assertTrue(g.check(129.0))       # floor touched -> bank the day
         self.assertEqual(g.reason, "profit_lock")

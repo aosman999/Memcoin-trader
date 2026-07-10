@@ -20,7 +20,7 @@
     "runners": 5
   },
   "RUGDEV007": {
-    "rugs": 22,
+    "rugs": 23,
     "runners": 1
   },
   "GOODDEV11": {
@@ -41,7 +41,7 @@
   },
   "GOODDEV01": {
     "rugs": 0,
-    "runners": 18
+    "runners": 24
   },
   "GOODDEV05": {
     "rugs": 0,
@@ -97,7 +97,7 @@
   },
   "GOODDEV14": {
     "rugs": 0,
-    "runners": 29
+    "runners": 31
   },
   "GOODDEV07": {
     "rugs": 0,
@@ -976,7 +976,7 @@
     "runners": 0
   },
   "RUGDEV004": {
-    "rugs": 0,
+    "rugs": 1,
     "runners": 0
   },
   "DEVKDQirjkk": {
@@ -1424,7 +1424,7 @@
     "runners": 0
   },
   "RUGDEV011": {
-    "rugs": 1,
+    "rugs": 2,
     "runners": 0
   },
   "DEV8HpafzYv": {
@@ -3344,7 +3344,7 @@
     "runners": 0
   },
   "RUGDEV035": {
-    "rugs": 23,
+    "rugs": 24,
     "runners": 0
   },
   "DEVDd5cvD44": {
@@ -3684,7 +3684,7 @@
     "runners": 0
   },
   "RUGDEV017": {
-    "rugs": 0,
+    "rugs": 1,
     "runners": 0
   },
   "DEVc47rDUe2": {
@@ -9885,11 +9885,11 @@
   },
   "DEVUrPHEqF2": {
     "rugs": 0,
-    "runners": 1
+    "runners": 3
   },
   "DEV5cEqGcn9": {
     "rugs": 0,
-    "runners": 1
+    "runners": 3
   },
   "DEVihwzTSxq": {
     "rugs": 0,
@@ -9897,19 +9897,19 @@
   },
   "DEV9Fsha3H8": {
     "rugs": 0,
-    "runners": 1
+    "runners": 3
   },
   "DEViMQgcqBA": {
     "rugs": 0,
-    "runners": 1
+    "runners": 3
   },
   "DEVw1IOxwuZ": {
     "rugs": 0,
-    "runners": 1
+    "runners": 3
   },
   "DEVaWMEZOse": {
     "rugs": 0,
-    "runners": 1
+    "runners": 3
   },
   "DEVLUmbG7na": {
     "rugs": 1,
@@ -10101,6 +10101,470 @@
   },
   "DEVsd5uzBvh": {
     "rugs": 1,
+    "runners": 0
+  },
+  "DEVGbZD97wm": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVnsTzK3Ln": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVo32iS67U": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVgizpFxYc": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVX1j7cpBo": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVyVNI1wcI": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVM0joxkaC": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEV6fME87sQ": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVgGe91L0H": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVPeqzBOv2": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVHsZvgCLL": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEV22sUbvVj": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVxTT2niOS": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVA9IS21Sx": {
+    "rugs": 1,
+    "runners": 0
+  },
+  "DEVCvSjhVOE": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVkHcXWSQr": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEV0hGxzA6n": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVEAlh2AcT": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEV6UcUCAsc": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVeURV9Cm9": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEV4om7hltS": {
+    "rugs": 1,
+    "runners": 0
+  },
+  "DEVPpzY4l5D": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVg6A2CdfI": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVd0Ov2ijT": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVkxukscfN": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVq0jVdMR9": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVgjn3LBzW": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVX9NIAewc": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVbKy09zJA": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVgsBBNDKm": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVpIuE0jiM": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEV6rIYKmJg": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVgPH3f1TK": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVsfeCiJbj": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVfoLetIhC": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVmGhUDoal": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVDsQwnUWF": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVrRXsEkQe": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEV12sEaKn7": {
+    "rugs": 2,
+    "runners": 0
+  },
+  "DEVtwnPAGPz": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVkVFopP9p": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVUDBRbSLw": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVVatm2lM1": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVKXYmQr3i": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVK6Ybwetl": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVawllMqEV": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVWITY4CtN": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVg71a78L8": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVuBjjbwL3": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVkgNgbDbi": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVA8WNsHii": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVZivAG3qf": {
+    "rugs": 1,
+    "runners": 0
+  },
+  "DEVil7M7Rbk": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVp570X3Ka": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEV9d6QG3CV": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVPCnYKRQw": {
+    "rugs": 1,
+    "runners": 0
+  },
+  "DEVSKBthLui": {
+    "rugs": 1,
+    "runners": 0
+  },
+  "DEVTWKunBYF": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVqYQHYHTw": {
+    "rugs": 1,
+    "runners": 0
+  },
+  "DEVHFCr2JNR": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVLDP10QPb": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVYeolRZtv": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVVZeyi3Lt": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEV8oycwnPq": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVcCnw36cq": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVONo8BSU9": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEV7vmKGfHy": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVqhND6qq8": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVxWv3dYas": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVvlmDuSUI": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVEJrhI3s1": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVWPFrgNw8": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVGA2vLa8R": {
+    "rugs": 1,
+    "runners": 0
+  },
+  "DEVoOsjztnb": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEV6dKma8SX": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVNaebgsBw": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEV0LyRJsbL": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVvsagfU1V": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVAL1KuvOb": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVNSk8RCwO": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVjs0se0cb": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVQTk8xMtT": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVqFcEsTi6": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVZr8zT5y6": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVR4jVOB7Y": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVB34XZ0j6": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVwuAetSPN": {
+    "rugs": 1,
+    "runners": 0
+  },
+  "DEVrHaF5vmm": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVnFZiYK3W": {
+    "rugs": 1,
+    "runners": 0
+  },
+  "DEVWXeMyRFy": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVRY1ujq5q": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVC9F4ThsM": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVv9QD3I2j": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVqD3bHuuS": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVqe8jBUxc": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEV3kMZhZPf": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVqZnEpPd7": {
+    "rugs": 1,
+    "runners": 0
+  },
+  "DEVBHiLIseB": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVOAMu0kiv": {
+    "rugs": 1,
+    "runners": 0
+  },
+  "DEV2uvDXh71": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEV3m8SGxeO": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVTxwS7cFL": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVQMUijWKd": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVneXaJ2RD": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVmWGPCrd7": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVTOdEFiML": {
+    "rugs": 1,
+    "runners": 0
+  },
+  "DEVnLDc5Tw6": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVRYnAuCJC": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVfygIqhFE": {
+    "rugs": 1,
+    "runners": 0
+  },
+  "DEVru257HFG": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVeQV7mTIh": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVPoQ9WE4c": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVRKLPGMXO": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVAYRhHMAv": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEV9ISye7rm": {
+    "rugs": 0,
+    "runners": 0
+  },
+  "DEVdY5L5guW": {
+    "rugs": 0,
     "runners": 0
   }
 }

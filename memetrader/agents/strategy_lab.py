@@ -42,9 +42,9 @@ RISK_SPACE = [
     ("max_per_strategy", 2, 8, True),
     ("spike_sell_threshold", 0.10, 0.50, False),
     ("spike_min_multiple", 1.02, 1.50, False),
-    # spike_sell_fraction is deliberately NOT evolvable: exits are 100% out
-    ("daily_loss_limit", 0.05, 0.25, False),
-    ("profit_lock_keep", 0.30, 0.90, False),
+    # spike_sell_fraction is deliberately NOT evolvable: exits are 100% out.
+    # Day-guard knobs are fixed policy too — evolution once learned to bank
+    # $2 days by hugging the profit floor, which is gaming the guard.
 ]
 
 
