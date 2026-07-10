@@ -86,7 +86,11 @@ def cmd_evolve(args: argparse.Namespace) -> None:
 
 
 def cmd_campaign(args: argparse.Namespace) -> None:
-    from .campaign import run_campaign_day, summary
+    from .campaign import reset_campaign, run_campaign_day, summary
+    if args.reset:
+        reset_campaign()
+        print(f"campaign reset — starting fresh from ${args.bankroll:,.2f} "
+              f"(old ledger archived)")
     row = run_campaign_day(bankroll=args.bankroll, hours=args.hours,
                            verbose=args.verbose)
     print(f"day {row['day']} ({row['date']}): "
@@ -162,6 +166,8 @@ def main() -> None:
                                         "quick-flip paper campaign")
     c.add_argument("--hours", type=float, default=24.0)
     c.add_argument("--bankroll", type=float, default=20.0)
+    c.add_argument("--reset", action="store_true",
+                   help="archive the ledger and restart from the bankroll")
     c.add_argument("--verbose", action="store_true")
     c.set_defaults(fn=cmd_campaign)
 

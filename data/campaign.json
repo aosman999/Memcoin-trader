@@ -1,79 +1,19 @@
 {
-  "day": 6,
-  "equity": 105425.00582383879,
+  "day": 1,
+  "equity": 17955.774261763,
   "starting_bankroll": 20.0,
   "history": [
     {
-      "date": "2026-07-09",
+      "date": "2026-07-10",
       "day": 1,
       "start_equity": 20.0,
-      "end_equity": 244.95,
-      "pnl": 224.95,
-      "pnl_pct": 1124.7,
-      "trades": 178,
-      "win_rate": 87,
-      "best_trade": "ROPE 92.4x (+$14)",
-      "avg_hold_minutes": 66.7
-    },
-    {
-      "date": "2026-07-09",
-      "day": 2,
-      "start_equity": 244.95,
-      "end_equity": 6206.77,
-      "pnl": 5961.82,
-      "pnl_pct": 2433.9,
-      "trades": 174,
+      "end_equity": 17955.77,
+      "pnl": 17935.77,
+      "pnl_pct": 89678.9,
+      "trades": 524,
       "win_rate": 90,
-      "best_trade": "GIWIF 34.4x (+$100)",
-      "avg_hold_minutes": 83.8
-    },
-    {
-      "date": "2026-07-09",
-      "day": 3,
-      "start_equity": 6206.77,
-      "end_equity": 25544.2,
-      "pnl": 19337.43,
-      "pnl_pct": 311.6,
-      "trades": 188,
-      "win_rate": 87,
-      "best_trade": "PEKIMO 455.4x (+$4,634)",
-      "avg_hold_minutes": 78.7
-    },
-    {
-      "date": "2026-07-09",
-      "day": 4,
-      "start_equity": 25544.2,
-      "end_equity": 48529.38,
-      "pnl": 22985.19,
-      "pnl_pct": 90.0,
-      "trades": 369,
-      "win_rate": 89,
-      "best_trade": "ZAPE 1.6x (+$120)",
-      "avg_hold_minutes": 30.0
-    },
-    {
-      "date": "2026-07-10",
-      "day": 5,
-      "start_equity": 48529.38,
-      "end_equity": 74681.53,
-      "pnl": 26152.15,
-      "pnl_pct": 53.9,
-      "trades": 450,
-      "win_rate": 88,
-      "best_trade": "GIDO 1.6x (+$112)",
-      "avg_hold_minutes": 25.7
-    },
-    {
-      "date": "2026-07-10",
-      "day": 6,
-      "start_equity": 74681.53,
-      "end_equity": 105425.01,
-      "pnl": 30743.47,
-      "pnl_pct": 41.2,
-      "trades": 514,
-      "win_rate": 89,
-      "best_trade": "GIGEGI 1.5x (+$106)",
-      "avg_hold_minutes": 28.6
+      "best_trade": "GAMOOF 1.6x (+$11)",
+      "avg_hold_minutes": 24.4
     }
   ]
 }

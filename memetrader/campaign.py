@@ -43,6 +43,17 @@ def _load_ledger(bankroll: float) -> dict:
     return {"day": 0, "equity": bankroll, "starting_bankroll": bankroll, "history": []}
 
 
+def reset_campaign() -> None:
+    """Archive the current ledger (phase N) and start fresh from $20."""
+    if os.path.exists(CAMPAIGN_PATH):
+        n = 1
+        while os.path.exists(os.path.join(DATA_DIR, f"pnl_log_phase{n}.md")):
+            n += 1
+        if os.path.exists(PNL_LOG_PATH):
+            os.rename(PNL_LOG_PATH, os.path.join(DATA_DIR, f"pnl_log_phase{n}.md"))
+        os.remove(CAMPAIGN_PATH)
+
+
 def run_campaign_day(bankroll: float = 20.0, hours: float = 24.0,
                      verbose: bool = False) -> dict:
     ledger = _load_ledger(bankroll)
