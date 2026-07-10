@@ -65,9 +65,13 @@ def fitness(stats: dict) -> float:
     ret = stats["return_pct"] / 100.0
     dd = stats["max_drawdown_pct"] / 100.0
     trades = stats["trades"]
-    if trades < 5:
-        return -1.0  # a strategy that barely trades proves nothing
-    return ret - 1.5 * dd * max(0.0, ret)  # drawdown-penalized return
+    win = stats["win_rate"]
+    if trades < 15:
+        return -1.0  # too few trades to prove anything statistically
+    # drawdown-penalized return, scaled by accuracy: a param set that wins
+    # 90% of its trades beats one that gets the same return winning 60%
+    base = ret - 1.5 * dd * max(0.0, ret)
+    return base * (0.4 + 0.6 * win)
 
 
 class StrategyLab:
