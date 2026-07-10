@@ -1,6 +1,6 @@
 {
-  "day": 4,
-  "equity": 48529.381556277534,
+  "day": 6,
+  "equity": 105425.00582383879,
   "starting_bankroll": 20.0,
   "history": [
     {
@@ -50,6 +50,30 @@
       "win_rate": 89,
       "best_trade": "ZAPE 1.6x (+$120)",
       "avg_hold_minutes": 30.0
+    },
+    {
+      "date": "2026-07-10",
+      "day": 5,
+      "start_equity": 48529.38,
+      "end_equity": 74681.53,
+      "pnl": 26152.15,
+      "pnl_pct": 53.9,
+      "trades": 450,
+      "win_rate": 88,
+      "best_trade": "GIDO 1.6x (+$112)",
+      "avg_hold_minutes": 25.7
+    },
+    {
+      "date": "2026-07-10",
+      "day": 6,
+      "start_equity": 74681.53,
+      "end_equity": 105425.01,
+      "pnl": 30743.47,
+      "pnl_pct": 41.2,
+      "trades": 514,
+      "win_rate": 89,
+      "best_trade": "GIGEGI 1.5x (+$106)",
+      "avg_hold_minutes": 28.6
     }
   ]
 }
