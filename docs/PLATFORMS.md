@@ -39,17 +39,24 @@ Phantom already speaks Solana natively, so you're in the right ecosystem.
 4. Revoke stale token approvals occasionally (Phantom shows connected
    apps; revoke.cash equivalent on Solana: sol-incinerator / Phantom UI).
 
-## Copy trading — concretely, on GMGN
+## Copy trading — concretely, on GMGN (or Axiom's leaderboard / Kolscan)
 
-1. Leaderboard → filter by 7-day & 30-day **realized** PnL, win rate ≥ 50%,
-   and trade count high enough to mean something (≥ 30 trades).
-2. Open the wallet's history: check they profit on many coins (skill), not
+1. Leaderboard → filter by 7-day & 30-day **realized** PnL (realized should
+   be the majority of total PnL — paper gains can't be copied), win rate
+   ≥ 50-70% for snipers, and trade count high enough to mean something
+   (≥ 30 trades). A good scoring weight from 2026 guides: win rate 35%,
+   realized PnL 30%, trade frequency 20%, token diversity 15%.
+2. Open the wallet's history: check they profit on MANY coins (skill), not
    one lucky hold (variance) — and that they aren't the token deployer
-   (insider, unrepeatable).
+   (insider, unrepeatable). Prefer hold times of minutes-to-hours; a
+   wallet that wins with 3-second holds is a block-0 sniper you cannot
+   copy profitably (you'll always be behind it).
 3. Add 3–5 such wallets to copy with SMALL fixed per-trade amounts, set
    max buy, slippage cap (~10–15% on microcaps), and auto-sell mirroring.
 4. Feed those same addresses into this bot's `data/watch_wallets.json` so
-   the paper trader evaluates them too.
+   the paper trader evaluates them too — the bot keeps its own measured
+   track record per wallet and only treats wallets as copyworthy after
+   they prove themselves in ITS ledger.
 
 ## What this repo's bot uses (all free, keyless)
 

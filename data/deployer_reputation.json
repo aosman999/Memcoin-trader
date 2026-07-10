@@ -20,7 +20,7 @@
     "runners": 5
   },
   "RUGDEV007": {
-    "rugs": 8,
+    "rugs": 22,
     "runners": 1
   },
   "GOODDEV11": {
@@ -3344,7 +3344,7 @@
     "runners": 0
   },
   "RUGDEV035": {
-    "rugs": 8,
+    "rugs": 23,
     "runners": 0
   },
   "DEVDd5cvD44": {
@@ -10016,7 +10016,7 @@
     "runners": 0
   },
   "DEVp1oE1x1X": {
-    "rugs": 1,
+    "rugs": 2,
     "runners": 0
   },
   "DEVtqDOqZUf": {
@@ -10024,7 +10024,7 @@
     "runners": 0
   },
   "DEVQ22DZXuP": {
-    "rugs": 1,
+    "rugs": 2,
     "runners": 0
   },
   "DEVuCUxvgpn": {
@@ -10088,11 +10088,19 @@
     "runners": 0
   },
   "DEVys6GQvbb": {
-    "rugs": 0,
+    "rugs": 1,
     "runners": 0
   },
   "DEVKGAjj3m5": {
-    "rugs": 0,
+    "rugs": 1,
+    "runners": 0
+  },
+  "DEV50Yn1oPx": {
+    "rugs": 1,
+    "runners": 0
+  },
+  "DEVsd5uzBvh": {
+    "rugs": 1,
     "runners": 0
   }
 }
