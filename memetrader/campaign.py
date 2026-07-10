@@ -16,6 +16,7 @@ import os
 
 from .config import DATA_DIR, load_scalp
 from .datafeed.simulator import SimMarket
+from .engine.day_guard import DayGuard
 from .engine.orchestrator import Orchestrator
 from .engine.portfolio import Portfolio
 
@@ -73,18 +74,20 @@ def run_campaign_day(bankroll: float = 20.0, hours: float = 24.0,
     pf = Portfolio(start_equity)
     orch = Orchestrator(params, market, portfolio=pf, verbose=verbose)
 
+    guard = DayGuard(params.risk, start_equity)
+    guard_note = ""
     ticks = int(hours * 60)
     for _ in range(ticks):
         market.step()
         orch.tick(market.now_ts)
+        # trade as often as it likes — but the day's result is protected
+        if guard.check(pf.equity_curve[-1]):
+            orch.liquidate_all(market.now_ts, guard.reason)
+            guard_note = guard.reason
+            break
 
     # liquidate whatever is still open — the ledger is cash-only
-    for pos in list(pf.positions.values()):
-        snap = market.snapshot(pos.address)
-        if snap is not None:
-            orch.risk._close_all(pos, snap, pf, market.now_ts, "campaign_day_end")
-        else:
-            pf.positions.pop(pos.address, None)
+    orch.liquidate_all(market.now_ts, "campaign_day_end")
     orch.rug_checker.flush_reputation()   # persist what today taught us
 
     end_equity = pf.cash
@@ -100,6 +103,7 @@ def run_campaign_day(bankroll: float = 20.0, hours: float = 24.0,
         "win_rate": round(stats["win_rate"] * 100),
         "best_trade": stats["best_trade"],
         "avg_hold_minutes": round(stats["avg_hold_minutes"], 1),
+        "guard": guard_note,   # "" | "profit_lock" | "daily_loss_stop"
     }
 
     ledger["day"] = day

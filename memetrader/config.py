@@ -33,6 +33,11 @@ class RiskParams:
     spike_sell_threshold: float = 0.20    # 1-tick jump that counts as a spike
     spike_sell_fraction: float = 1.00     # 100% out — no partials, no trailing trust
     spike_min_multiple: float = 1.05      # only spike-sell if actually in profit
+    # day guard: trade as often as it wants, but protect the day's result
+    daily_loss_limit: float = 0.10        # stop the day if down this much from start
+    profit_lock_trigger: float = 0.10     # day counts as "green" once up this much
+    profit_lock_keep: float = 0.60        # then never give back more than this
+                                          # fraction of the day's peak profit
 
 
 @dataclass

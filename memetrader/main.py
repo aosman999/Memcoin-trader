@@ -115,15 +115,30 @@ def cmd_paper(args: argparse.Namespace) -> None:
           f"every {args.fast_interval}s, discovery every {args.interval}s. "
           f"Ctrl-C to stop; state is saved.")
     next_discovery = 0.0
+    import datetime as _dt
+    from .engine.day_guard import DayGuard
+    guard_date = _dt.date.today()
+    guard = DayGuard(params.risk, pf.equity({}))
     try:
         while time.time() < end:
             now = time.time()
+            if _dt.date.today() != guard_date:   # new day, fresh guard
+                guard_date = _dt.date.today()
+                guard = DayGuard(params.risk, pf.equity_curve[-1])
+                print(f"-- new trading day, day guard reset "
+                      f"(start ${guard.start:,.2f})")
             # fast clock: every open position, every few seconds — memecoins
             # go 2k -> 400k mcap (and back) in the blink of an eye
             if orch.manage_positions(now):
                 pf.save()
-            # slow clock: hunt for new entries
-            if now >= next_discovery:
+            if guard.check(pf.equity_curve[-1]):
+                if pf.positions:
+                    orch.liquidate_all(now, guard.reason)
+                    pf.save()
+                    print(f"-- DAY GUARD [{guard.reason}]: all positions "
+                          f"closed, no new trades until tomorrow")
+            # slow clock: hunt for new entries (paused while guard is up)
+            elif now >= next_discovery:
                 orch.news.update()
                 orch.discover_and_enter(now)
                 next_discovery = now + args.interval

@@ -141,3 +141,15 @@ class Orchestrator:
 
         self.portfolio.mark(marks)
         return closed
+
+    # ------------------------------------------------------------------
+    def liquidate_all(self, now: float, reason: str) -> list[TradeRecord]:
+        """Market-dump every open position (day guard / end of day)."""
+        closed: list[TradeRecord] = []
+        for pos in list(self.portfolio.positions.values()):
+            snap = self.feed.snapshot(pos.address)
+            if snap is not None:
+                closed.append(self.risk._close_all(pos, snap, self.portfolio, now, reason))
+            else:
+                self.portfolio.positions.pop(pos.address, None)
+        return closed

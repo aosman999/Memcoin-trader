@@ -56,6 +56,36 @@ class TestBroker(unittest.TestCase):
         self.assertLess(big / 5_000.0, small / 10.0)  # tokens per USD degrade
 
 
+class TestDayGuard(unittest.TestCase):
+    def test_loss_stop(self):
+        from memetrader.engine.day_guard import DayGuard
+        from memetrader.config import RiskParams
+        g = DayGuard(RiskParams(), 100.0)
+        self.assertFalse(g.check(95.0))       # small dip: keep trading
+        self.assertTrue(g.check(89.0))        # -11% -> daily loss stop
+        self.assertEqual(g.reason, "daily_loss_stop")
+
+    def test_profit_lock_banks_green_day(self):
+        from memetrader.engine.day_guard import DayGuard
+        from memetrader.config import RiskParams
+        g = DayGuard(RiskParams(), 100.0)
+        self.assertFalse(g.check(150.0))      # nice run: peak 150, floor 130
+        self.assertFalse(g.check(140.0))      # giveback above floor: fine
+        self.assertTrue(g.check(129.0))       # floor touched -> bank the day
+        self.assertEqual(g.reason, "profit_lock")
+        # halted day ends ABOVE where it started: profit protected
+        self.assertGreater(129.0, g.start)
+
+    def test_ratchets_with_new_peak(self):
+        from memetrader.engine.day_guard import DayGuard
+        from memetrader.config import RiskParams
+        g = DayGuard(RiskParams(), 100.0)
+        g.check(150.0)
+        floor1 = g.floor()
+        g.check(300.0)                        # new peak -> floor rises
+        self.assertGreater(g.floor(), floor1)
+
+
 class TestEndToEnd(unittest.TestCase):
     def test_backtest_runs_and_trades(self):
         market = SimMarket(seed=5)
