@@ -93,6 +93,9 @@ def cmd_campaign(args: argparse.Namespace) -> None:
               f"(old ledger archived)")
     row = run_campaign_day(bankroll=args.bankroll, hours=args.hours,
                            verbose=args.verbose)
+    if row.get("already_ran"):
+        print(f"already traded today ({row['date']} = day {row['day']}) — "
+              f"next trading day runs tomorrow")
     print(f"day {row['day']} ({row['date']}): "
           f"${row['start_equity']:,.2f} -> ${row['end_equity']:,.2f} "
           f"({row['pnl_pct']:+.1f}%) | {row['trades']} trades, "

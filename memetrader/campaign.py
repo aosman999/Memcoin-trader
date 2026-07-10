@@ -57,6 +57,12 @@ def reset_campaign() -> None:
 def run_campaign_day(bankroll: float = 20.0, hours: float = 24.0,
                      verbose: bool = False) -> dict:
     ledger = _load_ledger(bankroll)
+    today = _dt.date.today().isoformat()
+    # one trading day per calendar date: jul 10 = day 1, jul 11 = day 2, ...
+    for r in ledger["history"]:
+        if r["date"] == today:
+            r["already_ran"] = True
+            return r
     day = ledger["day"] + 1
     start_equity = float(ledger["equity"])
 
@@ -84,7 +90,7 @@ def run_campaign_day(bankroll: float = 20.0, hours: float = 24.0,
     end_equity = pf.cash
     stats = pf.stats()
     day_row = {
-        "date": _dt.date.today().isoformat(),
+        "date": today,
         "day": day,
         "start_equity": round(start_equity, 2),
         "end_equity": round(end_equity, 2),
