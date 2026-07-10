@@ -105,7 +105,45 @@ They are real — and they are the wrong thing to build a system around:
 | Fills on microcaps are bad | `engine/paper_broker.py` models impact + fees |
 | Parameters decay; the market adapts | `agents/strategy_lab.py` re-evolves them |
 
-## 5. Honest limitations
+## 5. July 2026 live-web study update
+
+Findings from live web research (July 2026) now baked into the simulator
+calibration and strategy signals:
+
+- **Graduation collapse**: pump.fun graduation rates fell from ~1.4%
+  (2024) to ~0.6% (late 2025) to **~0.2-0.26% by mid-2026** (DEXTools;
+  SSRN survival analysis of 832,941 launches). The simulator's archetype
+  weights now reflect this much harsher reality. Graduations migrate to
+  **PumpSwap** (pump.fun's own DEX), no longer Raydium.
+- **Socials are the strongest survival signal**: launches advertising all
+  three social channels graduate at ~17x the rate of those with none;
+  a Telegram alone is a ~9x lift. The Rug Checker's socials penalty and
+  the simulator's social-quality correlation were strengthened accordingly.
+- **Curve acceleration beats curve position**: the "graduation gap" study
+  found graduating tokens show *accelerating* bonding-curve progress and
+  organic, rhythmic buying in their first minutes; plateaued curves die
+  regardless of how far they got. The graduation sniper now requires
+  minimum bonding VELOCITY, not just progress (`grad_min_velocity`).
+- **Liquidity velocity** is the single most informative graduation
+  predictor (arXiv pump.fun success-prediction study) — reflected in the
+  momentum strategy's volume-spike entry.
+- **Current metas** (July 2026): brainrot memes, AI-agent coins
+  (PIPPIN/FARTCOIN lineage), PolitiFi, NFT-community coins (PENGU/BONK),
+  KOL coins (ANSEM +299%/wk). TikTok now rivals X as the discovery
+  channel. The News agent's narrative table was extended, and
+  `python3 -m memetrader study` mines the live vocabulary directly from
+  trending tokens whenever the bot has internet.
+- **Platform landscape**: Axiom now holds the largest trading-terminal
+  market share (fastest execution, 0.75-0.95%/trade); GMGN remains the
+  copy-trading + wallet-analytics default (6 chains, free analytics);
+  Photon is a manual terminal, not a copy trader. New launchpads (Believe,
+  Moonshot, Virl.fun) chip at pump.fun without displacing it.
+
+Sources: DEXTools news & 2026 Solana guide, SSRN "Pump.fun Graduation
+Regime Windows" (832,941 launches), arXiv 2602.14860, VoluTools
+"Graduation Gap" study, walletmaster/telegramtrading 2026 tool comparisons.
+
+## 6. Honest limitations
 
 - The simulator is calibrated to published aggregate statistics, not tick
   data. It is a **strategy development environment**, not proof of future

@@ -53,6 +53,8 @@ class StrategyParams:
     grad_min_bonding: float = 0.85        # enter when bonding curve is nearly complete
     grad_min_holders: int = 60
     grad_max_top10_pct: float = 0.32
+    grad_min_velocity: float = 0.004      # curve progress/min: accelerating curves
+                                          # graduate, plateaued curves die (2026 studies)
 
     # ---- momentum breakout ----
     mom_vol_spike: float = 3.0            # 5m volume must be X times the hourly baseline

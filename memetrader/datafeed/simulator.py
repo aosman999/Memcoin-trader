@@ -25,18 +25,23 @@ from ..models import TokenSnapshot, TokenSource
 
 TICK_SECONDS = 60.0  # one simulator tick = one minute
 
-# archetype -> (probability, description)
+# archetype -> probability. Calibrated to observed mid-2026 statistics:
+# pump.fun graduation rate ~0.2-0.3% (DEXTools/SSRN survival analysis of
+# 832k launches), i.e. ~99.7% of launches never complete the curve. The
+# tradeable tail (runner+moonshot+part of pump_dump) is a few per thousand.
 ARCHETYPES = {
-    "hard_rug":   0.55,   # dev pulls liquidity / dumps within minutes
-    "slow_bleed": 0.30,   # never finds buyers, -99% over hours
-    "pump_dump":  0.095,  # coordinated pump to 2-10x then collapse
-    "runner":     0.048,  # real community, graduates, 3-40x over hours/days
-    "moonshot":   0.002,  # the WIF/PEPE tail: 50-800x
+    "hard_rug":   0.600,   # dev pulls liquidity / dumps within minutes
+    "slow_bleed": 0.365,   # never finds buyers, -99% over hours
+    "pump_dump":  0.028,   # coordinated pump then collapse (some graduate)
+    "runner":     0.0065,  # real community, graduates, 3-40x
+    "moonshot":   0.0005,  # the WIF/PEPE tail: 50-800x
 }
 
+# July 2026 metas (live web research): brainrot memes, AI agents,
+# PolitiFi, NFT-community coins, KOL coins — plus the evergreens
 NARRATIVES = [
     "dog", "cat", "frog", "ai", "political", "celebrity", "food",
-    "retro", "space", "baby", "chad", "quant",
+    "retro", "space", "baby", "chad", "quant", "brainrot", "nft", "kol",
 ]
 
 _SYLLABLES = ["do", "ge", "pe", "wif", "bo", "nk", "moo", "gi", "ga",
@@ -74,6 +79,7 @@ class SimToken:
     has_socials: bool
     smart_buys_30m: int = 0
     bonding_progress: float = 0.02
+    bonding_velocity: float = 0.0
     graduated: bool = False
     dead: bool = False
     price_high: float = 0.0
@@ -104,6 +110,7 @@ class SimToken:
             bonding_progress=self.bonding_progress,
             graduated=self.graduated,
             smart_wallet_buys_30m=self.smart_buys_30m,
+            bonding_velocity=self.bonding_velocity,
             deployer=self.deployer,
             price_high=self.price_high,
             ts=now_ts,
@@ -143,7 +150,9 @@ class SimMarket:
         mint_revoked = rng.random() < p_clean
         freeze_revoked = rng.random() < (p_clean + 0.05)
         lp_locked = rng.random() < p_clean
-        has_socials = rng.random() < (0.9 if good else 0.4)
+        # socials are the single strongest observed graduation signal in the
+        # 2026 survival studies (~17x lift with all three channels present)
+        has_socials = rng.random() < (0.95 if good else 0.30)
         top10 = rng.uniform(0.10, 0.30) if good else rng.uniform(0.25, 0.85)
         deployer = rng.uniform(0.0, 0.04) if good else rng.uniform(0.02, 0.30)
 
@@ -256,10 +265,12 @@ class SimMarket:
         mcap = tok.price * tok.supply
         # bonding curve completes around ~$69k mcap (pump.fun graduation)
         if not tok.graduated:
-            tok.bonding_progress = min(1.0, mcap / 69_000.0)
+            new_progress = min(1.0, mcap / 69_000.0)
+            tok.bonding_velocity = new_progress - tok.bonding_progress
+            tok.bonding_progress = new_progress
             if tok.bonding_progress >= 1.0:
                 tok.graduated = True
-                tok.liquidity += 12_000  # migration deposit
+                tok.liquidity += 12_000  # migration deposit to PumpSwap
         # liquidity and holders loosely track mcap
         tok.liquidity = max(500.0, tok.liquidity * 0.98 + mcap * 0.004)
         growth = {"runner": 8, "moonshot": 25, "pump_dump": 6}.get(tok.archetype, 1)

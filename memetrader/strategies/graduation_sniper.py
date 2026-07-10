@@ -21,7 +21,11 @@ class GraduationSniper(Strategy):
 
     def evaluate(self, t: TokenSnapshot, ctx: Context) -> Signal | None:
         p = self.params
-        near_grad = t.bonding_progress >= p.grad_min_bonding
+        # near-graduation entries additionally require curve ACCELERATION —
+        # a curve at 90% that stopped moving is a curve that dies at 90%
+        near_grad = (t.bonding_progress >= p.grad_min_bonding
+                     and not t.graduated
+                     and t.bonding_velocity >= p.grad_min_velocity)
         fresh_grad = t.graduated and t.age_minutes <= p.max_age_minutes
         if not (near_grad or fresh_grad):
             return None

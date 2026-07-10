@@ -10,8 +10,8 @@ connects to or that run their own wallets.
 | Job | Tool | Why |
 |---|---|---|
 | Vault / long-term storage | **Phantom** (what you have) + ideally a hardware wallet | Never expose your main stack to a trading bot |
-| Trading terminal + **copy trading** | **GMGN.ai** | Wallet PnL leaderboards + built-in copy-trade with per-wallet buy amounts, slippage and auto-sell settings — the best fit for "copy big profitable traders" |
-| Fast manual sniping terminal | **Axiom** or **Photon** or **BullX Neo** | Sub-second execution UIs for pump.fun launches; Axiom has had the lowest fees recently |
+| Trading terminal + **copy trading** | **GMGN.ai** | Wallet PnL leaderboards + built-in copy-trade with per-wallet buy amounts, slippage and auto-sell settings — the best fit for "copy big profitable traders" (6 chains, free analytics) |
+| Fast manual sniping terminal | **Axiom** (largest market share & fastest execution as of 2026, 0.75-0.95%/trade) or **Photon** (manual terminal — NOT a copy trader) or **BullX Neo** | Sub-second execution UIs for pump.fun launches |
 | Telegram-native trading | **Trojan** or **BonkBot** | If you live in Telegram; fastest way to ape from a group chat |
 | Safety background checks | **RugCheck.xyz**, **GoPlus**, holder tab on **GMGN** | Exactly the checks our Rug Checker automates |
 | Wallet discovery for copy trading | **GMGN leaderboard**, **Kolscan**, **Cielo** | Find wallets by *realized PnL*, sort by win rate — never copy influencers' public calls |

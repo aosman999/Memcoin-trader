@@ -25,6 +25,7 @@ PARAM_SPACE = [
     ("grad_min_bonding", 0.6, 0.99, False),
     ("grad_min_holders", 20, 200, True),
     ("grad_max_top10_pct", 0.15, 0.5, False),
+    ("grad_min_velocity", 0.0, 0.02, False),
     ("mom_vol_spike", 1.5, 6.0, False),
     ("mom_min_holders", 40, 300, True),
     ("copy_min_smart_buys", 1, 4, True),

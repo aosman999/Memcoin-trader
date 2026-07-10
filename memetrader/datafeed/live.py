@@ -198,6 +198,9 @@ class LiveFeed:
             fresh = pumpfun_coin(address)
             if fresh is not None:
                 fresh.price_high = max(prev.price_high, fresh.price)
+                minutes = max(0.25, (fresh.ts - prev.ts) / 60.0)
+                fresh.bonding_velocity = (
+                    (fresh.bonding_progress - prev.bonding_progress) / minutes)
                 self._known[address] = fresh
                 return fresh
         return prev

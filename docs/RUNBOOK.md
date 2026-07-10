@@ -25,11 +25,19 @@ git checkout claude/memecoin-trader-ai-39lzel
 
 There is nothing to install — the bot has zero dependencies.
 
-## 2. Start paper trading the real market
+## 2. Let the bot study the real market, then trade it
 
 ```bash
+# 1) research pass: samples live launches, mines the hot narrative
+#    vocabulary of the moment (the news agent uses it automatically)
+python3 -m memetrader study
+
+# 2) paper trade the real market
 python3 -m memetrader paper --scalp --bankroll 20 --minutes 1440
 ```
+
+Re-run `study` every day or two — metas rotate fast and the bot trades
+according to whatever it studied last.
 
 That runs 24 hours of live paper trading in quick-flip mode with a $20
 paper bankroll:

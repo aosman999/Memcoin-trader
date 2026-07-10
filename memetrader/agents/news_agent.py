@@ -27,6 +27,10 @@ NARRATIVE_KEYWORDS = {
     "baby":      ["baby", "mini", "lil"],
     "chad":      ["chad", "giga", "sigma", "based"],
     "quant":     ["quant", "alpha", "degen"],
+    # July 2026 metas (live web research)
+    "brainrot":  ["brainrot", "skibidi", "ohio", "rizz", "tralala", "sahur", "italian"],
+    "nft":       ["pengu", "penguin", "ape", "punk", "mad", "lad"],
+    "kol":       ["ansem", "kol", "call", "alpha"],
 }
 
 
@@ -37,6 +41,17 @@ class NewsAgent:
         self.params = params
         self.feed = feed
         self.hot_narrative: str = ""
+        self.studied_words: list[str] = []
+        self._reload_study()
+
+    def _reload_study(self) -> None:
+        """Vocabulary mined from the REAL market by `memetrader study`."""
+        try:
+            from ..study import load_study
+            study = load_study()
+            self.studied_words = (study or {}).get("hot_words", [])[:12]
+        except Exception:
+            self.studied_words = []
 
     def update(self) -> None:
         try:
@@ -46,9 +61,12 @@ class NewsAgent:
 
     def narrative_score(self, t: TokenSnapshot) -> float:
         """Returns a confidence delta in [-0.05, +news_boost]."""
+        text = f"{t.name} {t.symbol}".lower()
+        # live-studied vocabulary wins over the static narrative table
+        if self.studied_words and any(w in text for w in self.studied_words):
+            return self.params.news_boost
         if not self.hot_narrative:
             return 0.0
-        text = f"{t.name} {t.symbol}".lower()
         hot_words = NARRATIVE_KEYWORDS.get(self.hot_narrative, [self.hot_narrative])
         if any(w and w in text for w in hot_words):
             return self.params.news_boost

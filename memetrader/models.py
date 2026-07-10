@@ -38,6 +38,8 @@ class TokenSnapshot:
     bonding_progress: float      # 0..1 pump.fun bonding-curve progress (1 = graduated)
     graduated: bool
     smart_wallet_buys_30m: int   # how many tracked profitable wallets bought recently
+    bonding_velocity: float = 0.0  # curve progress per minute — 2026 studies:
+                                   # ACCELERATING curves graduate, plateaus die
     deployer: str = ""           # wallet that created the token (reputation tracking)
     price_high: float = 0.0      # all-time-high price observed
     ts: float = field(default_factory=time.time)

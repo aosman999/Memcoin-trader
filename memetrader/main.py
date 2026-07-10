@@ -150,6 +150,11 @@ def cmd_paper(args: argparse.Namespace) -> None:
     _print_report(pf)
 
 
+def cmd_study(_args: argparse.Namespace) -> None:
+    from .study import run_study
+    run_study()
+
+
 def cmd_report(_args: argparse.Namespace) -> None:
     pf = Portfolio.load()
     if pf is None:
@@ -198,6 +203,10 @@ def main() -> None:
     p.add_argument("--scalp", action="store_true", help="quick-flip profile")
     p.add_argument("--bankroll", type=float, default=0.0)
     p.set_defaults(fn=cmd_paper)
+
+    s = sub.add_parser("study", help="research the REAL market: sample live "
+                                     "launches, mine the hot narrative vocabulary")
+    s.set_defaults(fn=cmd_study)
 
     r = sub.add_parser("report", help="show saved paper portfolio performance")
     r.set_defaults(fn=cmd_report)
