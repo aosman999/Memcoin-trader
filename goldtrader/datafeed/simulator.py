@@ -1,10 +1,12 @@
-"""Gold market simulator — minute bars, calibrated to real XAU/USD behavior.
+"""Gold market simulator — minute bars, calibrated to the 2026 regime.
 
-Calibration targets (public market statistics):
-  * annualized volatility ~14-18% -> per-minute sigma ~2.5e-4
+Calibration targets (July 2026, live research — see docs/GOLD_MARKET_STUDY.md):
+  * spot ~$4,100 after the Jan-2026 $5,590 all-time high and correction
+  * annualized volatility ~24% (2026 runs hot: >50% at the peak, ~30%
+    now, vs a 20-year average of 17%) -> per-minute sigma ~4e-4
   * session structure: quiet Asia, active London, most active NY overlap
   * ~35% of days trend (macro flows), the rest mean-revert in a range
-  * occasional news jumps (data releases): ~1-2 per day, 0.1-0.5% moves
+  * news jumps (CPI/NFP/FOMC): ~2/day, 0.1-0.6% moves
 """
 from __future__ import annotations
 
@@ -38,7 +40,7 @@ def gold_snapshot(price: float, ts: float, price_high: float,
 class GoldSim:
     """Evolves a spot-gold price path one minute at a time."""
 
-    def __init__(self, seed: int = 7, start_price: float = 3350.0):
+    def __init__(self, seed: int = 7, start_price: float = 4100.0):
         self.rng = random.Random(seed)
         self.price = start_price
         self.tick = 0
@@ -78,14 +80,14 @@ class GoldSim:
         if self.tick % 1440 == 0:
             self._roll_day()
 
-        sigma = 2.5e-4 * self._session_mult()
+        sigma = 4.0e-4 * self._session_mult()
         ret = rng.gauss(self.day_drift, sigma)
         if not self.trending_day:
             # gentle pull back toward the day's anchor (ranging behavior)
             ret += -0.002 * (self.price / self.day_anchor - 1.0) / 60.0
-        # news jump ~1.5/day
-        if rng.random() < 1.5 / 1440:
-            ret += rng.choice([-1, 1]) * rng.uniform(0.001, 0.005)
+        # news jumps (CPI/NFP/FOMC prints): ~2/day in the 2026 regime
+        if rng.random() < 2.0 / 1440:
+            ret += rng.choice([-1, 1]) * rng.uniform(0.001, 0.006)
 
         self.price *= math.exp(ret)
         self.price_high = max(self.price_high, self.price)

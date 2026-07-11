@@ -54,8 +54,9 @@ def gold_risk() -> RiskParams:
 class GoldParams:
     # execution mode
     allow_short: bool = True             # set False for long-only (spot/Islamic)
-    max_leverage: float = 10.0           # notional cap as multiple of equity;
-                                         # set 1.0 for fully unleveraged
+    max_leverage: float = 100.0          # broker cap (1:100 account). Actual
+                                         # leverage used = risk_per_trade /
+                                         # stop_loss; set 1.0 for unleveraged
 
     # trend following (EMA crossover)
     ema_fast: int = 20                   # minutes
