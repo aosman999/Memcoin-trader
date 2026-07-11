@@ -1,4 +1,11 @@
-# Memcoin Trader — multi-agent memecoin paper-trading system
+# Memcoin Trader — multi-agent trading system
+
+> **Project pivot (July 2026)**: the owner moved away from memecoin
+> trading for religious reasons. Active development now targets **gold
+> (XAU/USD)** — see **[docs/GOLD.md](docs/GOLD.md)** and the `goldtrader/`
+> package (spot + MetaTrader 5 demo bridge, configurable leverage,
+> long-only mode). The memecoin system below remains as a working
+> reference implementation and is no longer actively traded.
 
 A zero-dependency Python system in which **five cooperating AIs** research,
 vet, and paper-trade Solana memecoins — every entry at low market cap,

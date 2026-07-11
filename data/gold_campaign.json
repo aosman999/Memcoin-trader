@@ -1,0 +1,18 @@
+{
+  "day": 1,
+  "equity": 1034.639661478367,
+  "starting_bankroll": 1000.0,
+  "history": [
+    {
+      "date": "2026-07-11",
+      "day": 1,
+      "start_equity": 1000.0,
+      "end_equity": 1034.6397,
+      "pnl": 34.6397,
+      "pnl_pct": 3.464,
+      "trades": 4,
+      "win_rate": 75,
+      "guard": ""
+    }
+  ]
+}
