@@ -60,7 +60,8 @@ def cmd_backtest(args: argparse.Namespace) -> None:
 
 def cmd_campaign(args: argparse.Namespace) -> None:
     from .campaign import run_campaign_day, summary
-    row = run_campaign_day(bankroll=args.bankroll, verbose=args.verbose)
+    row = run_campaign_day(bankroll=args.bankroll, verbose=args.verbose,
+                           anchor_price=args.anchor_price or None)
     if row.get("already_ran"):
         print(f"already traded today ({row['date']} = day {row['day']})")
     else:
@@ -126,6 +127,9 @@ def main() -> None:
 
     c = sub.add_parser("campaign")
     c.add_argument("--bankroll", type=float, default=3000.0)
+    c.add_argument("--anchor-price", type=float, default=0.0, dest="anchor_price",
+                   help="today's actual spot gold price (auto-fetched when "
+                        "the machine has market access)")
     c.add_argument("--verbose", action="store_true")
     c.set_defaults(fn=cmd_campaign)
 

@@ -27,8 +27,8 @@ _LOG_HEADER = (
     "one simulated trading day per row. **SIMULATED paper results** (this\n"
     "environment cannot reach live price APIs); live paper trading runs\n"
     "via `python3 -m goldtrader paper` on your own machine.\n\n"
-    "| date | day | start | end | day pnl | day % | trades | win rate |\n"
-    "|---|---|---|---|---|---|---|---|\n"
+    "| date | day | real spot anchor | start | end | day pnl | day % | trades | win rate |\n"
+    "|---|---|---|---|---|---|---|---|---|\n"
 )
 
 
@@ -42,7 +42,11 @@ def _load_ledger(bankroll: float) -> dict:
     return {"day": 0, "equity": bankroll, "starting_bankroll": bankroll, "history": []}
 
 
-def run_campaign_day(bankroll: float = 20.0, verbose: bool = False) -> dict:
+def run_campaign_day(bankroll: float = 3000.0, verbose: bool = False,
+                     anchor_price: float | None = None) -> dict:
+    """anchor_price: today's ACTUAL spot gold price — the simulated day
+    starts at the real market level. Live mode on a laptop needs no
+    anchor; it trades real ticks directly."""
     ledger = _load_ledger(bankroll)
     today = _dt.date.today().isoformat()
     for r in ledger["history"]:
@@ -55,7 +59,19 @@ def run_campaign_day(bankroll: float = 20.0, verbose: bool = False) -> dict:
     params = GoldParams.load()
     params.risk.starting_bankroll_usd = start_equity
 
-    sim = GoldSim(seed=20_000 + day * 13)
+    if anchor_price is None:
+        # try the live feeds (works on a networked machine); else carry
+        # forward the last anchor so the level stays continuous
+        try:
+            from .datafeed.live import GoldLiveFeed
+            anchor_price = GoldLiveFeed().spot()
+        except Exception:
+            anchor_price = None
+        if not anchor_price:
+            prev = ledger["history"][-1] if ledger["history"] else None
+            anchor_price = (prev or {}).get("real_spot_anchor") or 4100.0
+
+    sim = GoldSim(seed=20_000 + day * 13, start_price=float(anchor_price))
     pf = Portfolio(start_equity)
     orch = GoldOrchestrator(params, portfolio=pf, verbose=verbose)
     guard = DayGuard(params.risk, start_equity)
@@ -80,6 +96,7 @@ def run_campaign_day(bankroll: float = 20.0, verbose: bool = False) -> dict:
         "trades": stats["trades"],
         "win_rate": round(stats["win_rate"] * 100),
         "guard": guard_note,
+        "real_spot_anchor": round(float(anchor_price), 2),
     }
     ledger["day"] = day
     ledger["equity"] = end_equity
@@ -93,7 +110,8 @@ def run_campaign_day(bankroll: float = 20.0, verbose: bool = False) -> dict:
 
 def _write_log(ledger: dict) -> None:
     rows = [
-        f"| {r['date']} | {r['day']} | ${r['start_equity']:,.2f} "
+        f"| {r['date']} | {r['day']} | ${r.get('real_spot_anchor') or 0:,.2f} "
+        f"| ${r['start_equity']:,.2f} "
         f"| ${r['end_equity']:,.2f} | ${r['pnl']:+,.4f} | {r['pnl_pct']:+.3f}% "
         f"| {r['trades']} | {r['win_rate']}% |"
         for r in ledger["history"]
