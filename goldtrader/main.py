@@ -62,6 +62,10 @@ def cmd_campaign(args: argparse.Namespace) -> None:
     from .campaign import run_campaign_day, summary
     row = run_campaign_day(bankroll=args.bankroll, verbose=args.verbose,
                            anchor_price=args.anchor_price or None)
+    if row.get("market_closed"):
+        print(f"{row['date']}: gold market closed (weekend) — no trading day; "
+              f"equity carries at ${row['equity']:,.2f}")
+        return
     if row.get("already_ran"):
         print(f"already traded today ({row['date']} = day {row['day']})")
     else:

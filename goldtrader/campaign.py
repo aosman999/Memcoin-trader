@@ -48,6 +48,9 @@ def run_campaign_day(bankroll: float = 3000.0, verbose: bool = False,
     starts at the real market level. Live mode on a laptop needs no
     anchor; it trades real ticks directly."""
     ledger = _load_ledger(bankroll)
+    if _dt.date.today().weekday() >= 5:   # Sat/Sun: gold market is closed
+        return {"market_closed": True, "date": _dt.date.today().isoformat(),
+                "day": ledger["day"], "equity": ledger["equity"]}
     today = _dt.date.today().isoformat()
     for r in ledger["history"]:
         if r["date"] == today:
