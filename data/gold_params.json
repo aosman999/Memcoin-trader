@@ -30,7 +30,7 @@
     "spike_sell_fraction": 1.0,
     "spike_min_multiple": 1.0015,
     "daily_loss_limit": 0.15,
-    "profit_lock_trigger": 0.1,
+    "profit_lock_trigger": 999.0,
     "profit_lock_keep": 0.5
   }
 }

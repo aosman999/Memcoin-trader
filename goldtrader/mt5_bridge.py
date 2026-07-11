@@ -80,6 +80,9 @@ def run_mt5(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
 
     end = time.time() + minutes * 60
     last_bar_minute = int(time.time() // 60)
+    day_start_equity = acct.equity
+    day_key = time.strftime("%Y-%m-%d")
+    halted_for_day = False
     while time.time() < end:
         tick = mt5.symbol_info_tick(symbol)
         if tick is None:
@@ -92,8 +95,22 @@ def run_mt5(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
             prices = prices[-1600:]
             last_bar_minute = this_minute
 
+        # daily loss stop (no profit target — winners run all day)
+        today = time.strftime("%Y-%m-%d")
+        if today != day_key:
+            day_key = today
+            day_start_equity = mt5.account_info().equity
+            halted_for_day = False
+        equity = mt5.account_info().equity
+        if not halted_for_day and equity <= day_start_equity * (1 - params.risk.daily_loss_limit):
+            _close_all(mt5, symbol)
+            halted_for_day = True
+            print(f"-- DAILY LOSS STOP: equity {equity:.2f} <= "
+                  f"{day_start_equity * (1 - params.risk.daily_loss_limit):.2f}; "
+                  f"flat until tomorrow")
+
         open_positions = mt5.positions_get(symbol=symbol) or []
-        if not open_positions and len(prices) > 130:
+        if not halted_for_day and not open_positions and len(prices) > 130:
             for strat in ALL_STRATEGIES:
                 sig = strat(prices, params)
                 if sig is None or (sig.direction < 0 and not params.allow_short):
@@ -104,6 +121,25 @@ def run_mt5(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
 
     print("session over — positions (with broker-side SL/TP) left to their exits")
     mt5.shutdown()
+
+
+def _close_all(mt5, symbol: str) -> None:
+    for pos in mt5.positions_get(symbol=symbol) or []:
+        tick = mt5.symbol_info_tick(symbol)
+        is_long = pos.type == mt5.POSITION_TYPE_BUY
+        mt5.order_send({
+            "action": mt5.TRADE_ACTION_DEAL,
+            "symbol": symbol,
+            "volume": pos.volume,
+            "type": mt5.ORDER_TYPE_SELL if is_long else mt5.ORDER_TYPE_BUY,
+            "position": pos.ticket,
+            "price": tick.bid if is_long else tick.ask,
+            "deviation": 30,
+            "magic": 777001,
+            "comment": "goldtrader:day_stop",
+            "type_time": mt5.ORDER_TIME_GTC,
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        })
 
 
 def _place_order(mt5, symbol: str, sig, price: float,
