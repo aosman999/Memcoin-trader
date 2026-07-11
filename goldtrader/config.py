@@ -53,6 +53,7 @@ def gold_risk() -> RiskParams:
 @dataclass
 class GoldParams:
     # execution mode
+    exit_style: str = "trail"            # "trail" | "breakeven" | "binary"
     allow_short: bool = True             # set False for long-only (spot/Islamic)
     max_leverage: float = 100.0          # broker cap (1:100 account). Actual
                                          # leverage used = risk_per_trade /

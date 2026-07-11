@@ -36,9 +36,11 @@ class LevPosition:
 
 
 class LevEngine:
-    def __init__(self, risk, max_leverage: float = 10.0):
+    def __init__(self, risk, max_leverage: float = 10.0,
+                 exit_style: str = "trail"):
         self.risk = risk
         self.max_leverage = max_leverage
+        self.exit_style = exit_style   # trail | breakeven | binary
         self.pos: LevPosition | None = None
 
     # ------------------------------------------------------------------
@@ -85,12 +87,20 @@ class LevEngine:
         if (price - p.extreme) * p.direction > 0:
             p.extreme = price
 
+        halfway = abs(p.extreme / p.entry_price - 1.0) >= (r.tp_multiples[0] - 1.0) / 2
+        # breakeven mode: once halfway to target, the stop moves to entry —
+        # losers become scratches, winners run to the FULL target
+        if self.exit_style == "breakeven" and halfway:
+            be = p.entry_price * (1 + p.direction * 2 * HALF_SPREAD)
+            if (be - p.sl_price) * p.direction > 0:
+                p.sl_price = be
+
         hit_sl = (price - p.sl_price) * p.direction <= 0
         hit_tp = (price - p.tp_price) * p.direction >= 0
-        # trailing: after price moved half way to TP, trail the extreme
-        armed = abs(p.extreme / p.entry_price - 1.0) >= (r.tp_multiples[0] - 1.0) / 2
-        trail_hit = armed and abs(price / p.extreme - 1.0) >= r.trailing_stop \
-            and (price - p.extreme) * p.direction < 0
+        # trail mode: after halfway, trail the favorable extreme
+        trail_hit = (self.exit_style == "trail" and halfway
+                     and abs(price / p.extreme - 1.0) >= r.trailing_stop
+                     and (price - p.extreme) * p.direction < 0)
         timed_out = (now - p.opened_at) / 60.0 >= r.max_hold_minutes
         margin_call = self._unrealized(price) <= -0.8 * pf.cash
 

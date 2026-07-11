@@ -1,4 +1,5 @@
 {
+  "exit_style": "binary",
   "allow_short": true,
   "max_leverage": 200.0,
   "ema_fast": 20,

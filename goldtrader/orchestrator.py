@@ -23,7 +23,8 @@ class GoldOrchestrator:
         self.params = params
         self.verbose = verbose
         self.portfolio = portfolio or Portfolio(params.risk.starting_bankroll_usd)
-        self.engine = LevEngine(params.risk, max_leverage=params.max_leverage)
+        self.engine = LevEngine(params.risk, max_leverage=params.max_leverage,
+                                exit_style=getattr(params, "exit_style", "trail"))
         self.prices: deque[float] = deque(maxlen=1600)
 
     def on_price(self, price: float, now: float) -> list[TradeRecord]:
