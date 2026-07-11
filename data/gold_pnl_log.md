@@ -7,6 +7,6 @@ via `python3 -m goldtrader paper` on your own machine.
 
 | date | day | start | end | day pnl | day % | trades | win rate |
 |---|---|---|---|---|---|---|---|
-| 2026-07-11 | 1 | $1,000.00 | $1,034.64 | $+34.6397 | +3.464% | 4 | 75% |
+| 2026-07-11 | 1 | $3,000.00 | $2,926.12 | $-73.8812 | -2.463% | 5 | 60% |
 
-**Campaign total: $1,000.00 → $1,034.64  (+34.6397 / +3.464%) over 1 trading day(s).**
+**Campaign total: $3,000.00 → $2,926.12  (-73.8812 / -2.463%) over 1 trading day(s).**

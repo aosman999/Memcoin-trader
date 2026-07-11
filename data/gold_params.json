@@ -1,6 +1,6 @@
 {
   "allow_short": true,
-  "max_leverage": 100.0,
+  "max_leverage": 200.0,
   "ema_fast": 20,
   "ema_slow": 60,
   "trend_min_slope": 0.0001,
@@ -10,7 +10,7 @@
   "bo_lookback": 120,
   "bo_min_range_expansion": 1.6,
   "risk": {
-    "starting_bankroll_usd": 20.0,
+    "starting_bankroll_usd": 3000.0,
     "risk_per_trade": 0.02,
     "max_concurrent_positions": 1,
     "max_per_strategy": 1,

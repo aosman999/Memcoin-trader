@@ -120,19 +120,19 @@ def main() -> None:
     b = sub.add_parser("backtest")
     b.add_argument("--days", type=float, default=30.0)
     b.add_argument("--seed", type=int, default=7)
-    b.add_argument("--bankroll", type=float, default=20.0)
+    b.add_argument("--bankroll", type=float, default=3000.0)
     b.add_argument("--verbose", action="store_true")
     b.set_defaults(fn=cmd_backtest)
 
     c = sub.add_parser("campaign")
-    c.add_argument("--bankroll", type=float, default=20.0)
+    c.add_argument("--bankroll", type=float, default=3000.0)
     c.add_argument("--verbose", action="store_true")
     c.set_defaults(fn=cmd_campaign)
 
     p = sub.add_parser("paper")
     p.add_argument("--minutes", type=float, default=480.0)
     p.add_argument("--interval", type=float, default=30.0)
-    p.add_argument("--bankroll", type=float, default=20.0)
+    p.add_argument("--bankroll", type=float, default=3000.0)
     p.set_defaults(fn=cmd_paper)
 
     m = sub.add_parser("mt5", help="trade your MetaTrader 5 DEMO account "
