@@ -67,6 +67,11 @@ def run_mt5(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
     if not mt5.symbol_select(symbol, True):
         raise SystemExit(f"symbol {symbol} not available on this broker")
 
+    from .telegram import send as tg_send, telegram_enabled
+    if telegram_enabled():
+        tg_send(f"🥇 Gold bot connected: {acct.server} #{acct.login} (DEMO), "
+                f"equity {acct.equity:,.2f} {acct.currency}. Session started.")
+
     info = mt5.symbol_info(symbol)
     print(f"connected: {acct.server} #{acct.login} (DEMO) — balance "
           f"{acct.balance:.2f} {acct.currency}, {symbol} "
@@ -98,8 +103,13 @@ def run_mt5(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
         # daily loss stop (no profit target — winners run all day)
         today = time.strftime("%Y-%m-%d")
         if today != day_key:
+            # send yesterday's daily report, then roll the day
+            eq_now = mt5.account_info().equity
+            tg_send(f"🥇 Gold bot daily report {day_key}: "
+                    f"{day_start_equity:,.2f} → {eq_now:,.2f} "
+                    f"({(eq_now / day_start_equity - 1) * 100:+.2f}%)")
             day_key = today
-            day_start_equity = mt5.account_info().equity
+            day_start_equity = eq_now
             halted_for_day = False
         equity = mt5.account_info().equity
         if not halted_for_day and equity <= day_start_equity * (1 - params.risk.daily_loss_limit):
@@ -108,6 +118,8 @@ def run_mt5(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
             print(f"-- DAILY LOSS STOP: equity {equity:.2f} <= "
                   f"{day_start_equity * (1 - params.risk.daily_loss_limit):.2f}; "
                   f"flat until tomorrow")
+            tg_send(f"⚠️ Gold bot: daily loss stop hit at {equity:,.2f}. "
+                    f"All positions closed; flat until tomorrow.")
 
         open_positions = mt5.positions_get(symbol=symbol) or []
         if not halted_for_day and not open_positions and len(prices) > 130:
@@ -119,6 +131,10 @@ def run_mt5(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
                 break
         time.sleep(poll_seconds)
 
+    final_eq = mt5.account_info().equity
+    tg_send(f"🥇 Gold bot session over. Equity {final_eq:,.2f} "
+            f"({(final_eq / day_start_equity - 1) * 100:+.2f}% today). "
+            f"Open positions keep their broker-side SL/TP.")
     print("session over — positions (with broker-side SL/TP) left to their exits")
     mt5.shutdown()
 
@@ -178,6 +194,10 @@ def _place_order(mt5, symbol: str, sig, price: float,
     if result and result.retcode == mt5.TRADE_RETCODE_DONE:
         print(f"  OPEN [{sig.strategy}] {side} {lots} lots {symbol} @ {px:.2f} "
               f"SL {request['sl']:.2f} TP {request['tp']:.2f} — {sig.reason}")
+        from .telegram import send as tg_send
+        tg_send(f"🥇 OPEN {side} {lots} lots {symbol} @ {px:.2f} "
+                f"(SL {request['sl']:.2f} / TP {request['tp']:.2f}) "
+                f"[{sig.strategy}]")
     else:
         code = result.retcode if result else "no result"
         print(f"  order rejected ({code}) — {side} {lots} lots; check margin "

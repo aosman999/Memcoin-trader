@@ -47,6 +47,20 @@ python3 -m goldtrader paper --minutes 480 # live spot prices, no broker needed
 Every order is placed with stop-loss and take-profit attached at the
 broker, so exits execute even if your computer disconnects.
 
+## Telegram notifications (optional, 2 minutes)
+
+1. In Telegram message **@BotFather** → `/newbot` → pick a name; copy the
+   bot token it gives you.
+2. Open your new bot's chat and press START.
+3. Message **@userinfobot** to get your numeric chat id.
+4. Create `data/telegram_config.json` (gitignored, stays on your machine):
+   ```json
+   {"bot_token": "123456789:AAF...xyz", "chat_id": 111222333}
+   ```
+
+The MT5 bridge then sends: session start/end, every order it opens,
+daily loss-stop alerts, and a daily PnL report at day rollover.
+
 ## What to expect (honesty section)
 
 Simulator results (~+4%/day average at ~4x effective leverage, red days
