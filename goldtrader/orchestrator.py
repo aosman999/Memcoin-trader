@@ -9,12 +9,13 @@ from __future__ import annotations
 
 from collections import deque
 
-from memetrader.engine.portfolio import Portfolio
-from memetrader.models import TradeRecord
+from .portfolio import Portfolio
+from .models import TradeRecord
 
 from .agents import EventSentinel, RegimeAgent, SessionAgent
 from .config import GoldParams
 from .leverage import LevEngine
+from .news_agent import NewsAgent
 from .strategies import ALL_STRATEGIES
 
 
@@ -31,6 +32,9 @@ class GoldOrchestrator:
         self.session = SessionAgent()
         self.regime = RegimeAgent()
         self.sentinel = EventSentinel()
+        # news agent is off in simulation (no headlines to read there);
+        # live paper mode and both MT5 bridges switch it on
+        self.news = NewsAgent(enabled=params.use_news)
         self.current_regime = "ranging"
 
     def on_price(self, price: float, now: float) -> list[TradeRecord]:
@@ -60,11 +64,14 @@ class GoldOrchestrator:
                     return closed
                 risk_scale = self.session.weight(now)
                 self.current_regime = self.regime.classify(history)
+            self.news.update(now)
             for strat in ALL_STRATEGIES:
                 sig = strat(history, self.params)
                 if sig is None:
                     continue
                 if sig.direction < 0 and not self.params.allow_short:
+                    continue
+                if not self.news.entry_allowed(sig.direction, now):
                     continue
                 pos = self.engine.open(sig.direction, price, self.portfolio,
                                        now, sig.strategy, risk_scale=risk_scale)

@@ -13,28 +13,7 @@ from __future__ import annotations
 import math
 import random
 
-from memetrader.models import TokenSnapshot, TokenSource
-
 TICK_SECONDS = 60.0
-
-
-def gold_snapshot(price: float, ts: float, price_high: float,
-                  last_minute_prices: list[float]) -> TokenSnapshot:
-    """Dress spot gold in the engine's snapshot interface. The 'safety'
-    fields are all trivially clean — there is no rug in bullion."""
-    vol_5m = sum(abs(last_minute_prices[i] - last_minute_prices[i - 1])
-                 for i in range(1, len(last_minute_prices))) * 1000 \
-        if len(last_minute_prices) > 1 else 0.0
-    return TokenSnapshot(
-        address="XAUUSD", symbol="XAU", name="Gold Spot (oz)",
-        source=TokenSource.SIM, created_at=0.0,
-        price=price, market_cap=1e13, liquidity=1e12,
-        volume_5m=vol_5m, volume_1h=vol_5m * 12,
-        holders=10**9, top10_holder_pct=0.0, deployer_holds_pct=0.0,
-        mint_revoked=True, freeze_revoked=True, lp_locked_or_burned=True,
-        has_socials=True, bonding_progress=1.0, graduated=True,
-        smart_wallet_buys_30m=0, price_high=price_high, ts=ts,
-    )
 
 
 class GoldSim:

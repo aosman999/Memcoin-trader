@@ -8,7 +8,7 @@ short, one position at a time, never pyramided.
 
 ## Religious-compliance note (read me)
 
-This module was created after the owner moved away from memecoins for
+This module trades gold only; the owner chose gold for
 religious reasons. Points to verify with your own scholar — this is
 engineering, not a fatwa:
 

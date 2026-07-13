@@ -21,9 +21,9 @@ import datetime as _dt
 import os
 import time
 
-from memetrader.config import DATA_DIR
-from memetrader.engine.day_guard import DayGuard
-from memetrader.engine.portfolio import Portfolio
+from .config import DATA_DIR
+from .day_guard import DayGuard
+from .portfolio import Portfolio
 
 from .config import GoldParams
 from .orchestrator import GoldOrchestrator
@@ -79,10 +79,11 @@ def cmd_campaign(args: argparse.Namespace) -> None:
 def cmd_paper(args: argparse.Namespace) -> None:
     from .datafeed.live import GoldLiveFeed
     params = GoldParams.load()
+    params.use_news = True     # live machine: the news agent can actually read
     pf = Portfolio.load(GOLD_PF_PATH) or Portfolio(args.bankroll)
     orch = GoldOrchestrator(params, portfolio=pf, verbose=True)
     feed = GoldLiveFeed()
-    guard = DayGuard(params.risk, pf.equity({}))
+    guard = DayGuard(params.risk, pf.equity_curve[-1])
     guard_date = _dt.date.today()
     end = time.time() + args.minutes * 60
     print(f"LIVE gold paper trading for {args.minutes} min "

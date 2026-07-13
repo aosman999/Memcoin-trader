@@ -26,7 +26,7 @@ import os
 import time
 import urllib.request
 
-from memetrader.config import DATA_DIR
+from .config import DATA_DIR
 
 from .agents import EventSentinel, SessionAgent
 from .config import GoldParams
@@ -116,7 +116,8 @@ def run_mac(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
     tg_send(f"🥇 Gold bot connected via MetaApi (Mac): equity "
             f"{acct.get('equity', 0):,.2f}. Session started.")
 
-    session, sentinel = SessionAgent(), EventSentinel()
+    from .news_agent import NewsAgent
+    session, sentinel, news = SessionAgent(), EventSentinel(), NewsAgent(enabled=True)
     prices: list[float] = []
     end = time.time() + minutes * 60
     last_bar_minute = int(time.time() // 60)
@@ -165,11 +166,14 @@ def run_mac(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
         agents_ok = (not params.use_agents
                      or (sentinel.check(prices + [mid], time.time())
                          and session.tradeable(time.time())))
+        news.update(time.time())
         if not halted_for_day and not open_positions and len(prices) > 130 \
                 and agents_ok:
             for strat in ALL_STRATEGIES:
                 sig = strat(prices, params)
                 if sig is None or (sig.direction < 0 and not params.allow_short):
+                    continue
+                if not news.entry_allowed(sig.direction, time.time()):
                     continue
                 r = params.risk
                 stop_dist = mid * r.stop_loss

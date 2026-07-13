@@ -21,7 +21,7 @@ import json
 import os
 import time
 
-from memetrader.config import DATA_DIR
+from .config import DATA_DIR
 
 from .agents import EventSentinel, SessionAgent
 from .config import GoldParams
@@ -78,7 +78,8 @@ def run_mt5(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
           f"{acct.balance:.2f} {acct.currency}, {symbol} "
           f"min lot {info.volume_min}, leverage 1:{acct.leverage}")
 
-    session, sentinel = SessionAgent(), EventSentinel()
+    from .news_agent import NewsAgent
+    session, sentinel, news = SessionAgent(), EventSentinel(), NewsAgent(enabled=True)
     prices: list[float] = []
     # preload an hour of minute bars so strategies have context immediately
     rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 0, 120)
@@ -127,11 +128,14 @@ def run_mt5(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
         agents_ok = (not params.use_agents
                      or (sentinel.check(prices + [mid], time.time())
                          and session.tradeable(time.time())))
+        news.update(time.time())
         if not halted_for_day and not open_positions and len(prices) > 130 \
                 and agents_ok:
             for strat in ALL_STRATEGIES:
                 sig = strat(prices, params)
                 if sig is None or (sig.direction < 0 and not params.allow_short):
+                    continue
+                if not news.entry_allowed(sig.direction, time.time()):
                     continue
                 _place_order(mt5, symbol, sig, mid, params, info)
                 break

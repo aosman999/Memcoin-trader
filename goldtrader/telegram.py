@@ -18,7 +18,7 @@ import os
 import urllib.parse
 import urllib.request
 
-from memetrader.config import DATA_DIR
+from .config import DATA_DIR
 
 TELEGRAM_CONFIG_PATH = os.path.join(DATA_DIR, "telegram_config.json")
 _TIMEOUT = 10

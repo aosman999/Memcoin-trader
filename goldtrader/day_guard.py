@@ -1,26 +1,17 @@
 """Day guard — trade as many times as you like, but protect the day.
 
-Two circuit breakers, checked against equity every tick:
-
-  * PROFIT LOCK: once the day's equity peak clears the trigger (+10% by
-    default), a floor ratchets upward beneath it. Touch the floor and the
-    bot liquidates everything and stops for the day — the green day is
-    banked instead of round-tripped.
-  * DAILY LOSS STOP: if the day never got going and equity drops the
-    daily loss limit (-10% by default), liquidate and stop. A losing day
-    is capped at a scratch, never a blowup.
-
-This cannot make every day profitable — nothing honest can — but it
-converts "was profitable at some point today" into "ENDED profitable",
-and shrinks the bad days to noise.
+  * DAILY LOSS STOP: if the day's equity drops the daily loss limit from
+    the day's start, liquidate and stop until tomorrow — a losing day is
+    capped at a scratch, never a blowup.
+  * PROFIT LOCK (optional; disabled when profit_lock_trigger is huge):
+    once the day is up enough, a floor ratchets under the peak so a
+    green day cannot round-trip into red.
 """
 from __future__ import annotations
 
-from ..config import RiskParams
-
 
 class DayGuard:
-    def __init__(self, risk: RiskParams, start_equity: float):
+    def __init__(self, risk, start_equity: float):
         self.risk = risk
         self.start = start_equity
         self.peak = start_equity
@@ -29,7 +20,6 @@ class DayGuard:
 
     @property
     def armed(self) -> bool:
-        """Has the day been green enough to defend?"""
         return self.peak >= self.start * (1.0 + self.risk.profit_lock_trigger)
 
     def floor(self) -> float:

@@ -37,8 +37,8 @@ RR_RANGE = (1.5, 3.0)   # tp distance as a multiple of stop distance
 
 
 def _run_epoch(params: GoldParams, seed: int, days: int) -> dict:
-    from memetrader.engine.day_guard import DayGuard
-    from memetrader.engine.portfolio import Portfolio
+    from .day_guard import DayGuard
+    from .portfolio import Portfolio
 
     from .datafeed.simulator import GoldSim
     from .orchestrator import GoldOrchestrator
@@ -129,7 +129,25 @@ class GoldStrategyLab:
             elite = [c for _, c, _ in scored[: max(2, population // 3)]]
             pop = elite + [self._mutate(self.rng.choice(elite))
                            for _ in range(population - len(elite))]
-        best.save(save_path)
+
+        # SAVE GUARD: a low-budget run must never overwrite a better
+        # champion. The challenger has to beat the incumbent on HOLDOUT
+        # seeds neither trained on, else the incumbent stays.
+        holdout = (911, 912, 913)
+        def holdout_fit(cand: GoldParams) -> float:
+            ms, tr = [], 0
+            for s in holdout:
+                st = _run_epoch(cand, seed=s, days=days)
+                ms.append(st["multiple"]); tr += st["trades"]
+            return fitness_of(ms, tr // len(holdout))
+        challenger, incumbent = holdout_fit(best), holdout_fit(self.base)
+        if challenger >= incumbent:
+            best.save(save_path)
+            if verbose:
+                print(f"champion saved -> {save_path} "
+                      f"(holdout {challenger:+.3f} vs incumbent {incumbent:+.3f})")
+            return best
         if verbose:
-            print(f"champion saved -> {save_path}")
-        return best
+            print(f"challenger LOST holdout ({challenger:+.3f} vs "
+                  f"{incumbent:+.3f}) — keeping incumbent params")
+        return self.base

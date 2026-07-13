@@ -1,25 +1,27 @@
 # Gold Trader — multi-agent XAU/USD trading system
 
-Five cooperating AIs trade gold on simulated, live-paper, and MT5-demo
+Six cooperating AIs trade gold on simulated, live-paper, and MT5-demo
 markets (never real money):
 
 | AI | Job |
 |---|---|
-| **Session Agent** | Gold's liquidity clock (Asia/London/NY) — entries only when the market is truly alive, size scaled by session |
-| **Event Sentinel** | The safety veto: detects news-grade volatility shocks and blocks entries until the tape calms (A/B-validated: lifts the worst-case outcome above break-even) |
+| **Session Agent** | Gold's liquidity clock (Asia / London / NY) — entries only when the market is truly alive, size scaled by session |
+| **Event Sentinel** | Fast safety veto: detects news-grade price shocks in the tape and blocks entries until it calms (A/B-validated: lifts the worst-case outcome above break-even) |
+| **News Agent** | Reads the headlines that move gold — wars, missile strikes, sanctions, Fed speeches, CPI prints. Fresh high-impact news opens a stand-aside window; a strong bullish/bearish news bias blocks counter-direction entries |
 | **Regime Agent** | Classifies the tape — trending / ranging / chaotic (advisory: the strategies carry their own regime filters) |
 | **Strategy AIs** | Trend-following, mean-reversion, breakout — long & short, one position at a time |
-| **Gold Strategy Lab** | Evolutionary self-improvement over every parameter; champions must win across multiple market seeds |
+| **Gold Strategy Lab** | Evolutionary self-improvement over every parameter; champions must win across multiple simulated market seeds |
 
-Everything sits on a shared risk engine: stop-defined position sizing
-(never exceeds the leverage cap), stop-loss and take-profit attached
-broker-side on every order, a -15% daily loss stop, and demo-only guards
-in both MT5 bridges.
+Everything sits on a shared risk engine: **stop-defined position sizing**
+(risk % of equity / stop distance, hard-capped by the leverage limit),
+stop-loss and take-profit attached **broker-side** on every order, a
+**daily loss stop**, margin stop-out modeling, and **demo-only guards**
+in both MT5 bridges — the code refuses real-money accounts.
 
-## Quickstart
+## Quickstart (pure stdlib, Python 3.10+, zero installs)
 
 ```bash
-python3 -m goldtrader backtest --days 30     # simulator (2026-calibrated)
+python3 -m goldtrader backtest --days 30     # simulator (2026-regime calibrated)
 python3 -m goldtrader campaign               # persistent day-by-day ledger
 python3 -m goldtrader paper --minutes 480    # LIVE real gold prices, no broker
 python3 -m goldtrader evolve                 # Gold Strategy Lab
@@ -27,148 +29,37 @@ python3 -m goldtrader mt5                    # MT5 demo bridge (Windows)
 python3 -m goldtrader mac                    # MT5 demo via MetaApi (macOS/Linux)
 ```
 
-Docs: **[docs/GOLD.md](docs/GOLD.md)** (setup: MT5, MetaApi, Telegram
-alerts) and **[docs/GOLD_MARKET_STUDY.md](docs/GOLD_MARKET_STUDY.md)**
-(the market research since 1971 behind the calibration).
-
-> **Repo history note**: this project began as a memecoin paper-trader
-> (the repo name survives from then). The owner pivoted to gold for
-> religious reasons. The original memecoin system lives on in
-> `memetrader/` — `goldtrader` reuses its portfolio/risk/day-guard
-> engine — and is documented below, but is no longer actively traded
-> or developed.
-
-A zero-dependency Python system in which **five cooperating AIs** research,
-vet, and paper-trade Solana memecoins — every entry at low market cap,
-every exit owned by a disciplined risk engine, and a self-improvement loop
-that evolves the strategy parameters against a market simulator calibrated
-to real pump.fun-era statistics.
-
-> **This system never touches real money.** It has no wallet, no keys, and
-> deliberately no live-execution code. Paper trade until the numbers earn
-> anything more — and read the disclaimer at the bottom.
-
-## The agents
-
-```
-                        ┌────────────────────────────────────┐
-                        │            ORCHESTRATOR            │
-                        └────────────────────────────────────┘
-   discovery                 vetting                intelligence
-┌─────────────┐   ┌────────────────────────┐   ┌─────────────────────┐
-│   SCOUT     │──▶│      RUG CHECKER       │   │  NEWS AGENT         │
-│ new coins,  │   │ mint/freeze authority, │   │  narrative metas    │
-│ low mcap    │   │ LP lock, holder spread,│   ├─────────────────────┤
-│ only        │   │ deployer bags → VETO   │   │  WHALE TRACKER      │
-└─────────────┘   └────────────────────────┘   │  measured-PnL       │
-                              │                │  wallets, copy sigs │
-                              ▼                └─────────────────────┘
-     ┌────────────────────────────────────────────────┐
-     │                  STRATEGIES                    │
-     │  graduation_sniper · momentum · copy_trade ·   │
-     │  dip_buyer                                     │
-     └────────────────────────────────────────────────┘
-                              │ buy signals
-                              ▼
-     ┌────────────────────────────────────────────────┐
-     │   RISK ENGINE — sizing, stops, TP ladder,      │
-     │   moonbag trailing stop, rug exits             │
-     └────────────────────────────────────────────────┘
-                              ▲
-     ┌────────────────────────────────────────────────┐
-     │   STRATEGY LAB — evolves every parameter by    │
-     │   paper-trading mutations across market seeds  │
-     └────────────────────────────────────────────────┘
-```
-
-| Agent | Job |
-|---|---|
-| **Scout** | Finds newly launched coins (pump.fun bonding curve, DexScreener new pairs) and enforces the house rule: only low market caps enter the funnel |
-| **Rug Checker** | Background check with hard veto: mint/freeze authority, LP lock/burn, holder concentration, deployer bags, socials, liquidity. Keeps re-checking open positions and forces instant exits on rug signals |
-| **News Agent** | Tracks the hot narrative meta (dogs → AI → politics → …) and boosts/penalizes signals by fit |
-| **Whale Tracker** | Maintains measured track records of trader wallets; flags convergent smart-money entries; powers copy trading |
-| **Strategy Lab** | The AI that improves the other AIs: evolutionary search over every strategy/risk parameter, fitness = drawdown-penalized return across multiple simulated market seeds |
-
-## Quickstart (no installs — pure stdlib, Python 3.10+)
-
-```bash
-# 1. Paper-trade 72 simulated hours of memecoin market
-python3 -m memetrader backtest --hours 72 --verbose
-
-# 2. Let the Strategy Lab evolve better parameters (writes data/best_params.json)
-python3 -m memetrader evolve --generations 6 --population 10
-
-# 3. Re-test with the evolved champion (picked up automatically)
-python3 -m memetrader backtest --hours 72
-
-# 4. LIVE paper trading on real market data (needs internet; still no real money)
-python3 -m memetrader paper --minutes 120
-
-# 5. Inspect the saved live-paper portfolio anytime
-python3 -m memetrader report
-
-# 6. Quick-flip mode (buy, take profit immediately, move on) + tiny bankroll
-python3 -m memetrader backtest --scalp --bankroll 20 --hours 24
-
-# 7. The persistent $20 campaign: one simulated trading day per run,
-#    equity carries over, dated ledger written to data/pnl_log.md
-python3 -m memetrader campaign
-```
-
-### Quick-flip (scalp) profile
-
-`--scalp` switches the exit ladder to fast profit-taking: **sell 60% at
-+30%, 25% at +60%, 10% at +120%**, 25% stop, 18% trailing stop, nothing
-held past ~2 hours. `python3 -m memetrader evolve --scalp` evolves this
-profile separately (champion: `data/best_params_scalp.json`).
-
-Example simulator results (72h, $1,000 start — **simulator numbers do not
-promise live results**):
-
-```
-final equity  $22,352   return +2135%   trades 119   win rate 89%   max DD 3.9%
-  copy_trade         44 trades  avg  8.10x   +$12,149
-  momentum           31 trades  avg  4.47x   +$5,985
-  graduation_sniper  36 trades  avg  2.06x   +$3,426
-  dip_buyer           8 trades  avg  1.31x   +$609
-```
-
 ## Documentation
 
-- **[docs/MARKET_STUDY.md](docs/MARKET_STUDY.md)** — the memecoin market
-  from Dogecoin (2013) through pump.fun industrialization to 2026: the hard
-  statistics, why "$50 → $50M" stories are survivorship bias, and how each
-  finding became a system rule.
-- **[docs/STRATEGIES.md](docs/STRATEGIES.md)** — the four strategies, the
-  rug-check gate, the exit ladder, and the evolution loop, with every
-  tunable explained.
-- **[docs/PLATFORMS.md](docs/PLATFORMS.md)** — what to use alongside
-  Phantom (GMGN for copy trading, Axiom/Photon for terminals, RugCheck for
-  safety), wallet hygiene, and how to pick wallets worth copying.
+- **[docs/GOLD.md](docs/GOLD.md)** — full setup: MT5 demo (Windows),
+  MetaApi (MacBook/Linux), Telegram trade alerts and daily PnL reports
+- **[docs/GOLD_MARKET_STUDY.md](docs/GOLD_MARKET_STUDY.md)** — the market
+  research behind the calibration: gold since free trading opened (1971)
+  through the January 2026 all-time high and today's high-volatility regime
 
 ## Project layout
 
 ```
-memetrader/
-  config.py            every tunable parameter (evolvable)
-  models.py            shared dataclasses
-  datafeed/
-    simulator.py       offline market calibrated to real memecoin statistics
-    live.py            DexScreener + pump.fun + RugCheck clients (keyless)
-  agents/              scout, rug_checker, news_agent, whale_tracker, strategy_lab
-  strategies/          graduation_sniper, momentum, copy_trade, dip_buyer
-  engine/              portfolio, risk (exits/sizing), paper_broker (slippage), orchestrator
-  main.py              CLI
-data/
-  best_params.json     Strategy Lab champion (auto-loaded)
-  watch_wallets.json   wallets to copy (seed from GMGN/Kolscan leaderboards)
+goldtrader/
+  config.py            every tunable (evolvable); champion in data/gold_params.json
+  strategies.py        trend / mean-reversion / breakout (long & short)
+  agents.py            session clock, event sentinel, regime classifier
+  news_agent.py        headline tracker (wars, Fed, CPI) with entry gating
+  leverage.py          margin engine: risk-based sizing, SL/TP, stop-out
+  orchestrator.py      wires agents -> strategies -> risk engine
+  day_guard.py         daily loss stop (profit lock available, off by default)
+  portfolio.py         cash, trade ledger, equity curve, stats
+  strategy_lab.py      evolutionary parameter search
+  campaign.py          persistent daily ledger (data/gold_pnl_log.md)
+  datafeed/            2026-calibrated simulator + live spot feeds (keyless)
+  mt5_bridge.py        MetaTrader 5 demo bridge (Windows)
+  metaapi_bridge.py    MT5 demo via MetaApi cloud (macOS/Linux)
+  telegram.py          trade alerts + daily reports to your Telegram
 ```
 
 ## Disclaimer
 
-Memecoins are the highest-risk corner of crypto: most tokens are scams,
-most traders lose money, and nothing in this repository changes those base
-rates. This code is a research and paper-trading tool, not financial
-advice and not an invitation to deploy capital. Simulator performance
-(however good) does not predict live performance. If you ever trade real
-money, use a separate small wallet you can afford to lose entirely.
+Leveraged gold trading can lose money quickly; most retail traders lose.
+This project is a research and DEMO-trading tool — it refuses real-money
+accounts by design, and simulated results (however good) do not predict
+live performance. Nothing here is financial advice.

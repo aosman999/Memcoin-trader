@@ -17,8 +17,8 @@ from __future__ import annotations
 import time as _time
 from dataclasses import dataclass
 
-from memetrader.engine.portfolio import Portfolio
-from memetrader.models import TradeRecord
+from .portfolio import Portfolio
+from .models import TradeRecord
 
 HALF_SPREAD = 0.00013     # ~$0.45/oz each way on XAUUSD, typical MT5 raw+comm
 
@@ -121,9 +121,9 @@ class LevEngine:
         pnl = self._unrealized(price)
         pf.cash += pnl
         rec = TradeRecord(
-            address="XAUUSD", symbol=("XAU-L" if p.direction > 0 else "XAU-S"),
+            symbol=("XAU-L" if p.direction > 0 else "XAU-S"),
             strategy=p.strategy, entry_price=p.entry_price, exit_price=price,
-            entry_mcap=0.0, size_usd=p.notional, pnl_usd=pnl,
+            notional_usd=p.notional, pnl_usd=pnl,
             multiple=1.0 + pnl / p.notional if p.notional else 1.0,
             hold_minutes=(now - p.opened_at) / 60.0, exit_reason=reason,
             opened_at=p.opened_at, closed_at=now,

@@ -1,8 +1,9 @@
-"""Gold paper-trading campaign — persistent day-by-day $20 ledger.
+"""Gold paper-trading campaign — the persistent day-by-day ledger.
 
-Same discipline as before: one trading day per calendar date, equity
-carries over, everything liquidated to cash at day end, day guard active
-throughout. Results land in data/gold_pnl_log.md.
+One trading day per calendar date (weekends skipped — gold is closed),
+equity carries over, everything liquidated to cash at day end, day
+guard active throughout. Each day is anchored to the REAL spot gold
+price. Results land in data/gold_pnl_log.md.
 """
 from __future__ import annotations
 
@@ -10,9 +11,9 @@ import datetime as _dt
 import json
 import os
 
-from memetrader.config import DATA_DIR
-from memetrader.engine.day_guard import DayGuard
-from memetrader.engine.portfolio import Portfolio
+from .config import DATA_DIR
+from .day_guard import DayGuard
+from .portfolio import Portfolio
 
 from .config import GoldParams
 from .datafeed.simulator import GoldSim
@@ -23,10 +24,11 @@ PNL_LOG_PATH = os.path.join(DATA_DIR, "gold_pnl_log.md")
 
 _LOG_HEADER = (
     "# Gold Paper-Trading Campaign — PnL Ledger\n\n"
-    "Spot gold, unleveraged, long-only, swap-free — $20 starting bankroll,\n"
-    "one simulated trading day per row. **SIMULATED paper results** (this\n"
-    "environment cannot reach live price APIs); live paper trading runs\n"
-    "via `python3 -m goldtrader paper` on your own machine.\n\n"
+    "XAU/USD, risk-based sizing under a 1:200 cap, one trading day per\n"
+    "calendar date, each day anchored to the REAL spot price.\n"
+    "**SIMULATED paper results** (this environment cannot stream live\n"
+    "ticks); live trading runs via the MT5/MetaApi bridges on the\n"
+    "owner's machine.\n\n"
     "| date | day | real spot anchor | start | end | day pnl | day % | trades | win rate |\n"
     "|---|---|---|---|---|---|---|---|---|\n"
 )
