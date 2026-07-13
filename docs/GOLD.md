@@ -47,6 +47,27 @@ python3 -m goldtrader paper --minutes 480 # live spot prices, no broker needed
 Every order is placed with stop-loss and take-profit attached at the
 broker, so exits execute even if your computer disconnects.
 
+## MacBook / Linux setup (MetaApi — no Windows needed)
+
+MetaQuotes' python package is Windows-only, so on a Mac the bot talks to
+your MT5 demo account through **MetaApi** (metaapi.cloud, free tier):
+
+1. Sign up at https://app.metaapi.cloud
+2. Trading accounts → **Add account**: MT5, your demo login/password and
+   server (e.g. `MetaQuotes-Demo`) → **Deploy** (takes ~a minute)
+3. Copy the account's **id** (uuid) and create an **API token**
+   (profile menu → API tokens)
+4. Create `data/metaapi_config.json` (gitignored):
+   ```json
+   {"token": "YOUR_TOKEN", "account_id": "YOUR_ACCOUNT_UUID",
+    "symbol": "XAUUSD", "region": "london"}
+   ```
+5. Run: `python3 -m goldtrader mac --minutes 480`
+
+Same engine, same risk rules, SL/TP attached broker-side, demo-only
+guard, Telegram alerts. You can watch the trades appear in the MT5 app
+on the Mac (or your phone) simultaneously.
+
 ## Telegram notifications (optional, 2 minutes)
 
 1. In Telegram message **@BotFather** → `/newbot` → pick a name; copy the

@@ -3,3 +3,4 @@ __pycache__/
 data/paper_portfolio.json
 data/mt5_config.json
 data/telegram_config.json
+data/metaapi_config.json

@@ -112,6 +112,11 @@ def cmd_mt5(args: argparse.Namespace) -> None:
     run_mt5(minutes=args.minutes, poll_seconds=args.interval)
 
 
+def cmd_mac(args: argparse.Namespace) -> None:
+    from .metaapi_bridge import run_mac
+    run_mac(minutes=args.minutes, poll_seconds=args.interval)
+
+
 def cmd_report(_args: argparse.Namespace) -> None:
     from .campaign import summary
     print(summary())
@@ -143,11 +148,17 @@ def main() -> None:
     p.add_argument("--bankroll", type=float, default=3000.0)
     p.set_defaults(fn=cmd_paper)
 
-    m = sub.add_parser("mt5", help="trade your MetaTrader 5 DEMO account "
+    m = sub.add_parser("mt5", help="trade your MT5 DEMO account "
                                    "(Windows + MT5 terminal + pip install MetaTrader5)")
     m.add_argument("--minutes", type=float, default=480.0)
     m.add_argument("--interval", type=float, default=15.0)
     m.set_defaults(fn=cmd_mt5)
+
+    mac = sub.add_parser("mac", help="trade your MT5 DEMO account from "
+                                     "macOS/Linux via MetaApi cloud")
+    mac.add_argument("--minutes", type=float, default=480.0)
+    mac.add_argument("--interval", type=float, default=15.0)
+    mac.set_defaults(fn=cmd_mac)
 
     r = sub.add_parser("report")
     r.set_defaults(fn=cmd_report)
