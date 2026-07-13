@@ -35,6 +35,8 @@ class GoldOrchestrator:
         # news agent is off in simulation (no headlines to read there);
         # live paper mode and both MT5 bridges switch it on
         self.news = NewsAgent(enabled=params.use_news)
+        from .mastery import StrategyMastery
+        self.mastery = StrategyMastery(persist=getattr(params, "use_mastery", False))
         self.current_regime = "ranging"
 
     def on_price(self, price: float, now: float) -> list[TradeRecord]:
@@ -45,6 +47,10 @@ class GoldOrchestrator:
         rec = self.engine.manage(price, self.portfolio, now)
         if rec:
             closed.append(rec)
+            # feed the outcome back to the mastery tracker: what was
+            # risked is notional * stop distance
+            self.mastery.record(rec.strategy, rec.pnl_usd,
+                                rec.notional_usd * self.params.risk.stop_loss)
             if self.verbose:
                 print(f"  CLOSE [{rec.exit_reason:>13}] {rec.symbol} "
                       f"pnl ${rec.pnl_usd:+.2f} held {rec.hold_minutes:.0f}m")
@@ -73,8 +79,15 @@ class GoldOrchestrator:
                     continue
                 if not self.news.entry_allowed(sig.direction, now):
                     continue
+                if self.params.use_indicators:
+                    from .indicators import confluence_ok
+                    if not confluence_ok(sig.strategy, sig.direction, history):
+                        continue
+                strat_scale = (self.mastery.risk_scale(sig.strategy)
+                               if self.params.use_mastery else 1.0)
                 pos = self.engine.open(sig.direction, price, self.portfolio,
-                                       now, sig.strategy, risk_scale=risk_scale)
+                                       now, sig.strategy,
+                                       risk_scale=risk_scale * strat_scale)
                 if pos:
                     if self.verbose:
                         side = "LONG" if sig.direction > 0 else "SHORT"

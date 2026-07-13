@@ -37,6 +37,8 @@ class GoldParams:
     exit_style: str = "binary"           # "binary" | "trail" | "breakeven"
     use_agents: bool = True              # session + sentinel gates (A/B-validated)
     use_news: bool = False               # news agent (auto-on in live bridges)
+    use_indicators: bool = False         # RSI/MACD/Bollinger confluence (A/B first)
+    use_mastery: bool = False            # per-strategy performance weighting (A/B first)
     allow_short: bool = True             # set False for long-only
     max_leverage: float = 200.0          # broker cap (1:200 account). Actual
                                          # leverage used = risk_per_trade/stop_loss

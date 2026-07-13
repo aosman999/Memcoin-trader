@@ -2,6 +2,8 @@
   "exit_style": "binary",
   "use_agents": true,
   "use_news": false,
+  "use_indicators": true,
+  "use_mastery": false,
   "allow_short": true,
   "max_leverage": 200.0,
   "ema_fast": 20,

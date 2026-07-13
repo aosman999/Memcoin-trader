@@ -116,10 +116,12 @@ class NewsAgent:
             return False                 # strongly gold-bearish news: no new longs
         return True
 
-    def state(self) -> str:
+    def state(self, now: float | None = None) -> str:
         if not self.enabled:
             return "news agent: offline"
+        import time as _t
+        now = _t.time() if now is None else now
         mood = ("bullish" if self.bias >= 3 else
                 "bearish" if self.bias <= -3 else "neutral")
         return f"news bias {self.bias:+d} ({mood})" + \
-               (", HIGH-IMPACT window open" if self._impact_until else "")
+               (", HIGH-IMPACT window open" if now < self._impact_until else "")
