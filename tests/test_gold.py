@@ -26,6 +26,35 @@ class TestGoldBroker(unittest.TestCase):
         self.assertGreater(back, spent * 0.998)  # ~0.04% round trip
 
 
+class TestAgents(unittest.TestCase):
+    def test_sentinel_blocks_news_shock(self):
+        from goldtrader.agents import EventSentinel
+        s = EventSentinel()
+        calm = [4100 + 0.05 * i for i in range(50)]
+        self.assertTrue(s.check(calm, now=1000.0))
+        shock = calm + [calm[-1] * 1.004]     # +0.4% in one minute
+        self.assertFalse(s.check(shock, now=2000.0))
+        # cooldown holds even after the tape calms
+        self.assertFalse(s.check(calm, now=2000.0 + 60))
+
+    def test_session_clock(self):
+        from goldtrader.agents import SessionAgent
+        a = SessionAgent()
+        overlap = 14 * 3600.0      # 14:00 UTC — London/NY overlap
+        graveyard = 22 * 3600.0    # 22:00 UTC
+        self.assertTrue(a.tradeable(overlap))
+        self.assertFalse(a.tradeable(graveyard))
+        self.assertGreater(a.weight(overlap), a.weight(graveyard))
+
+    def test_regime_labels(self):
+        from goldtrader.agents import RegimeAgent
+        r = RegimeAgent()
+        trend = [4000 + 0.5 * i for i in range(300)]
+        self.assertEqual(r.classify(trend), "trending")
+        rng = [4000 + (3 if i % 2 else -3) for i in range(300)]
+        self.assertEqual(r.classify(rng), "ranging")
+
+
 class TestGoldEndToEnd(unittest.TestCase):
     def test_solvent_and_leverage_capped(self):
         params = GoldParams()

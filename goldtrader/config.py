@@ -54,6 +54,7 @@ def gold_risk() -> RiskParams:
 class GoldParams:
     # execution mode
     exit_style: str = "trail"            # "trail" | "breakeven" | "binary"
+    use_agents: bool = True              # session/regime/sentinel agents gate entries
     allow_short: bool = True             # set False for long-only (spot/Islamic)
     max_leverage: float = 100.0          # broker cap (1:100 account). Actual
                                          # leverage used = risk_per_trade /

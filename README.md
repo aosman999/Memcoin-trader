@@ -1,11 +1,42 @@
-# Memcoin Trader — multi-agent trading system
+# Gold Trader — multi-agent XAU/USD trading system
 
-> **Project pivot (July 2026)**: the owner moved away from memecoin
-> trading for religious reasons. Active development now targets **gold
-> (XAU/USD)** — see **[docs/GOLD.md](docs/GOLD.md)** and the `goldtrader/`
-> package (spot + MetaTrader 5 demo bridge, configurable leverage,
-> long-only mode). The memecoin system below remains as a working
-> reference implementation and is no longer actively traded.
+Five cooperating AIs trade gold on simulated, live-paper, and MT5-demo
+markets (never real money):
+
+| AI | Job |
+|---|---|
+| **Session Agent** | Gold's liquidity clock (Asia/London/NY) — entries only when the market is truly alive, size scaled by session |
+| **Event Sentinel** | The safety veto: detects news-grade volatility shocks and blocks entries until the tape calms (A/B-validated: lifts the worst-case outcome above break-even) |
+| **Regime Agent** | Classifies the tape — trending / ranging / chaotic (advisory: the strategies carry their own regime filters) |
+| **Strategy AIs** | Trend-following, mean-reversion, breakout — long & short, one position at a time |
+| **Gold Strategy Lab** | Evolutionary self-improvement over every parameter; champions must win across multiple market seeds |
+
+Everything sits on a shared risk engine: stop-defined position sizing
+(never exceeds the leverage cap), stop-loss and take-profit attached
+broker-side on every order, a -15% daily loss stop, and demo-only guards
+in both MT5 bridges.
+
+## Quickstart
+
+```bash
+python3 -m goldtrader backtest --days 30     # simulator (2026-calibrated)
+python3 -m goldtrader campaign               # persistent day-by-day ledger
+python3 -m goldtrader paper --minutes 480    # LIVE real gold prices, no broker
+python3 -m goldtrader evolve                 # Gold Strategy Lab
+python3 -m goldtrader mt5                    # MT5 demo bridge (Windows)
+python3 -m goldtrader mac                    # MT5 demo via MetaApi (macOS/Linux)
+```
+
+Docs: **[docs/GOLD.md](docs/GOLD.md)** (setup: MT5, MetaApi, Telegram
+alerts) and **[docs/GOLD_MARKET_STUDY.md](docs/GOLD_MARKET_STUDY.md)**
+(the market research since 1971 behind the calibration).
+
+> **Repo history note**: this project began as a memecoin paper-trader
+> (the repo name survives from then). The owner pivoted to gold for
+> religious reasons. The original memecoin system lives on in
+> `memetrader/` — `goldtrader` reuses its portfolio/risk/day-guard
+> engine — and is documented below, but is no longer actively traded
+> or developed.
 
 A zero-dependency Python system in which **five cooperating AIs** research,
 vet, and paper-trade Solana memecoins — every entry at low market cap,

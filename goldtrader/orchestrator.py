@@ -12,6 +12,7 @@ from collections import deque
 from memetrader.engine.portfolio import Portfolio
 from memetrader.models import TradeRecord
 
+from .agents import EventSentinel, RegimeAgent, SessionAgent
 from .config import GoldParams
 from .leverage import LevEngine
 from .strategies import ALL_STRATEGIES
@@ -19,13 +20,18 @@ from .strategies import ALL_STRATEGIES
 
 class GoldOrchestrator:
     def __init__(self, params: GoldParams, portfolio: Portfolio | None = None,
-                 verbose: bool = False):
+                 verbose: bool = False, use_agents: bool | None = None):
         self.params = params
         self.verbose = verbose
         self.portfolio = portfolio or Portfolio(params.risk.starting_bankroll_usd)
         self.engine = LevEngine(params.risk, max_leverage=params.max_leverage,
                                 exit_style=getattr(params, "exit_style", "trail"))
         self.prices: deque[float] = deque(maxlen=1600)
+        self.use_agents = params.use_agents if use_agents is None else use_agents
+        self.session = SessionAgent()
+        self.regime = RegimeAgent()
+        self.sentinel = EventSentinel()
+        self.current_regime = "ranging"
 
     def on_price(self, price: float, now: float) -> list[TradeRecord]:
         self.prices.append(price)
@@ -41,6 +47,19 @@ class GoldOrchestrator:
 
         if self.engine.pos is None:
             history = list(self.prices)
+            risk_scale = 1.0
+            if self.use_agents:
+                # A/B-validated gates: sentinel (news shock veto) + session
+                # (liquidity clock). Regime is ADVISORY only — gating by it
+                # measurably starved the strategies, which carry their own
+                # internal regime filters.
+                if (not self.sentinel.check(history, now)
+                        or not self.session.tradeable(now)):
+                    self.portfolio.equity_curve.append(
+                        self.engine.equity(self.portfolio, price))
+                    return closed
+                risk_scale = self.session.weight(now)
+                self.current_regime = self.regime.classify(history)
             for strat in ALL_STRATEGIES:
                 sig = strat(history, self.params)
                 if sig is None:
@@ -48,7 +67,7 @@ class GoldOrchestrator:
                 if sig.direction < 0 and not self.params.allow_short:
                     continue
                 pos = self.engine.open(sig.direction, price, self.portfolio,
-                                       now, sig.strategy)
+                                       now, sig.strategy, risk_scale=risk_scale)
                 if pos:
                     if self.verbose:
                         side = "LONG" if sig.direction > 0 else "SHORT"

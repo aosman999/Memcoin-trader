@@ -57,12 +57,12 @@ class LevEngine:
 
     # ------------------------------------------------------------------
     def open(self, direction: int, price: float, pf: Portfolio, now: float,
-             strategy: str) -> LevPosition | None:
+             strategy: str, risk_scale: float = 1.0) -> LevPosition | None:
         if self.pos is not None or pf.cash <= 0:
             return None
         r = self.risk
         equity = pf.cash
-        risk_usd = equity * r.risk_per_trade
+        risk_usd = equity * r.risk_per_trade * max(0.1, min(1.5, risk_scale))
         stop_dist = r.stop_loss
         tp_dist = r.tp_multiples[0] - 1.0
         notional = min(risk_usd / stop_dist, equity * self.max_leverage)

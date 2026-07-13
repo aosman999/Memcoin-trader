@@ -59,7 +59,9 @@ class GoldSim:
 
     @property
     def now_ts(self) -> float:
-        return 1_700_000_000.0 + self.tick * TICK_SECONDS
+        # base is midnight UTC so tick-of-day == UTC time-of-day: the
+        # SessionAgent's clock and the sim's session structure agree
+        return 1_700_006_400.0 + self.tick * TICK_SECONDS
 
     def _session_mult(self) -> float:
         minute_of_day = self.tick % 1440

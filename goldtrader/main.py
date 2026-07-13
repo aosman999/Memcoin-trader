@@ -117,6 +117,13 @@ def cmd_mac(args: argparse.Namespace) -> None:
     run_mac(minutes=args.minutes, poll_seconds=args.interval)
 
 
+def cmd_evolve(args: argparse.Namespace) -> None:
+    from .strategy_lab import GoldStrategyLab
+    print("Gold Strategy Lab: evolving parameters on the simulator...")
+    GoldStrategyLab().evolve(generations=args.generations,
+                             population=args.population, days=args.days)
+
+
 def cmd_report(_args: argparse.Namespace) -> None:
     from .campaign import summary
     print(summary())
@@ -159,6 +166,12 @@ def main() -> None:
     mac.add_argument("--minutes", type=float, default=480.0)
     mac.add_argument("--interval", type=float, default=15.0)
     mac.set_defaults(fn=cmd_mac)
+
+    e = sub.add_parser("evolve", help="Gold Strategy Lab: evolve parameters")
+    e.add_argument("--generations", type=int, default=4)
+    e.add_argument("--population", type=int, default=8)
+    e.add_argument("--days", type=int, default=10)
+    e.set_defaults(fn=cmd_evolve)
 
     r = sub.add_parser("report")
     r.set_defaults(fn=cmd_report)
