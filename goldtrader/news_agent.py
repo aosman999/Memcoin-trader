@@ -46,6 +46,11 @@ _TITLE_RE = re.compile(r"<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</title>",
                        re.IGNORECASE | re.DOTALL)
 
 
+CALENDAR_URL = "https://nfs.faireconomy.media/ff_calendar_thisweek.json"
+PRE_EVENT_MIN = 10      # flat this long BEFORE a scheduled high-impact event
+POST_EVENT_MIN = 15     # and this long after it hits
+
+
 class NewsAgent:
     name = "news"
     IMPACT_WINDOW_MIN = 20
@@ -59,6 +64,42 @@ class NewsAgent:
         self._impact_until = 0.0
         self._seen: set[str] = set()
         self._fail_streak = 0
+        # scheduled economic calendar (Fed, CPI, NFP, speeches):
+        # list of unix timestamps of high-impact USD events this week
+        self.scheduled_events: list[float] = []
+        self._next_calendar_poll = 0.0
+
+    # ------------------------------------------------------------------
+    def _fetch_calendar(self) -> None:
+        """Weekly high-impact USD events (fail-soft). The bot knows WHEN
+        Powell speaks or CPI drops BEFORE it happens and stands aside."""
+        import json as _json
+        req = urllib.request.Request(CALENDAR_URL,
+                                     headers={"User-Agent": "goldtrader/1.0"})
+        try:
+            with urllib.request.urlopen(req, timeout=8) as r:
+                events = _json.loads(r.read().decode("utf-8", "ignore"))
+        except Exception:
+            return
+        import datetime as _dt
+        out = []
+        for e in events if isinstance(events, list) else []:
+            try:
+                if e.get("impact") != "High" or e.get("country") not in ("USD",):
+                    continue
+                ts = _dt.datetime.strptime(
+                    e["date"][:19], "%Y-%m-%dT%H:%M:%S").timestamp()
+                # the feed's dates carry an offset suffix; a few minutes of
+                # skew is acceptable given the +/- window around each event
+                out.append(ts)
+            except (KeyError, ValueError, TypeError):
+                continue
+        if out:
+            self.scheduled_events = out
+
+    def in_scheduled_event_window(self, now: float) -> bool:
+        return any(t - PRE_EVENT_MIN * 60 <= now <= t + POST_EVENT_MIN * 60
+                   for t in self.scheduled_events)
 
     # ------------------------------------------------------------------
     def _fetch_titles(self) -> list[str] | None:
@@ -72,7 +113,12 @@ class NewsAgent:
             return None
 
     def update(self, now: float) -> None:
-        if not self.enabled or now < self._next_poll:
+        if not self.enabled:
+            return
+        if now >= self._next_calendar_poll:
+            self._next_calendar_poll = now + 12 * 3600   # refresh twice a day
+            self._fetch_calendar()
+        if now < self._next_poll:
             return
         self._next_poll = now + self.poll_minutes * 60
         titles = self._fetch_titles()
@@ -108,6 +154,8 @@ class NewsAgent:
         """direction: +1 long / -1 short. Exits are never blocked."""
         if not self.enabled:
             return True
+        if self.in_scheduled_event_window(now):
+            return False                 # scheduled Fed/CPI/speech: stand aside
         if now < self._impact_until:
             return False                 # high-impact window: stand aside
         if self.bias >= 3 and direction < 0:
