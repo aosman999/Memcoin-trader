@@ -57,6 +57,19 @@ class GoldParams:
     bo_lookback: int = 120
     bo_min_range_expansion: float = 1.6
 
+    # mentor sweep (ICT/PB Blake/TJR liquidity-sweep reversal).
+    # LIVE-ONLY by default: sweeps are real-market stop-hunt microstructure
+    # that the statistical simulator cannot contain, so the sim can't judge
+    # it — the demo account is its proving ground (mastery records it).
+    use_mentors: bool = False            # bridges force-enable at runtime
+    use_discipline: bool = False         # Valentini 3-loss daily stop — LIVE-ONLY
+                                         # (sim already has the day guard; measured
+                                         # as median-up but tail-down in sim)
+    sweep_lookback: int = 240            # minutes defining the session high/low
+    sweep_margin: float = 0.0003         # how far beyond the level = a sweep
+    sweep_atr_mult: float = 1.5          # rejection speed (displacement) filter
+    mentor_killzones_only: bool = True   # trade sweeps only at London/NY opens
+
     risk: RiskParams = field(default_factory=RiskParams)
 
     # ------------------------------------------------------------------

@@ -36,7 +36,9 @@ class GoldOrchestrator:
         # live paper mode and both MT5 bridges switch it on
         self.news = NewsAgent(enabled=params.use_news)
         from .mastery import StrategyMastery
+        from .mentors import MentorDiscipline
         self.mastery = StrategyMastery(persist=getattr(params, "use_mastery", False))
+        self.discipline = MentorDiscipline()
         self.current_regime = "ranging"
 
     def on_price(self, price: float, now: float) -> list[TradeRecord]:
@@ -51,6 +53,7 @@ class GoldOrchestrator:
             # risked is notional * stop distance
             self.mastery.record(rec.strategy, rec.pnl_usd,
                                 rec.notional_usd * self.params.risk.stop_loss)
+            self.discipline.on_trade_closed(rec.pnl_usd, now)
             if self.verbose:
                 print(f"  CLOSE [{rec.exit_reason:>13}] {rec.symbol} "
                       f"pnl ${rec.pnl_usd:+.2f} held {rec.hold_minutes:.0f}m")
@@ -71,7 +74,16 @@ class GoldOrchestrator:
                 risk_scale = self.session.weight(now)
                 self.current_regime = self.regime.classify(history)
             self.news.update(now)
-            for strat in ALL_STRATEGIES:
+            if (self.params.use_discipline
+                    and not self.discipline.entries_allowed(now)):
+                self.portfolio.equity_curve.append(
+                    self.engine.equity(self.portfolio, price))
+                return closed
+            candidates = list(ALL_STRATEGIES)
+            if self.params.use_mentors:
+                from .strategies import mentor_sweep_signal
+                candidates.insert(0, lambda h, p: mentor_sweep_signal(h, p, now))
+            for strat in candidates:
                 sig = strat(history, self.params)
                 if sig is None:
                     continue

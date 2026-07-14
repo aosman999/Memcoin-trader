@@ -27,6 +27,9 @@ GOLD_SPACE = [
     ("mr_max_trend_z", 0.3, 1.2, False),
     ("bo_lookback", 60, 240, True),
     ("bo_min_range_expansion", 1.2, 2.5, False),
+    ("sweep_lookback", 120, 480, True),
+    ("sweep_margin", 0.0001, 0.001, False),
+    ("sweep_atr_mult", 1.0, 3.0, False),
 ]
 # risk knobs (stop defines sizing; tp expressed as reward:risk ratio)
 RISK_SPACE = [

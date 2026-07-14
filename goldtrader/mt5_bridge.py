@@ -51,6 +51,8 @@ def run_mt5(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
 
     cfg = _load_config()
     params = GoldParams.load()
+    params.use_mentors = True    # live market: sweep strategy on its proving ground
+    params.use_discipline = True # Valentini 3-loss daily stop, live protection
     symbol = cfg.get("symbol", "XAUUSD")
 
     if not mt5.initialize():
@@ -78,8 +80,11 @@ def run_mt5(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
           f"{acct.balance:.2f} {acct.currency}, {symbol} "
           f"min lot {info.volume_min}, leverage 1:{acct.leverage}")
 
+    from .mentors import MentorDiscipline
     from .news_agent import NewsAgent
+    from .strategies import mentor_sweep_signal
     session, sentinel, news = SessionAgent(), EventSentinel(), NewsAgent(enabled=True)
+    discipline = MentorDiscipline()
     prices: list[float] = []
     # preload an hour of minute bars so strategies have context immediately
     rates = mt5.copy_rates_from_pos(symbol, mt5.TIMEFRAME_M1, 0, 120)
@@ -129,9 +134,18 @@ def run_mt5(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
                      or (sentinel.check(prices + [mid], time.time())
                          and session.tradeable(time.time())))
         news.update(time.time())
+        # mentor discipline: learn realized results from the broker's history
+        deals = mt5.history_deals_get(_time_dt_start(), _time_dt_now()) or []
+        losses_today = sum(1 for d in deals
+                           if getattr(d, "profit", 0) < 0 and d.magic == 777001
+                           and getattr(d, "entry", 1) == 1)
+        mentor_ok = (not params.use_discipline
+                     or losses_today < MentorDiscipline.MAX_LOSSES_PER_DAY)
+        candidates = ([lambda h, p: mentor_sweep_signal(h, p, time.time())]
+                      if params.use_mentors else []) + list(ALL_STRATEGIES)
         if not halted_for_day and not open_positions and len(prices) > 130 \
-                and agents_ok:
-            for strat in ALL_STRATEGIES:
+                and agents_ok and mentor_ok:
+            for strat in candidates:
                 sig = strat(prices, params)
                 if sig is None or (sig.direction < 0 and not params.allow_short):
                     continue
@@ -147,6 +161,17 @@ def run_mt5(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
             f"Open positions keep their broker-side SL/TP.")
     print("session over — positions (with broker-side SL/TP) left to their exits")
     mt5.shutdown()
+
+
+def _time_dt_start():
+    import datetime
+    now = datetime.datetime.now()
+    return datetime.datetime(now.year, now.month, now.day)
+
+
+def _time_dt_now():
+    import datetime
+    return datetime.datetime.now()
 
 
 def _close_all(mt5, symbol: str) -> None:

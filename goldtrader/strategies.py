@@ -76,6 +76,42 @@ def meanrev_signal(prices: list[float], p: GoldParams) -> GoldSignal | None:
     return None
 
 
+def mentor_sweep_signal(prices: list[float], p: GoldParams,
+                        now: float | None = None) -> GoldSignal | None:
+    """The ICT / PB Blake / TJR liquidity-sweep reversal.
+
+    IF price sweeps beyond the session high/low (runs the stops) and
+    snaps back through the level with DISPLACEMENT (a fast rejection),
+    THEN enter the reversal — only during kill zones (London/NY opens),
+    where these engineered moves actually happen.
+    """
+    look = p.sweep_lookback
+    if len(prices) < look + 6:
+        return None
+    if now is not None and p.mentor_killzones_only:
+        from .mentors import in_kill_zone
+        if not in_kill_zone(now):
+            return None
+    window = prices[-look - 5:-5]         # the levels BEFORE the sweep
+    recent = prices[-5:]                  # the sweep + rejection window
+    hi, lo = max(window), min(window)
+    last = prices[-1]
+    # displacement: the rejection leg must be fast relative to normal noise
+    from .indicators import atr_proxy
+    atr = atr_proxy(prices)
+    if atr <= 0:
+        return None
+    swept_high = max(recent) > hi * (1 + p.sweep_margin)
+    swept_low = min(recent) < lo * (1 - p.sweep_margin)
+    if swept_high and last < hi and (max(recent) - last) >= p.sweep_atr_mult * atr:
+        return GoldSignal("mentor_sweep", -1, 0.60,
+                          f"swept high {hi:.2f}, fast rejection back below")
+    if swept_low and last > lo and (last - min(recent)) >= p.sweep_atr_mult * atr:
+        return GoldSignal("mentor_sweep", +1, 0.60,
+                          f"swept low {lo:.2f}, fast rejection back above")
+    return None
+
+
 def breakout_signal(prices: list[float], p: GoldParams) -> GoldSignal | None:
     """Rolling high/low break with range expansion (session momentum)."""
     if len(prices) < p.bo_lookback + 10:

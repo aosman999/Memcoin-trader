@@ -85,6 +85,18 @@ class MetaApi:
         return self._req("/trade", "POST", {
             "actionType": "POSITION_CLOSE_ID", "positionId": position_id})
 
+    def losses_today(self) -> int:
+        """Closed losing deals since midnight UTC (fail-soft to 0)."""
+        import datetime as dt
+        start = dt.datetime.utcnow().strftime("%Y-%m-%dT00:00:00.000Z")
+        end = dt.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        deals = self._req(f"/history-deals/time/{start}/{end}") or []
+        if not isinstance(deals, list):
+            return 0
+        return sum(1 for d in deals
+                   if isinstance(d, dict) and d.get("entryType") == "DEAL_ENTRY_OUT"
+                   and float(d.get("profit", 0)) < 0)
+
 
 def _load_config() -> dict:
     if not os.path.exists(METAAPI_CONFIG_PATH):
@@ -99,6 +111,8 @@ def _load_config() -> dict:
 def run_mac(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
     cfg = _load_config()
     params = GoldParams.load()
+    params.use_mentors = True    # live market: sweep strategy on its proving ground
+    params.use_discipline = True # Valentini 3-loss daily stop, live protection
     symbol = cfg.get("symbol", "XAUUSD")
     api = MetaApi(cfg)
 
@@ -116,8 +130,11 @@ def run_mac(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
     tg_send(f"🥇 Gold bot connected via MetaApi (Mac): equity "
             f"{acct.get('equity', 0):,.2f}. Session started.")
 
+    from .mentors import MentorDiscipline
     from .news_agent import NewsAgent
+    from .strategies import mentor_sweep_signal
     session, sentinel, news = SessionAgent(), EventSentinel(), NewsAgent(enabled=True)
+    discipline = MentorDiscipline()
     prices: list[float] = []
     end = time.time() + minutes * 60
     last_bar_minute = int(time.time() // 60)
@@ -167,9 +184,13 @@ def run_mac(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
                      or (sentinel.check(prices + [mid], time.time())
                          and session.tradeable(time.time())))
         news.update(time.time())
+        mentor_ok = (not params.use_discipline
+                     or api.losses_today() < MentorDiscipline.MAX_LOSSES_PER_DAY)
+        candidates = ([lambda h, p: mentor_sweep_signal(h, p, time.time())]
+                      if params.use_mentors else []) + list(ALL_STRATEGIES)
         if not halted_for_day and not open_positions and len(prices) > 130 \
-                and agents_ok:
-            for strat in ALL_STRATEGIES:
+                and agents_ok and mentor_ok:
+            for strat in candidates:
                 sig = strat(prices, params)
                 if sig is None or (sig.direction < 0 and not params.allow_short):
                     continue

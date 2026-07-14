@@ -9,8 +9,9 @@ markets (never real money):
 | **Event Sentinel** | Fast safety veto: detects news-grade price shocks in the tape and blocks entries until it calms (A/B-validated: lifts the worst-case outcome above break-even) |
 | **News Agent** | Reads the headlines that move gold — wars, missile strikes, sanctions, Fed speeches, CPI prints. Fresh high-impact news opens a stand-aside window; a strong bullish/bearish news bias blocks counter-direction entries |
 | **Regime Agent** | Classifies the tape — trending / ranging / chaotic (advisory: the strategies carry their own regime filters) |
-| **Strategy AIs** | Trend-following, mean-reversion, breakout — long & short, one position at a time |
-| **Gold Strategy Lab** | Evolutionary self-improvement over every parameter; champions must win across multiple simulated market seeds |
+| **Strategy AIs** | Trend-following, mean-reversion, breakout — long & short, one position at a time, with RSI/MACD/Bollinger confluence on every setup |
+| **Mentor AI** | Studies trading mentors and encodes their mechanizable rules: ICT/PB Blake/TJR liquidity-sweep reversals in kill zones (live-only — real stop-hunts don't exist in a simulator) and Fabio Valentini's 3-losses-a-day hard stop. Registry in `mentors.py`; more mentors addable |
+| **Gold Strategy Lab** | Evolutionary self-improvement over every parameter; champions must win across multiple simulated market seeds AND beat the incumbent on holdout scenarios |
 
 Everything sits on a shared risk engine: **stop-defined position sizing**
 (risk % of equity / stop distance, hard-capped by the leverage limit),

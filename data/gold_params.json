@@ -14,6 +14,12 @@
   "mr_max_trend_z": 0.8,
   "bo_lookback": 120,
   "bo_min_range_expansion": 1.6,
+  "use_mentors": false,
+  "use_discipline": false,
+  "sweep_lookback": 240,
+  "sweep_margin": 0.0003,
+  "sweep_atr_mult": 1.5,
+  "mentor_killzones_only": true,
   "risk": {
     "starting_bankroll_usd": 3000.0,
     "risk_per_trade": 0.04,
