@@ -207,6 +207,16 @@ def _place_order(mt5, symbol: str, sig, price: float,
     lots = max(info.volume_min, round(lots / step) * step)
     lots = min(lots, info.volume_max)
 
+    # account-too-small guard: the broker's minimum lot must not force
+    # more than 2x the intended risk per trade
+    min_lot_risk = info.volume_min * OZ_PER_LOT * price * r.stop_loss
+    if min_lot_risk > equity * r.risk_per_trade * 2:
+        needed = min_lot_risk / r.risk_per_trade
+        print(f"  SKIP: account too small — the minimum lot risks "
+              f"${min_lot_risk:.2f}/trade ({min_lot_risk/equity:.0%} of equity). "
+              f"Fund to ~${needed:,.0f}+ for safe sizing.")
+        return
+
     is_buy = sig.direction > 0
     tick = mt5.symbol_info_tick(symbol)
     px = tick.ask if is_buy else tick.bid

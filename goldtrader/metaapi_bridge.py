@@ -197,6 +197,13 @@ def run_mac(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
                 if not news.entry_allowed(sig.direction, time.time()):
                     continue
                 r = params.risk
+                # account-too-small guard: min lot must not force >2x risk
+                min_lot_risk = 0.01 * OZ_PER_LOT * mid * r.stop_loss
+                if min_lot_risk > equity * r.risk_per_trade * 2:
+                    print(f"  SKIP: account too small — min lot risks "
+                          f"${min_lot_risk:.2f}/trade. Fund to "
+                          f"~${min_lot_risk / r.risk_per_trade:,.0f}+.")
+                    break
                 stop_dist = mid * r.stop_loss
                 tp_dist = mid * (r.tp_multiples[0] - 1.0)
                 notional = min(equity * r.risk_per_trade / r.stop_loss,
