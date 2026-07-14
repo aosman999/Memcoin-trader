@@ -22,7 +22,7 @@
   "mentor_killzones_only": true,
   "risk": {
     "starting_bankroll_usd": 3000.0,
-    "risk_per_trade": 0.04,
+    "risk_per_trade": 0.1,
     "stop_loss": 0.006,
     "tp_multiples": [
       1.012
