@@ -39,6 +39,9 @@ class GoldParams:
     use_news: bool = False               # news agent (auto-on in live bridges)
     use_indicators: bool = False         # RSI/MACD/Bollinger confluence (A/B first)
     use_mastery: bool = False            # per-strategy performance weighting (A/B first)
+    use_analyst: bool = False            # fool-me-twice GATING: measured -60%
+                                         # median in sim; available, off
+    journal_mistakes: bool = False       # loss journaling (campaign turns on)
     allow_short: bool = True             # set False for long-only
     max_leverage: float = 200.0          # broker cap (1:200 account). Actual
                                          # leverage used = risk_per_trade/stop_loss

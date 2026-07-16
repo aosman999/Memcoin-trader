@@ -125,6 +125,11 @@ def cmd_evolve(args: argparse.Namespace) -> None:
                              population=args.population, days=args.days)
 
 
+def cmd_mistakes(_args: argparse.Namespace) -> None:
+    from .mistake_analyst import MistakeAnalyst
+    print(MistakeAnalyst(persist=True).report())
+
+
 def cmd_report(_args: argparse.Namespace) -> None:
     from .campaign import summary
     print(summary())
@@ -173,6 +178,9 @@ def main() -> None:
     e.add_argument("--population", type=int, default=8)
     e.add_argument("--days", type=int, default=10)
     e.set_defaults(fn=cmd_evolve)
+
+    mi = sub.add_parser("mistakes", help="the Mistake Analyst's loss-pattern report")
+    mi.set_defaults(fn=cmd_mistakes)
 
     r = sub.add_parser("report")
     r.set_defaults(fn=cmd_report)

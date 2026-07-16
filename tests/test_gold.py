@@ -73,6 +73,36 @@ class TestNewsAgent(unittest.TestCase):
         self.assertGreater(bull - bear, 2)       # clearly gold-bullish set
 
 
+class TestMistakeAnalyst(unittest.TestCase):
+    def _loss(self, strategy="gold_breakout", regime="ranging"):
+        from goldtrader.models import TradeRecord
+        return TradeRecord("XAU-S", strategy, 4100, 4120, 30000, -300,
+                           0.99, 120, "stop_loss", 0, 7200)
+
+    def test_fool_me_twice_blocks_third(self):
+        from goldtrader.mistake_analyst import MistakeAnalyst
+        a = MistakeAnalyst(persist=False)
+        now = 50_000.0
+        a.on_trade_closed(self._loss(), "ranging", 1.0, now)
+        self.assertFalse(a.blocked("gold_breakout", "ranging", now))
+        a.on_trade_closed(self._loss(), "ranging", 1.0, now + 3600)
+        self.assertTrue(a.blocked("gold_breakout", "ranging", now + 3600))
+        # different regime or strategy is NOT blocked
+        self.assertFalse(a.blocked("gold_breakout", "trending", now + 3600))
+        self.assertFalse(a.blocked("gold_trend", "ranging", now + 3600))
+        # next day: clean slate
+        self.assertFalse(a.blocked("gold_breakout", "ranging", now + 90_000))
+
+    def test_wins_not_journaled(self):
+        from goldtrader.mistake_analyst import MistakeAnalyst
+        from goldtrader.models import TradeRecord
+        a = MistakeAnalyst(persist=False)
+        win = TradeRecord("XAU-L", "gold_trend", 4100, 4150, 30000, 360,
+                          1.012, 60, "take_profit", 0, 3600)
+        a.on_trade_closed(win, "trending", 1.0, 1000.0)
+        self.assertEqual(len(a.journal), 0)
+
+
 class TestGoldEndToEnd(unittest.TestCase):
     def test_solvent_and_leverage_capped(self):
         params = GoldParams()

@@ -62,6 +62,7 @@ def run_campaign_day(bankroll: float = 3000.0, verbose: bool = False,
     day = ledger["day"] + 1
     start_equity = float(ledger["equity"])
     params = GoldParams.load()
+    params.journal_mistakes = True    # the Mistake Analyst studies every loss
     params.risk.starting_bankroll_usd = start_equity
 
     if anchor_price is None:

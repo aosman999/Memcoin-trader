@@ -37,9 +37,14 @@ class GoldOrchestrator:
         self.news = NewsAgent(enabled=params.use_news)
         from .mastery import StrategyMastery
         from .mentors import MentorDiscipline
+        from .mistake_analyst import MistakeAnalyst
         self.mastery = StrategyMastery(persist=getattr(params, "use_mastery", False))
         self.discipline = MentorDiscipline()
+        self.analyst = MistakeAnalyst(
+            persist=getattr(params, "journal_mistakes", False)
+            or getattr(params, "use_analyst", False))
         self.current_regime = "ranging"
+        self._session_w = 1.0
 
     def on_price(self, price: float, now: float) -> list[TradeRecord]:
         self.prices.append(price)
@@ -54,6 +59,8 @@ class GoldOrchestrator:
             self.mastery.record(rec.strategy, rec.pnl_usd,
                                 rec.notional_usd * self.params.risk.stop_loss)
             self.discipline.on_trade_closed(rec.pnl_usd, now)
+            self.analyst.on_trade_closed(rec, self.current_regime,
+                                         self._session_w, now)
             if self.verbose:
                 print(f"  CLOSE [{rec.exit_reason:>13}] {rec.symbol} "
                       f"pnl ${rec.pnl_usd:+.2f} held {rec.hold_minutes:.0f}m")
@@ -72,6 +79,7 @@ class GoldOrchestrator:
                         self.engine.equity(self.portfolio, price))
                     return closed
                 risk_scale = self.session.weight(now)
+                self._session_w = risk_scale
                 self.current_regime = self.regime.classify(history)
             self.news.update(now)
             if (self.params.use_discipline
@@ -91,6 +99,10 @@ class GoldOrchestrator:
                     continue
                 if not self.news.entry_allowed(sig.direction, now):
                     continue
+                if (self.params.use_analyst
+                        and self.analyst.blocked(sig.strategy,
+                                                 self.current_regime, now)):
+                    continue   # fool-me-twice: benched for today
                 if self.params.use_indicators:
                     from .indicators import confluence_ok
                     if not confluence_ok(sig.strategy, sig.direction, history):

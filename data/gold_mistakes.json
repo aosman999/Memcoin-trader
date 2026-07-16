@@ -1,0 +1,1142 @@
+[
+  {
+    "day": "2023-11-15",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 62.0,
+    "pnl_usd": -529.58
+  },
+  {
+    "day": "2023-11-15",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 11.0,
+    "pnl_usd": -304.12
+  },
+  {
+    "day": "2023-11-16",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 365.0,
+    "pnl_usd": -159.9
+  },
+  {
+    "day": "2023-11-17",
+    "strategy": "gold_meanrev",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 455.0,
+    "pnl_usd": -231.63
+  },
+  {
+    "day": "2023-11-18",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 219.0,
+    "pnl_usd": -205.44
+  },
+  {
+    "day": "2023-11-18",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 383.0,
+    "pnl_usd": -195.91
+  },
+  {
+    "day": "2023-11-20",
+    "strategy": "gold_meanrev",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 79.0,
+    "pnl_usd": -523.2
+  },
+  {
+    "day": "2023-11-20",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 47.0,
+    "pnl_usd": -484.54
+  },
+  {
+    "day": "2023-11-21",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 42.0,
+    "pnl_usd": -733.36
+  },
+  {
+    "day": "2023-11-21",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 271.0,
+    "pnl_usd": -684.75
+  },
+  {
+    "day": "2023-11-22",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 347.0,
+    "pnl_usd": -325.26
+  },
+  {
+    "day": "2023-11-24",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 76.0,
+    "pnl_usd": -1322.67
+  },
+  {
+    "day": "2023-11-24",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.9,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 241.0,
+    "pnl_usd": -860.93
+  },
+  {
+    "day": "2023-11-25",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 172.0,
+    "pnl_usd": -2003.65
+  },
+  {
+    "day": "2023-11-26",
+    "strategy": "gold_meanrev",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.9,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 281.0,
+    "pnl_usd": -2420.67
+  },
+  {
+    "day": "2023-11-27",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 475.0,
+    "pnl_usd": -1755.35
+  },
+  {
+    "day": "2023-11-27",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 74.0,
+    "pnl_usd": -3728.51
+  },
+  {
+    "day": "2023-11-28",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.9,
+    "exit_reason": "time_stop",
+    "hold_minutes": 600.0,
+    "pnl_usd": -1179.32
+  },
+  {
+    "day": "2023-11-28",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 210.0,
+    "pnl_usd": -2235.89
+  },
+  {
+    "day": "2023-11-15",
+    "strategy": "gold_meanrev",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "time_stop",
+    "hold_minutes": 600.0,
+    "pnl_usd": -171.04
+  },
+  {
+    "day": "2023-11-15",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 487.0,
+    "pnl_usd": -431.05
+  },
+  {
+    "day": "2023-11-16",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "trending",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 111.0,
+    "pnl_usd": -409.56
+  },
+  {
+    "day": "2023-11-16",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 49.0,
+    "pnl_usd": -353.99
+  },
+  {
+    "day": "2023-11-16",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 24.0,
+    "pnl_usd": -304.35
+  },
+  {
+    "day": "2023-11-17",
+    "strategy": "gold_meanrev",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 23.0,
+    "pnl_usd": -706.41
+  },
+  {
+    "day": "2023-11-17",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 135.0,
+    "pnl_usd": -692.95
+  },
+  {
+    "day": "2023-11-17",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 16.0,
+    "pnl_usd": -684.66
+  },
+  {
+    "day": "2023-11-18",
+    "strategy": "gold_meanrev",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "time_stop",
+    "hold_minutes": 600.0,
+    "pnl_usd": -29.87
+  },
+  {
+    "day": "2023-11-18",
+    "strategy": "gold_meanrev",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 101.0,
+    "pnl_usd": -549.65
+  },
+  {
+    "day": "2023-11-19",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 15.0,
+    "pnl_usd": -211.2
+  },
+  {
+    "day": "2023-11-19",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.9,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 63.0,
+    "pnl_usd": -332.78
+  },
+  {
+    "day": "2023-11-21",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 485.0,
+    "pnl_usd": -671.79
+  },
+  {
+    "day": "2023-11-22",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 91.0,
+    "pnl_usd": -416.69
+  },
+  {
+    "day": "2023-11-22",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 220.0,
+    "pnl_usd": -890.28
+  },
+  {
+    "day": "2023-11-22",
+    "strategy": "gold_meanrev",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.9,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 206.0,
+    "pnl_usd": -601.99
+  },
+  {
+    "day": "2023-11-23",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 91.0,
+    "pnl_usd": -389.2
+  },
+  {
+    "day": "2023-11-23",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 71.0,
+    "pnl_usd": -781.35
+  },
+  {
+    "day": "2023-11-24",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 177.0,
+    "pnl_usd": -693.75
+  },
+  {
+    "day": "2023-11-25",
+    "strategy": "gold_meanrev",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 189.0,
+    "pnl_usd": -1602.68
+  },
+  {
+    "day": "2023-11-26",
+    "strategy": "gold_meanrev",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 212.0,
+    "pnl_usd": -809.71
+  },
+  {
+    "day": "2023-11-26",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 165.0,
+    "pnl_usd": -752.52
+  },
+  {
+    "day": "2023-11-27",
+    "strategy": "gold_meanrev",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 491.0,
+    "pnl_usd": -668.44
+  },
+  {
+    "day": "2023-11-28",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "time_stop",
+    "hold_minutes": 600.0,
+    "pnl_usd": -908.01
+  },
+  {
+    "day": "2023-11-28",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 114.0,
+    "pnl_usd": -706.06
+  },
+  {
+    "day": "2023-11-15",
+    "strategy": "gold_meanrev",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.9,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 404.0,
+    "pnl_usd": -389.85
+  },
+  {
+    "day": "2023-11-16",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 320.0,
+    "pnl_usd": -635.41
+  },
+  {
+    "day": "2023-11-17",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 172.0,
+    "pnl_usd": -268.29
+  },
+  {
+    "day": "2023-11-18",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 144.0,
+    "pnl_usd": -385.36
+  },
+  {
+    "day": "2023-11-19",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 328.0,
+    "pnl_usd": -410.72
+  },
+  {
+    "day": "2023-11-20",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 593.0,
+    "pnl_usd": -266.68
+  },
+  {
+    "day": "2023-11-21",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.9,
+    "exit_reason": "time_stop",
+    "hold_minutes": 600.0,
+    "pnl_usd": -213.89
+  },
+  {
+    "day": "2023-11-21",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 83.0,
+    "pnl_usd": -559.24
+  },
+  {
+    "day": "2023-11-22",
+    "strategy": "gold_meanrev",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 104.0,
+    "pnl_usd": -265.28
+  },
+  {
+    "day": "2023-11-23",
+    "strategy": "gold_meanrev",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 220.0,
+    "pnl_usd": -230.85
+  },
+  {
+    "day": "2023-11-23",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 227.0,
+    "pnl_usd": -393.58
+  },
+  {
+    "day": "2023-11-23",
+    "strategy": "gold_meanrev",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.9,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 159.0,
+    "pnl_usd": -316.67
+  },
+  {
+    "day": "2023-11-24",
+    "strategy": "gold_meanrev",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "time_stop",
+    "hold_minutes": 600.0,
+    "pnl_usd": -12.48
+  },
+  {
+    "day": "2023-11-25",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 257.0,
+    "pnl_usd": -355.17
+  },
+  {
+    "day": "2023-11-26",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 73.0,
+    "pnl_usd": -170.35
+  },
+  {
+    "day": "2023-11-26",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 289.0,
+    "pnl_usd": -267.81
+  },
+  {
+    "day": "2023-11-27",
+    "strategy": "gold_meanrev",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 151.0,
+    "pnl_usd": -193.87
+  },
+  {
+    "day": "2023-11-27",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 277.0,
+    "pnl_usd": -137.31
+  },
+  {
+    "day": "2023-11-28",
+    "strategy": "gold_meanrev",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 334.0,
+    "pnl_usd": -122.13
+  },
+  {
+    "day": "2023-11-15",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 433.0,
+    "pnl_usd": -185.64
+  },
+  {
+    "day": "2023-11-16",
+    "strategy": "gold_meanrev",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 116.0,
+    "pnl_usd": -324.14
+  },
+  {
+    "day": "2023-11-16",
+    "strategy": "gold_meanrev",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 114.0,
+    "pnl_usd": -352.9
+  },
+  {
+    "day": "2023-11-17",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 297.0,
+    "pnl_usd": -361.84
+  },
+  {
+    "day": "2023-11-19",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 174.0,
+    "pnl_usd": -564.62
+  },
+  {
+    "day": "2023-11-20",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 146.0,
+    "pnl_usd": -724.39
+  },
+  {
+    "day": "2023-11-21",
+    "strategy": "gold_meanrev",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "time_stop",
+    "hold_minutes": 600.0,
+    "pnl_usd": -41.77
+  },
+  {
+    "day": "2023-11-21",
+    "strategy": "gold_meanrev",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 190.0,
+    "pnl_usd": -465.24
+  },
+  {
+    "day": "2023-11-22",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 140.0,
+    "pnl_usd": -499.36
+  },
+  {
+    "day": "2023-11-23",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 89.0,
+    "pnl_usd": -427.08
+  },
+  {
+    "day": "2023-11-24",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 155.0,
+    "pnl_usd": -489.7
+  },
+  {
+    "day": "2023-11-24",
+    "strategy": "gold_meanrev",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 31.0,
+    "pnl_usd": -538.4
+  },
+  {
+    "day": "2023-11-25",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 284.0,
+    "pnl_usd": -210.84
+  },
+  {
+    "day": "2023-11-26",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 345.0,
+    "pnl_usd": -169.4
+  },
+  {
+    "day": "2023-11-27",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 66.0,
+    "pnl_usd": -174.48
+  },
+  {
+    "day": "2023-11-28",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 283.0,
+    "pnl_usd": -162.39
+  },
+  {
+    "day": "2023-11-18",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "trending",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 87.0,
+    "pnl_usd": -257.41
+  },
+  {
+    "day": "2023-11-18",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 244.0,
+    "pnl_usd": -178.75
+  },
+  {
+    "day": "2023-11-19",
+    "strategy": "gold_meanrev",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 164.0,
+    "pnl_usd": -213.81
+  },
+  {
+    "day": "2023-11-19",
+    "strategy": "gold_meanrev",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 43.0,
+    "pnl_usd": -328.57
+  },
+  {
+    "day": "2023-11-20",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 302.0,
+    "pnl_usd": -163.23
+  },
+  {
+    "day": "2023-11-21",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "trending",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 511.0,
+    "pnl_usd": -152.47
+  },
+  {
+    "day": "2023-11-26",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.9,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 593.0,
+    "pnl_usd": -377.04
+  },
+  {
+    "day": "2023-11-28",
+    "strategy": "gold_meanrev",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "time_stop",
+    "hold_minutes": 600.0,
+    "pnl_usd": -132.86
+  },
+  {
+    "day": "2023-11-20",
+    "strategy": "gold_meanrev",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 214.0,
+    "pnl_usd": -211.27
+  },
+  {
+    "day": "2023-11-24",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "trending",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 66.0,
+    "pnl_usd": -234.14
+  },
+  {
+    "day": "2023-11-25",
+    "strategy": "gold_meanrev",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 301.0,
+    "pnl_usd": -205.49
+  },
+  {
+    "day": "2023-11-25",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 424.0,
+    "pnl_usd": -197.12
+  },
+  {
+    "day": "2023-11-26",
+    "strategy": "gold_meanrev",
+    "side": "short",
+    "regime": "trending",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 25.0,
+    "pnl_usd": -337.73
+  },
+  {
+    "day": "2023-11-25",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "trending",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 403.0,
+    "pnl_usd": -193.47
+  },
+  {
+    "day": "2023-11-26",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "chaotic",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 53.0,
+    "pnl_usd": -313.82
+  },
+  {
+    "day": "2023-11-15",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "trending",
+    "session_weight": 0.6,
+    "exit_reason": "time_stop",
+    "hold_minutes": 600.0,
+    "pnl_usd": -46.52
+  },
+  {
+    "day": "2023-11-23",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "trending",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 68.0,
+    "pnl_usd": -316.19
+  },
+  {
+    "day": "2023-11-25",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "trending",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 168.0,
+    "pnl_usd": -166.61
+  },
+  {
+    "day": "2023-11-22",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "trending",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 40.0,
+    "pnl_usd": -341.12
+  },
+  {
+    "day": "2023-11-27",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "trending",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 59.0,
+    "pnl_usd": -284.94
+  },
+  {
+    "day": "2023-11-25",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "trending",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 527.0,
+    "pnl_usd": -379.45
+  },
+  {
+    "day": "2023-11-18",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "trending",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 26.0,
+    "pnl_usd": -318.41
+  },
+  {
+    "day": "2023-11-21",
+    "strategy": "gold_meanrev",
+    "side": "long",
+    "regime": "chaotic",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 55.0,
+    "pnl_usd": -322.76
+  },
+  {
+    "day": "2023-11-15",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "trending",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 116.0,
+    "pnl_usd": -191.63
+  },
+  {
+    "day": "2023-11-16",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "trending",
+    "session_weight": 0.9,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 91.0,
+    "pnl_usd": -261.37
+  },
+  {
+    "day": "2023-11-18",
+    "strategy": "gold_breakout",
+    "side": "long",
+    "regime": "trending",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 216.0,
+    "pnl_usd": -161.18
+  },
+  {
+    "day": "2023-11-16",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "trending",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 21.0,
+    "pnl_usd": -194.24
+  },
+  {
+    "day": "2023-11-17",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "chaotic",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 86.0,
+    "pnl_usd": -404.45
+  },
+  {
+    "day": "2023-11-27",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "trending",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 26.0,
+    "pnl_usd": -420.02
+  },
+  {
+    "day": "2023-11-24",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "trending",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 171.0,
+    "pnl_usd": -308.54
+  },
+  {
+    "day": "2023-11-26",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "trending",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 55.0,
+    "pnl_usd": -312.55
+  },
+  {
+    "day": "2023-11-15",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 440.0,
+    "pnl_usd": -351.32
+  },
+  {
+    "day": "2023-11-15",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 32.0,
+    "pnl_usd": -512.24
+  },
+  {
+    "day": "2023-11-15",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 199.0,
+    "pnl_usd": -563.44
+  },
+  {
+    "day": "2023-11-15",
+    "strategy": "gold_breakout",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 0.6,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 333.0,
+    "pnl_usd": -228.79
+  }
+]
