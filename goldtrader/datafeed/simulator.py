@@ -19,8 +19,12 @@ TICK_SECONDS = 60.0
 class GoldSim:
     """Evolves a spot-gold price path one minute at a time."""
 
-    def __init__(self, seed: int = 7, start_price: float = 4100.0):
+    def __init__(self, seed: int = 7, start_price: float = 4100.0,
+                 vol_scale: float = 1.0):
+        """vol_scale: 1.0 = the 2026 hot regime (~24% ann.); 0.6 ≈ the
+        20-year average regime; 1.5 ≈ crisis conditions."""
         self.rng = random.Random(seed)
+        self.vol_scale = vol_scale
         self.price = start_price
         self.tick = 0
         self.price_high = start_price
@@ -61,7 +65,7 @@ class GoldSim:
         if self.tick % 1440 == 0:
             self._roll_day()
 
-        sigma = 4.0e-4 * self._session_mult()
+        sigma = 4.0e-4 * self.vol_scale * self._session_mult()
         ret = rng.gauss(self.day_drift, sigma)
         if not self.trending_day:
             # gentle pull back toward the day's anchor (ranging behavior)

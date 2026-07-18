@@ -48,6 +48,9 @@ class GoldParams:
     use_atr_stops: bool = False          # stop distance adapts to volatility
     atr_stop_mult: float = 1.3           # stop = mult * 60m ATR (clamped)
     session_min_weight: float = 0.6      # raise to 0.9 to skip Asia entirely
+    use_vol_targeting: bool = False      # shrink risk when vol runs hot (A/B)
+    vol_boost_only: bool = False         # only upsize in calm, never shrink
+    vol_target_ref: float = 3.4e-4       # reference per-minute absolute move
     allow_short: bool = True             # set False for long-only
     max_leverage: float = 200.0          # broker cap (1:200 account). Actual
                                          # leverage used = risk_per_trade/stop_loss

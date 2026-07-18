@@ -3,17 +3,22 @@
 **Champion configuration** (as of 2026-07-17): binary SL/TP exits at
 2:1 reward:risk (stop −0.6%, target +1.2%), 10% equity risked per trade
 (owner-directed), session+sentinel agent gates, indicator confluence,
-−15% daily loss stop, 1:200 leverage cap.
+boost-only volatility targeting, −15% daily loss stop, 1:200 cap.
 
 ## Certification (20 virgin seeds, 14 trading days each, $3,000 start)
 
 | metric | value |
 |---|---|
-| median outcome | **x1.44** (+44%) |
-| mean outcome | x1.91 |
-| profitable runs | 13/20 (65%) |
-| best run | x4.85 |
-| worst run | x0.22 (−78%) |
+| median outcome | **x1.74** (+74%) |
+| mean outcome | x2.21 |
+| profitable runs | 14/20 (70%) |
+| best run | x5.28 |
+| worst run | x0.31 (−69%) |
+
+Regime dependence (12-seed sweeps): calm markets ≈ x6.4 median, current
+hot regime ≈ x2-3, crisis volatility ≈ break-even. Spread sensitivity:
+edge halves at 2x assumed spread — the news/sentinel stand-asides exist
+partly to avoid trading when real spreads blow out.
 
 These are SIMULATED numbers on a market model. The MT5 demo (from
 July 22) is the real test; its results supersede this table.
@@ -31,7 +36,16 @@ July 22) is the real test; its results supersede this table.
 | +20% daily profit lock | median collapses, fewer +20% days |
 | Indicator v1 (RSI exhaustion caps) | blocked best trends; redesigned to v2 (kept) |
 
+## Ideas tested and REJECTED (continued)
+
+| idea | verdict |
+|---|---|
+| Full vol targeting (shrink in crisis) | crisis median 1.00→0.67: shrinks recovery wins |
+
 ## Ideas tested and ADOPTED
+
+- Boost-only vol targeting — upsizes modestly in calm tape, never
+  shrinks: +17% certified median, better tail, +25% in calm regimes
 
 - Binary exits (2:1, no trailing) — best median of three exit styles
 - 10% risk/trade — best median at owner's direction, fat tails accepted

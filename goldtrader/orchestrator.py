@@ -117,6 +117,15 @@ class GoldOrchestrator:
                                    and sig.strategy == "gold_meanrev"))
                     if against:
                         strat_scale *= self.params.regime_risk_factor
+                # vol targeting: when the tape runs hotter than reference,
+                # risk shrinks proportionally — crisis exposure control
+                if self.params.use_vol_targeting:
+                    from .indicators import atr_proxy
+                    rv = atr_proxy(history, period=120) / price if price else 0.0
+                    if rv > 0:
+                        floor = 1.0 if self.params.vol_boost_only else 0.4
+                        strat_scale *= min(1.2, max(floor,
+                                           self.params.vol_target_ref / rv))
                 stop_frac = None
                 if self.params.use_atr_stops:
                     from .indicators import atr_proxy

@@ -120,10 +120,15 @@ def run_mac(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
     if acct is None:
         raise SystemExit("could not reach MetaApi — check token/account_id/"
                          "region and that the account is DEPLOYED")
-    if str(acct.get("type", "")).lower().startswith("real") or \
-            acct.get("tradeMode") == "real":
-        raise SystemExit("REFUSING to run: account reports as REAL money. "
-                         "This bridge only trades demo accounts.")
+    acct_type = str(acct.get("type", "")).lower()
+    trade_mode = str(acct.get("tradeMode", "")).lower()
+    # conservative: run ONLY when the account is explicitly demo/contest —
+    # an unknown or real type refuses. (Caught by mock-broker tests: the
+    # old prefix check missed MetaApi's ACCOUNT_TRADE_MODE_REAL format.)
+    if not any(k in acct_type or k in trade_mode for k in ("demo", "contest")):
+        raise SystemExit(f"REFUSING to run: account type '{acct.get('type')}' "
+                         "is not explicitly demo. This bridge only trades "
+                         "demo accounts.")
     print(f"connected via MetaApi: {acct.get('broker', '?')} "
           f"#{acct.get('login', '?')} ({acct.get('type', '?')}) — "
           f"equity {acct.get('equity', 0):,.2f} {acct.get('currency', 'USD')}")
