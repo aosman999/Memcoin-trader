@@ -30,6 +30,7 @@ GOLD_SPACE = [
     ("sweep_lookback", 120, 480, True),
     ("sweep_margin", 0.0001, 0.001, False),
     ("sweep_atr_mult", 1.0, 3.0, False),
+    ("vol_target_ref", 2.5e-4, 4.5e-4, False),
 ]
 # risk knobs (stop defines sizing; tp expressed as reward:risk ratio)
 RISK_SPACE = [
