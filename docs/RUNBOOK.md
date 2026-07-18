@@ -6,10 +6,9 @@ one command every day after.
 ## Before the laptop (do these from your phone, any time)
 
 1. **MetaApi** (free): sign up at https://app.metaapi.cloud →
-   Trading accounts → Add account → MT5, login `109508768`,
-   password `-c2hUsEq`, server `MetaQuotes-Demo` → **Deploy**.
+   Trading accounts → Add account → MT5, your demo login, password and server (from your MT5 signup) → **Deploy**.
    Copy the account's **id** (uuid) and create an **API token**.
-2. **Telegram**: already configured (bot @xau99AO_Bot, chat id saved).
+2. **Telegram**: use your own bot token and chat id (see docs/GOLD.md).
 
 ## Day one — on the MacBook
 
@@ -26,7 +25,7 @@ cat > data/metaapi_config.json <<'EOF'
  "symbol": "XAUUSD", "region": "london"}
 EOF
 cat > data/telegram_config.json <<'EOF'
-{"bot_token": "8869631014:AAEgE72nUfTjjnykEWDL4U5Pj_rBuBsB15o", "chat_id": 6506163554}
+{"bot_token": "PASTE_YOUR_BOT_TOKEN", "chat_id": PASTE_YOUR_CHAT_ID}
 EOF
 
 # 3. verify EVERYTHING before the first trade
