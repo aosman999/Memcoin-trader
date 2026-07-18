@@ -1,10 +1,23 @@
-# Gold Trader — spot XAU/USD, MetaTrader 5 demo
+# Gold Trader — XAU/USD, MetaTrader 5 demo
 
-The project's gold module: same engine discipline as the original bot
-(risk-based sizing, hard stops, full take-profits, day guard), pointed at
-gold. Three strategies — trend (EMA cross), mean reversion (z-score fade
-in ranges), breakout (session high/low with range expansion) — long and
-short, one position at a time, never pyramided.
+Seven cooperating AIs around one disciplined engine (risk-based sizing,
+broker-side stops, full take-profits, day guard):
+
+- **Strategies** — trend (EMA cross), mean reversion (z-score fade),
+  breakout (range expansion), plus the mentor-derived liquidity-sweep
+  reversal (live-only); long & short, one position at a time, with
+  RSI/MACD indicator confluence on every setup
+- **Session Agent** — gold's liquidity clock gates and scales entries
+- **Event Sentinel** — vetoes entries during news-grade price shocks
+- **News Agent** — headlines (wars, Fed, CPI) + the weekly economic
+  calendar: flat 10 min before to 15 min after scheduled events;
+  strong news bias blocks counter-direction entries (live-only)
+- **Mentor AI** — encoded playbooks (ICT, PB Blake, TJR, Valentini;
+  registry in `mentors.py`); Valentini's 3-loss daily stop runs live
+- **Mistake Analyst** — autopsies every loss into a journal
+  (`python3 -m goldtrader mistakes` for the pattern report)
+- **Gold Strategy Lab** — evolutionary tuning; challengers must beat
+  the incumbent on holdout scenarios before the champion changes
 
 ## Religious-compliance note (read me)
 
