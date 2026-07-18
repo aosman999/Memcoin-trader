@@ -7,13 +7,20 @@ boost-only volatility targeting, −15% daily loss stop, 1:200 cap.
 
 ## Certification (20 virgin seeds, 14 trading days each, $3,000 start)
 
-| metric | value |
-|---|---|
-| median outcome | **x1.74** (+74%) |
-| mean outcome | x2.21 |
-| profitable runs | 14/20 (70%) |
-| best run | x5.28 |
-| worst run | x0.31 (−69%) |
+Deep-evolution champion (2026-07-18; passed the 3-seed holdout gate
++2.65 vs +0.49, then head-to-head certified below):
+
+| metric | deep champion | prior champion |
+|---|---|---|
+| median outcome | **x2.52** (+152%) | x1.71 |
+| mean outcome | x3.76 | x2.43 |
+| profitable runs | 15/20 | 17/20 |
+| best run | x14.24 | x6.70 |
+| worst run | x0.37 (−63%) | x0.26 |
+
+Champion changes: slower trend EMA (75m) with a looser slope filter
+(more trends caught, judged over longer), mr_window 51, hotter calm
+boost (vol_target_ref 3.8e-4), tighter mentor-sweep detection.
 
 Regime dependence (12-seed sweeps): calm markets ≈ x6.4 median, current
 hot regime ≈ x2-3, crisis volatility ≈ break-even. Spread sensitivity:
