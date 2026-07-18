@@ -130,6 +130,11 @@ def cmd_mistakes(_args: argparse.Namespace) -> None:
     print(MistakeAnalyst(persist=True).report())
 
 
+def cmd_preflight(_args: argparse.Namespace) -> None:
+    from .preflight import run_preflight
+    raise SystemExit(run_preflight())
+
+
 def cmd_report(_args: argparse.Namespace) -> None:
     from .campaign import summary
     print(summary())
@@ -181,6 +186,9 @@ def main() -> None:
 
     mi = sub.add_parser("mistakes", help="the Mistake Analyst's loss-pattern report")
     mi.set_defaults(fn=cmd_mistakes)
+
+    pf_ = sub.add_parser("preflight", help="verify this machine is ready to trade")
+    pf_.set_defaults(fn=cmd_preflight)
 
     r = sub.add_parser("report")
     r.set_defaults(fn=cmd_report)
