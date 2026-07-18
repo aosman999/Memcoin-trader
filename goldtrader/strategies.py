@@ -36,6 +36,17 @@ def _mean_std(values: list[float]) -> tuple[float, float]:
     return m, math.sqrt(var)
 
 
+def _mtf_agrees(prices: list[float], direction: int) -> bool:
+    """15-minute higher-timeframe filter: the 15m EMA(20) must slope with
+    the trade. Sampled from minute closes (every 15th)."""
+    bars15 = prices[-320::15]
+    if len(bars15) < 21:
+        return True
+    e_now = _ema(bars15, 20)
+    e_prev = _ema(bars15[:-1], 20)
+    return (e_now - e_prev) * direction >= 0
+
+
 def trend_signal(prices: list[float], p: GoldParams) -> GoldSignal | None:
     """EMA crossover with a sloping slow EMA: ride macro-flow days."""
     need = p.ema_slow + 5
@@ -47,9 +58,13 @@ def trend_signal(prices: list[float], p: GoldParams) -> GoldSignal | None:
     slow_prev = _ema(window[:-5], p.ema_slow)
     slope = (slow - slow_prev) / (5 * slow) if slow else 0.0
     if fast > slow and slope >= p.trend_min_slope and prices[-1] >= fast:
+        if p.use_mtf and not _mtf_agrees(prices, +1):
+            return None
         return GoldSignal("gold_trend", +1, 0.55,
                           f"EMA{p.ema_fast}>{p.ema_slow} rising ({slope:.2e})")
     if fast < slow and slope <= -p.trend_min_slope and prices[-1] <= fast:
+        if p.use_mtf and not _mtf_agrees(prices, -1):
+            return None
         return GoldSignal("gold_trend", -1, 0.55,
                           f"EMA{p.ema_fast}<{p.ema_slow} falling ({slope:.2e})")
     return None

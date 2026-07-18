@@ -42,6 +42,12 @@ class LevEngine:
         self.max_leverage = max_leverage
         self.exit_style = exit_style   # trail | breakeven | binary
         self.pos: LevPosition | None = None
+        # dynamic spread: real gold spreads widen 2-4x in violent minutes;
+        # the orchestrator updates this from the tape each tick
+        self.spread_mult = 1.0
+
+    def _half_spread(self) -> float:
+        return HALF_SPREAD * max(1.0, min(4.0, self.spread_mult))
 
     # ------------------------------------------------------------------
     def equity(self, pf: Portfolio, price: float) -> float:
@@ -52,7 +58,7 @@ class LevEngine:
 
     def _unrealized(self, price: float) -> float:
         p = self.pos
-        exit_eff = price * (1 - p.direction * HALF_SPREAD)
+        exit_eff = price * (1 - p.direction * self._half_spread())
         return p.notional * p.direction * (exit_eff / p.entry_price - 1.0)
 
     # ------------------------------------------------------------------
@@ -73,7 +79,7 @@ class LevEngine:
         notional = min(risk_usd / stop_dist, equity * self.max_leverage)
         if notional < 1.0:
             return None
-        entry = price * (1 + direction * HALF_SPREAD)
+        entry = price * (1 + direction * self._half_spread())
         self.pos = LevPosition(
             direction=direction, notional=notional, entry_price=entry,
             sl_price=entry * (1 - direction * stop_dist),

@@ -6,6 +6,7 @@
   "use_mastery": false,
   "use_analyst": false,
   "journal_mistakes": false,
+  "use_mtf": true,
   "use_regime_sizing": false,
   "regime_risk_factor": 0.6,
   "use_atr_stops": false,

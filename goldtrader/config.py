@@ -43,6 +43,7 @@ class GoldParams:
                                          # median in sim; available, off
     journal_mistakes: bool = False       # loss journaling (campaign turns on)
     # anti-chop candidates (A/B tested before adoption)
+    use_mtf: bool = False                # 15-min higher-timeframe trend filter
     use_regime_sizing: bool = False      # smaller size AGAINST the regime
     regime_risk_factor: float = 0.6      # counter-regime entries get this scale
     use_atr_stops: bool = False          # stop distance adapts to volatility

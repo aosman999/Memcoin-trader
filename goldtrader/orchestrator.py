@@ -47,6 +47,10 @@ class GoldOrchestrator:
         self._session_w = 1.0
 
     def on_price(self, price: float, now: float) -> list[TradeRecord]:
+        # realistic spreads: widen with the last minute's violence
+        if self.prices:
+            last_move = abs(price / self.prices[-1] - 1.0)
+            self.engine.spread_mult = 1.0 + 900.0 * last_move  # +0.1% move -> ~1.9x
         self.prices.append(price)
         closed: list[TradeRecord] = []
 
