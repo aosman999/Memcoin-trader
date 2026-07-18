@@ -74,7 +74,7 @@ class GoldOrchestrator:
                 # measurably starved the strategies, which carry their own
                 # internal regime filters.
                 if (not self.sentinel.check(history, now)
-                        or not self.session.tradeable(now)):
+                        or self.session.weight(now) < self.params.session_min_weight):
                     self.portfolio.equity_curve.append(
                         self.engine.equity(self.portfolio, price))
                     return closed
@@ -109,9 +109,25 @@ class GoldOrchestrator:
                         continue
                 strat_scale = (self.mastery.risk_scale(sig.strategy)
                                if self.params.use_mastery else 1.0)
+                # anti-chop: counter-regime entries trade smaller, not never
+                if self.params.use_regime_sizing:
+                    against = ((self.current_regime == "ranging"
+                                and sig.strategy in ("gold_trend", "gold_breakout"))
+                               or (self.current_regime == "trending"
+                                   and sig.strategy == "gold_meanrev"))
+                    if against:
+                        strat_scale *= self.params.regime_risk_factor
+                stop_frac = None
+                if self.params.use_atr_stops:
+                    from .indicators import atr_proxy
+                    atr = atr_proxy(history, period=60)
+                    if atr > 0 and price > 0:
+                        stop_frac = min(0.010, max(0.004,
+                                        self.params.atr_stop_mult * atr / price))
                 pos = self.engine.open(sig.direction, price, self.portfolio,
                                        now, sig.strategy,
-                                       risk_scale=risk_scale * strat_scale)
+                                       risk_scale=risk_scale * strat_scale,
+                                       stop_frac=stop_frac)
                 if pos:
                     if self.verbose:
                         side = "LONG" if sig.direction > 0 else "SHORT"

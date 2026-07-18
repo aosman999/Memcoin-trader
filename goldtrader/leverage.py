@@ -57,14 +57,19 @@ class LevEngine:
 
     # ------------------------------------------------------------------
     def open(self, direction: int, price: float, pf: Portfolio, now: float,
-             strategy: str, risk_scale: float = 1.0) -> LevPosition | None:
+             strategy: str, risk_scale: float = 1.0,
+             stop_frac: float | None = None) -> LevPosition | None:
+        """stop_frac overrides the fixed stop distance (ATR-adaptive stops);
+        the reward:risk ratio is preserved and sizing re-derives from the
+        actual stop, so risk-per-trade stays constant."""
         if self.pos is not None or pf.cash <= 0:
             return None
         r = self.risk
         equity = pf.cash
         risk_usd = equity * r.risk_per_trade * max(0.1, min(1.5, risk_scale))
-        stop_dist = r.stop_loss
-        tp_dist = r.tp_multiples[0] - 1.0
+        rr = (r.tp_multiples[0] - 1.0) / r.stop_loss
+        stop_dist = stop_frac if stop_frac is not None else r.stop_loss
+        tp_dist = rr * stop_dist
         notional = min(risk_usd / stop_dist, equity * self.max_leverage)
         if notional < 1.0:
             return None
