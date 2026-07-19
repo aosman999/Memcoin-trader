@@ -40,14 +40,17 @@ RISK_SPACE = [
 RR_RANGE = (1.5, 3.0)   # tp distance as a multiple of stop distance
 
 
-def _run_epoch(params: GoldParams, seed: int, days: int) -> dict:
+def _run_epoch(params: GoldParams, seed: int, days: int,
+               model: int = 1) -> dict:
     from .day_guard import DayGuard
     from .portfolio import Portfolio
 
     from .datafeed.simulator import GoldSim
+    from .datafeed.simulator2 import GoldSim2
     from .orchestrator import GoldOrchestrator
 
-    sim = GoldSim(seed=seed, start_price=4100.0)
+    sim_cls = GoldSim2 if model == 2 else GoldSim
+    sim = sim_cls(seed=seed, start_price=4100.0)
     pf = Portfolio(params.risk.starting_bankroll_usd)
     orch = GoldOrchestrator(params, portfolio=pf)
     for _ in range(days):
@@ -108,21 +111,29 @@ class GoldStrategyLab:
 
     def evolve(self, generations: int = 4, population: int = 8,
                days: int = 10, eval_seeds: tuple = (501, 502, 503),
-               verbose: bool = True,
+               verbose: bool = True, cross_model: bool = False,
                save_path: str = GOLD_PARAMS_PATH) -> GoldParams:
+        """cross_model: score every candidate on BOTH market models and
+        take the WORSE of the two fitnesses — evolves configurations
+        whose edge is not a fingerprint of one simulator's mechanics."""
         pop = [self.base] + [self._mutate(self.base, 0.6)
                              for _ in range(population - 1)]
         best, best_fit = self.base, float("-inf")
+        models = (1, 2) if cross_model else (1,)
         for gen in range(1, generations + 1):
             scored = []
             for cand in pop:
-                mults, trades = [], 0
-                for s in eval_seeds:
-                    st = _run_epoch(cand, seed=s, days=days)
-                    mults.append(st["multiple"])
-                    trades += st["trades"]
-                scored.append((fitness_of(mults, trades // len(eval_seeds)),
-                               cand, mults))
+                per_model = []
+                all_mults = []
+                for model in models:
+                    mults, trades = [], 0
+                    for s in eval_seeds:
+                        st = _run_epoch(cand, seed=s, days=days, model=model)
+                        mults.append(st["multiple"])
+                        trades += st["trades"]
+                    per_model.append(fitness_of(mults, trades // len(eval_seeds)))
+                    all_mults.extend(mults)
+                scored.append((min(per_model), cand, all_mults))
             scored.sort(key=lambda x: x[0], reverse=True)
             top_fit, top_cand, top_mults = scored[0]
             if top_fit > best_fit:
@@ -139,11 +150,14 @@ class GoldStrategyLab:
         # seeds neither trained on, else the incumbent stays.
         holdout = (911, 912, 913)
         def holdout_fit(cand: GoldParams) -> float:
-            ms, tr = [], 0
-            for s in holdout:
-                st = _run_epoch(cand, seed=s, days=days)
-                ms.append(st["multiple"]); tr += st["trades"]
-            return fitness_of(ms, tr // len(holdout))
+            fits = []
+            for model in models:
+                ms, tr = [], 0
+                for s in holdout:
+                    st = _run_epoch(cand, seed=s, days=days, model=model)
+                    ms.append(st["multiple"]); tr += st["trades"]
+                fits.append(fitness_of(ms, tr // len(holdout)))
+            return min(fits)
         challenger, incumbent = holdout_fit(best), holdout_fit(self.base)
         if challenger >= incumbent:
             best.save(save_path)

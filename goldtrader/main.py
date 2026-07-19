@@ -148,9 +148,11 @@ def cmd_mac(args: argparse.Namespace) -> None:
 
 def cmd_evolve(args: argparse.Namespace) -> None:
     from .strategy_lab import GoldStrategyLab
-    print("Gold Strategy Lab: evolving parameters on the simulator...")
+    mode = "BOTH market models (robust)" if args.cross_model else "the simulator"
+    print(f"Gold Strategy Lab: evolving parameters on {mode}...")
     GoldStrategyLab().evolve(generations=args.generations,
-                             population=args.population, days=args.days)
+                             population=args.population, days=args.days,
+                             cross_model=args.cross_model)
 
 
 def cmd_mistakes(_args: argparse.Namespace) -> None:
@@ -212,6 +214,8 @@ def main() -> None:
     e.add_argument("--generations", type=int, default=4)
     e.add_argument("--population", type=int, default=8)
     e.add_argument("--days", type=int, default=10)
+    e.add_argument("--cross-model", action="store_true", dest="cross_model",
+                   help="fitness = worst score across BOTH market models")
     e.set_defaults(fn=cmd_evolve)
 
     mi = sub.add_parser("mistakes", help="the Mistake Analyst's loss-pattern report")
