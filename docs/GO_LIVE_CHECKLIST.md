@@ -3,8 +3,8 @@
 Work through this top to bottom. Total: ~15 minutes.
 
 ## 1. Accounts (can be done from your phone before the laptop)
-- [ ] MT5 demo is the $3,000 / 1:200 account (login 109508768 on
-      MetaQuotes-Demo — password in your records)
+- [ ] MT5 demo is the $3,000 / 1:200 account (your MetaQuotes-Demo
+      login — credentials in your records / our chat)
 - [ ] metaapi.cloud: account added with those MT5 credentials → **Deploy**
       → copy the **account id** (uuid) and create an **API token**
 - [ ] Telegram bot @xau99AO_Bot exists; you have the token and chat id
