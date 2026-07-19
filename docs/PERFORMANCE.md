@@ -59,6 +59,12 @@ hostile cell and every worst-case at ~zero cost in friendly weather
 (base x1.97→x2.04, calm −3% median for a better tail). Runs in the
 Mac bridge with cross-session persistence.
 
+**Search closure (Jul 19):** a maximum-budget robust evolution (10
+generations x 14 candidates x both models) was the FOURTH consecutive
+challenger rejected by the cross-model holdout gate. The champion is
+confirmed as this environment's optimum; further tuning waits for
+live-market evidence (Jul 22+).
+
 ## Ideas tested and REJECTED by measurement (kept behind flags)
 
 | idea | verdict |
