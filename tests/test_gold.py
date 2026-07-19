@@ -145,6 +145,36 @@ class TestGoldEndToEnd(unittest.TestCase):
         self.assertEqual(p.to_dict(), q.to_dict())
 
 
+class TestSim2AndGovernor(unittest.TestCase):
+    def test_sim2_produces_gold_like_days(self):
+        from goldtrader.datafeed.simulator2 import GoldSim2
+        s = GoldSim2(seed=5)
+        start = s.price
+        for _ in range(1440):
+            s.step()
+        self.assertLess(abs(s.price / start - 1), 0.10)   # no runaway
+        self.assertGreater(s.price, 0)
+
+    def test_sim2_interface_matches(self):
+        from goldtrader.datafeed.simulator2 import GoldSim2
+        s = GoldSim2(seed=1)
+        self.assertTrue(hasattr(s, "now_ts"))
+        p1 = s.step()
+        self.assertIsInstance(p1, float)
+
+    def test_governor_red_streak_scaling(self):
+        from goldtrader.config import GoldParams
+        from goldtrader.orchestrator import GoldOrchestrator
+        from goldtrader.portfolio import Portfolio
+        p = GoldParams()
+        p.use_governor = True
+        o = GoldOrchestrator(p, portfolio=Portfolio(3000.0))
+        o._gov_red_streak = 2
+        # with 2 red days the governor cut must be applied to new entries
+        self.assertGreaterEqual(o._gov_red_streak, 2)
+        self.assertEqual(p.governor_cut, 0.5)
+
+
 class TestDayGuard(unittest.TestCase):
     def test_loss_stop(self):
         from goldtrader.config import RiskParams

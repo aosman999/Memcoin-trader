@@ -30,6 +30,18 @@ partly to avoid trading when real spreads blow out.
 These are SIMULATED numbers on a market model. The MT5 demo (from
 July 22) is the real test; its results supersede this table.
 
+## Cross-model certification (GoldSim2 — the unseen market)
+
+The champion was certified cold on a structurally independent model
+(Student-t fat tails, GARCH-style vol clustering, persistent AR(1)
+drift). Across 40 virgin seeds: **median ~x0.84-1.05 (≈ break-even),
+mean x1.6-1.9** — profits there come from occasional monster runs
+(x13 observed). Read: the median edge is partly specific to the
+primary model's mechanics; live reality likely sits between the two
+models. Robust (worst-model) evolution and holdout gating are now
+built in (`goldtrader evolve --cross-model`); exit-style re-test on
+both models confirmed binary keeps the best worst-model floor.
+
 ## Stress map — the champion's weather report (10 seeds per cell)
 
 | market personality | median | verdict |
