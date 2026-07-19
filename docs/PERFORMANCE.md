@@ -30,6 +30,23 @@ partly to avoid trading when real spreads blow out.
 These are SIMULATED numbers on a market model. The MT5 demo (from
 July 22) is the real test; its results supersede this table.
 
+## Stress map — the champion's weather report (10 seeds per cell)
+
+| market personality | median | verdict |
+|---|---|---|
+| calm gold (vol 0.6x) | x5.37 | thrives |
+| trend-rich (50% trend days) | x3.05 | thrives |
+| 2026 base calibration | ~x2.0 | works |
+| crisis vol (1.5x) | x0.68→x0.72* | bleeds |
+| trend-starved (17% trend days) | x0.57→x0.83* | bleeds |
+| news-heavy (5 jumps/day) | x0.47→x0.50* | bleeds |
+
+*after the hostile-weather GOVERNOR (adopted): 2 straight red days →
+risk halves until a green day breaks the streak. Improves every
+hostile cell and every worst-case at ~zero cost in friendly weather
+(base x1.97→x2.04, calm −3% median for a better tail). Runs in the
+Mac bridge with cross-session persistence.
+
 ## Ideas tested and REJECTED by measurement (kept behind flags)
 
 | idea | verdict |

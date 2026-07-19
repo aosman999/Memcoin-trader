@@ -115,7 +115,35 @@ def cmd_mt5(args: argparse.Namespace) -> None:
 
 def cmd_mac(args: argparse.Namespace) -> None:
     from .metaapi_bridge import run_mac
-    run_mac(minutes=args.minutes, poll_seconds=args.interval)
+    if not args.forever:
+        run_mac(minutes=args.minutes, poll_seconds=args.interval)
+        return
+    # supervised mode: a crashed bot earns nothing. Auto-restart with
+    # backoff; alert Telegram on every crash; give up only on a
+    # crash-loop (5 failures within 10 minutes).
+    from .telegram import send as tg_send
+    crashes: list[float] = []
+    while True:
+        try:
+            run_mac(minutes=args.minutes, poll_seconds=args.interval)
+            print("session finished cleanly — restarting for the next one")
+        except SystemExit as e:
+            print(f"fatal (not restartable): {e}")
+            tg_send(f"🛑 Gold bot stopped (not restartable): {e}")
+            raise
+        except KeyboardInterrupt:
+            raise
+        except Exception as e:
+            now = time.time()
+            crashes = [t for t in crashes if now - t < 600] + [now]
+            tg_send(f"⚠️ Gold bot crashed ({type(e).__name__}: {e}) — "
+                    f"restarting in 60s (crash {len(crashes)}/5)")
+            print(f"crash: {e!r} — restarting in 60s")
+            if len(crashes) >= 5:
+                tg_send("🛑 Gold bot: 5 crashes in 10 min — stopping. "
+                        "Check the terminal.")
+                raise
+            time.sleep(60)
 
 
 def cmd_evolve(args: argparse.Namespace) -> None:
@@ -176,6 +204,8 @@ def main() -> None:
                                      "macOS/Linux via MetaApi cloud")
     mac.add_argument("--minutes", type=float, default=480.0)
     mac.add_argument("--interval", type=float, default=15.0)
+    mac.add_argument("--forever", action="store_true",
+                     help="supervised: auto-restart on crash, Telegram alerts")
     mac.set_defaults(fn=cmd_mac)
 
     e = sub.add_parser("evolve", help="Gold Strategy Lab: evolve parameters")

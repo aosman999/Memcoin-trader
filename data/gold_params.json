@@ -7,6 +7,8 @@
   "use_analyst": false,
   "journal_mistakes": false,
   "use_mtf": true,
+  "use_governor": true,
+  "governor_cut": 0.5,
   "use_regime_sizing": false,
   "regime_risk_factor": 0.6,
   "use_atr_stops": false,

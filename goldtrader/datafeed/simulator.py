@@ -20,11 +20,16 @@ class GoldSim:
     """Evolves a spot-gold price path one minute at a time."""
 
     def __init__(self, seed: int = 7, start_price: float = 4100.0,
-                 vol_scale: float = 1.0):
+                 vol_scale: float = 1.0, trend_prob: float = 0.35,
+                 jump_rate: float = 2.0):
         """vol_scale: 1.0 = the 2026 hot regime (~24% ann.); 0.6 ≈ the
-        20-year average regime; 1.5 ≈ crisis conditions."""
+        20-year average regime; 1.5 ≈ crisis conditions.
+        trend_prob: share of days that trend (0.35 = 2026 calibration).
+        jump_rate: news jumps per day."""
         self.rng = random.Random(seed)
         self.vol_scale = vol_scale
+        self.trend_prob = trend_prob
+        self.jump_rate = jump_rate
         self.price = start_price
         self.tick = 0
         self.price_high = start_price
@@ -35,7 +40,7 @@ class GoldSim:
 
     def _roll_day(self) -> None:
         rng = self.rng
-        self.trending_day = rng.random() < 0.35
+        self.trending_day = rng.random() < self.trend_prob
         self.day_drift = rng.choice([-1, 1]) * rng.uniform(1e-5, 4e-5) \
             if self.trending_day else 0.0
         self.day_anchor = self.price
@@ -71,7 +76,7 @@ class GoldSim:
             # gentle pull back toward the day's anchor (ranging behavior)
             ret += -0.002 * (self.price / self.day_anchor - 1.0) / 60.0
         # news jumps (CPI/NFP/FOMC prints): ~2/day in the 2026 regime
-        if rng.random() < 2.0 / 1440:
+        if rng.random() < self.jump_rate / 1440:
             ret += rng.choice([-1, 1]) * rng.uniform(0.001, 0.006)
 
         self.price *= math.exp(ret)

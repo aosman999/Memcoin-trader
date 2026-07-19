@@ -45,6 +45,10 @@ class GoldOrchestrator:
             or getattr(params, "use_analyst", False))
         self.current_regime = "ranging"
         self._session_w = 1.0
+        # environment governor: day-level weather memory
+        self._gov_day = ""
+        self._gov_day_start_eq = None
+        self._gov_red_streak = 0
 
     def on_price(self, price: float, now: float) -> list[TradeRecord]:
         # realistic spreads: widen with the last minute's violence
@@ -53,6 +57,19 @@ class GoldOrchestrator:
             self.engine.spread_mult = 1.0 + 900.0 * last_move  # +0.1% move -> ~1.9x
         self.prices.append(price)
         closed: list[TradeRecord] = []
+
+        # environment governor bookkeeping (day-level weather memory)
+        import datetime as _dt
+        day = _dt.datetime.utcfromtimestamp(now).strftime("%Y-%m-%d")
+        if day != self._gov_day:
+            eq_now = self.engine.equity(self.portfolio, price)
+            if self._gov_day_start_eq is not None:
+                if eq_now < self._gov_day_start_eq:
+                    self._gov_red_streak += 1
+                else:
+                    self._gov_red_streak = 0
+            self._gov_day = day
+            self._gov_day_start_eq = eq_now
 
         # exits before entries, always
         rec = self.engine.manage(price, self.portfolio, now)
@@ -113,6 +130,10 @@ class GoldOrchestrator:
                         continue
                 strat_scale = (self.mastery.risk_scale(sig.strategy)
                                if self.params.use_mastery else 1.0)
+                # hostile-weather governor: after 2+ straight red days,
+                # trade smaller until a green day breaks the streak
+                if (self.params.use_governor and self._gov_red_streak >= 2):
+                    strat_scale *= self.params.governor_cut
                 # anti-chop: counter-regime entries trade smaller, not never
                 if self.params.use_regime_sizing:
                     against = ((self.current_regime == "ranging"

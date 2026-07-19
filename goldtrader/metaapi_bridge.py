@@ -98,6 +98,40 @@ class MetaApi:
                    and float(d.get("profit", 0)) < 0)
 
 
+GOV_STATE_PATH = os.path.join(DATA_DIR, "gold_governor_state.json")
+
+
+def _gov_record_day(day: str, day_return: float) -> None:
+    """Persist day results so the hostile-weather governor survives
+    session restarts."""
+    try:
+        state = {}
+        if os.path.exists(GOV_STATE_PATH):
+            with open(GOV_STATE_PATH) as f:
+                state = json.load(f)
+        state[day] = round(day_return, 5)
+        state = dict(sorted(state.items())[-10:])
+        with open(GOV_STATE_PATH, "w") as f:
+            json.dump(state, f, indent=2)
+    except OSError:
+        pass
+
+
+def _gov_red_streak() -> int:
+    try:
+        with open(GOV_STATE_PATH) as f:
+            state = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return 0
+    streak = 0
+    for _, ret in sorted(state.items(), reverse=True):
+        if ret < 0:
+            streak += 1
+        else:
+            break
+    return streak
+
+
 def _load_config() -> dict:
     if not os.path.exists(METAAPI_CONFIG_PATH):
         raise SystemExit(
@@ -171,6 +205,7 @@ def run_mac(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
             tg_send(f"🥇 Gold bot daily report {day_key}: "
                     f"{day_start_equity:,.2f} → {equity:,.2f} "
                     f"({(equity / day_start_equity - 1) * 100:+.2f}%)")
+            _gov_record_day(day_key, equity / day_start_equity - 1)
             day_key = today
             day_start_equity = equity
             halted_for_day = False
@@ -211,7 +246,9 @@ def run_mac(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
                     break
                 stop_dist = mid * r.stop_loss
                 tp_dist = mid * (r.tp_multiples[0] - 1.0)
-                notional = min(equity * r.risk_per_trade / r.stop_loss,
+                gov = params.governor_cut if (
+                    params.use_governor and _gov_red_streak() >= 2) else 1.0
+                notional = min(equity * r.risk_per_trade * gov / r.stop_loss,
                                equity * params.max_leverage)
                 lots = max(0.01, round(notional / (mid * OZ_PER_LOT), 2))
                 is_buy = sig.direction > 0
