@@ -78,26 +78,32 @@ def cmd_campaign(args: argparse.Namespace) -> None:
 
 def cmd_paper(args: argparse.Namespace) -> None:
     from .datafeed.live import GoldLiveFeed
-    params = GoldParams.load()
-    params.use_news = True     # live machine: the news agent can actually read
+    from .live_core import apply_live_profile, market_closed, utc_day
+    params = apply_live_profile(GoldParams.load())
     pf = Portfolio.load(GOLD_PF_PATH) or Portfolio(args.bankroll)
     orch = GoldOrchestrator(params, portfolio=pf, verbose=True)
     feed = GoldLiveFeed()
     guard = DayGuard(params.risk, pf.equity_curve[-1])
-    guard_date = _dt.date.today()
+    guard_day = utc_day(time.time())
     end = time.time() + args.minutes * 60
     print(f"LIVE gold paper trading for {args.minutes} min "
           f"(spot poll every {args.interval}s). Ctrl-C to stop.")
     try:
         while time.time() < end:
-            if _dt.date.today() != guard_date:
-                guard_date = _dt.date.today()
+            now = time.time()
+            if market_closed(now):
+                time.sleep(min(300.0, args.interval * 4))
+                continue
+            if utc_day(now) != guard_day:
+                guard_day = utc_day(now)
                 guard = DayGuard(params.risk, pf.equity_curve[-1])
+                orch.entries_enabled = True
             price = feed.spot()
             if price:
-                orch.on_price(price, time.time())
-                if guard.check(pf.equity_curve[-1]):
-                    orch.liquidate(time.time(), guard.reason)
+                orch.on_price(price, now)
+                if guard.check(pf.equity_curve[-1]) and orch.entries_enabled:
+                    orch.liquidate(now, guard.reason)
+                    orch.entries_enabled = False   # truly flat until tomorrow
                     print(f"-- DAY GUARD [{guard.reason}]: flat until tomorrow")
                 pf.save(GOLD_PF_PATH)
             time.sleep(args.interval)

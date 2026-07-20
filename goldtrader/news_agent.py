@@ -87,10 +87,18 @@ class NewsAgent:
             try:
                 if e.get("impact") != "High" or e.get("country") not in ("USD",):
                     continue
-                ts = _dt.datetime.strptime(
-                    e["date"][:19], "%Y-%m-%dT%H:%M:%S").timestamp()
-                # the feed's dates carry an offset suffix; a few minutes of
-                # skew is acceptable given the +/- window around each event
+                raw = str(e["date"])
+                try:
+                    # full offset-aware parse ("2026-07-22T08:30:00-04:00")
+                    ts = _dt.datetime.strptime(
+                        raw, "%Y-%m-%dT%H:%M:%S%z").timestamp()
+                except ValueError:
+                    # no offset in the feed: treat as UTC explicitly —
+                    # NEVER as host-local time (review finding: local
+                    # parsing shifted the stand-aside window by hours)
+                    ts = _dt.datetime.strptime(
+                        raw[:19], "%Y-%m-%dT%H:%M:%S").replace(
+                        tzinfo=_dt.timezone.utc).timestamp()
                 out.append(ts)
             except (KeyError, ValueError, TypeError):
                 continue

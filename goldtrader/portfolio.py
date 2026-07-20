@@ -9,11 +9,30 @@ from .models import TradeRecord
 
 
 class Portfolio:
+    # in-memory cap: long live sessions append one point per tick; without
+    # a bound this leaks (review finding). Peak/drawdown state is carried
+    # in _peak/_max_dd so trimming never loses the true max drawdown.
+    CURVE_CAP = 200_000
+
     def __init__(self, starting_cash: float):
         self.cash = starting_cash
         self.starting_cash = starting_cash
         self.trades: list[TradeRecord] = []
         self.equity_curve: list[float] = [starting_cash]
+        self._peak = starting_cash
+        self._max_dd = 0.0
+
+    def mark(self, v: float) -> None:
+        """Append an equity point with peak/drawdown bookkeeping."""
+        self.equity_curve.append(v)
+        self._note(v)
+
+    def _note(self, v: float) -> None:
+        self._peak = max(self._peak, v)
+        if self._peak > 0:
+            self._max_dd = max(self._max_dd, 1 - v / self._peak)
+        if len(self.equity_curve) > self.CURVE_CAP:
+            del self.equity_curve[: self.CURVE_CAP // 2]
 
     def stats(self) -> dict:
         n = len(self.trades)
@@ -22,8 +41,8 @@ class Portfolio:
         gross_win = sum(t.pnl_usd for t in wins)
         gross_loss = -sum(t.pnl_usd for t in losses)
         eq = self.equity_curve
-        peak, max_dd = eq[0] if eq else 0.0, 0.0
-        for v in eq:
+        peak, max_dd = self._peak, self._max_dd
+        for v in eq:                       # covers curves loaded from disk
             peak = max(peak, v)
             if peak > 0:
                 max_dd = max(max_dd, 1 - v / peak)

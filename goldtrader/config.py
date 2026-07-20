@@ -16,6 +16,19 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 GOLD_PARAMS_PATH = os.path.join(DATA_DIR, "gold_params.json")
 
 
+def load_json_config(path: str) -> dict | None:
+    """Shared fail-soft JSON config loader: missing or malformed files
+    return None instead of crashing the session at startup."""
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path) as f:
+            out = json.load(f)
+        return out if isinstance(out, dict) else None
+    except (json.JSONDecodeError, OSError):
+        return None
+
+
 @dataclass
 class RiskParams:
     starting_bankroll_usd: float = 3000.0
@@ -113,7 +126,9 @@ class GoldParams:
 
     @classmethod
     def load(cls, path: str = GOLD_PARAMS_PATH) -> "GoldParams":
-        if os.path.exists(path):
-            with open(path) as f:
-                return cls.from_dict(json.load(f))
-        return cls()
+        d = load_json_config(path)
+        if d is None:
+            if os.path.exists(path):
+                print(f"WARNING: {path} unreadable/corrupt — using defaults")
+            return cls()
+        return cls.from_dict(d)

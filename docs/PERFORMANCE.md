@@ -1,8 +1,10 @@
 # Certified Performance Baseline
 
 **Champion configuration** (as of 2026-07-17): binary SL/TP exits at
-2:1 reward:risk (stop −0.6%, target +1.2%), 10% equity risked per trade
-(owner-directed), session+sentinel agent gates, indicator confluence,
+2:1 reward:risk (stop −0.6%, target +1.2%), 10% BASE risk per trade
+(owner-directed; session-weight and calm-market boosts can scale a
+single entry up to 1.44x base = ~14.4% — this boosted behavior IS
+what was certified), session+sentinel agent gates, indicator confluence,
 boost-only volatility targeting, −15% daily loss stop, 1:200 cap.
 
 ## Certification (20 virgin seeds, 14 trading days each, $3,000 start)

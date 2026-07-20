@@ -53,15 +53,3 @@ def send(text: str) -> bool:
         return False
 
 
-def daily_report(row: dict) -> bool:
-    """Send a campaign/day summary row as a readable Telegram message."""
-    if row.get("market_closed"):
-        return send(f"🥇 Gold bot — {row['date']}: market closed (weekend). "
-                    f"Equity ${row['equity']:,.2f}.")
-    return send(
-        f"🥇 Gold bot day {row['day']} ({row['date']})\n"
-        f"${row['start_equity']:,.2f} → ${row['end_equity']:,.2f} "
-        f"({row['pnl_pct']:+.2f}%)\n"
-        f"{row['trades']} trades, win {row['win_rate']}%"
-        + (f"\n⚠️ {row['guard']}" if row.get("guard") else "")
-    )

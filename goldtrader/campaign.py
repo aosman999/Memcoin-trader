@@ -130,6 +130,10 @@ def _write_log(ledger: dict) -> None:
         f"${ledger['equity']:,.2f}  ({total:+,.4f} / {total_pct:+.3f}%) "
         f"over {ledger['day']} trading day(s).**\n"
     )
+    if any(r["date"] == "2026-07-11" for r in ledger["history"]):
+        footer += ("\n*Note: day 1 (2026-07-11, a Saturday, anchor $0) "
+                   "predates the weekend-skip and real-price-anchor "
+                   "features; kept unaltered for ledger honesty.*\n")
     with open(PNL_LOG_PATH, "w") as f:
         f.write(_LOG_HEADER + "\n".join(rows) + "\n" + footer)
 

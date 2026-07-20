@@ -47,11 +47,24 @@ def run_preflight() -> int:
     ok = os.path.exists(GOLD_PARAMS_PATH)
     _check("champion params (data/gold_params.json)", ok,
            "using defaults" if not ok else "", warn=True)
-    p = GoldParams.load()
+    from .live_core import apply_live_profile
+    p = apply_live_profile(GoldParams.load())   # validate what LIVE runs
     ok = 0 < p.risk.risk_per_trade <= 0.15 and p.risk.stop_loss > 0
     failures += not _check("risk config sane",
                            ok, f"risk {p.risk.risk_per_trade:.0%}/trade, "
                                f"stop {p.risk.stop_loss:.2%}")
+    ok = p.use_news and p.use_mentors and p.use_discipline
+    failures += not _check("live profile flags (news/mentors/discipline)",
+                           ok, "apply_live_profile() active")
+    # the live entry brain must be importable and evaluable end-to-end
+    try:
+        from .live_core import EntryPipeline
+        EntryPipeline(p).evaluate([4100.0 + 0.1 * i for i in range(200)],
+                                  4100.0, 13.5 * 3600)
+        ok = True
+    except Exception as e:
+        ok, _ = False, print(f"     pipeline error: {e}")
+    failures += not _check("certified EntryPipeline evaluates", ok)
 
     # 3. credentials
     mac_cfg = os.path.join(DATA_DIR, "metaapi_config.json")

@@ -57,13 +57,6 @@ class RegimeAgent:
             return "chaotic"
         return "trending" if efficiency >= 0.30 else "ranging"
 
-    @staticmethod
-    def allowed_strategies(regime: str) -> set[str]:
-        return {
-            "trending": {"gold_trend", "gold_breakout"},
-            "ranging": {"gold_meanrev"},
-            "chaotic": set(),        # stand aside while the tape is violent
-        }[regime]
 
 
 class EventSentinel:

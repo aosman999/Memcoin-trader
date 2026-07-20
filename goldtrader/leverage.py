@@ -14,7 +14,6 @@ One position at a time. No pyramiding, no martingale, ever.
 """
 from __future__ import annotations
 
-import time as _time
 from dataclasses import dataclass
 
 from .portfolio import Portfolio
@@ -37,7 +36,7 @@ class LevPosition:
 
 class LevEngine:
     def __init__(self, risk, max_leverage: float = 10.0,
-                 exit_style: str = "trail"):
+                 exit_style: str = "binary"):
         self.risk = risk
         self.max_leverage = max_leverage
         self.exit_style = exit_style   # trail | breakeven | binary

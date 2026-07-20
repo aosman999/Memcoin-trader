@@ -18,16 +18,14 @@ from .config import GoldParams
 class GoldSignal:
     strategy: str
     direction: int          # +1 long, -1 short
-    confidence: float
     reason: str
 
 
 def _ema(values: list[float], period: int) -> float:
-    k = 2.0 / (period + 1)
-    e = values[0]
-    for v in values[1:]:
-        e = v * k + e * (1 - k)
-    return e
+    """Canonical EMA lives in indicators.ema_series; this is the
+    last-value convenience wrapper (review: two copies had drifted risk)."""
+    from .indicators import ema_series
+    return ema_series(values, period)[-1]
 
 
 def _mean_std(values: list[float]) -> tuple[float, float]:
@@ -60,12 +58,12 @@ def trend_signal(prices: list[float], p: GoldParams) -> GoldSignal | None:
     if fast > slow and slope >= p.trend_min_slope and prices[-1] >= fast:
         if p.use_mtf and not _mtf_agrees(prices, +1):
             return None
-        return GoldSignal("gold_trend", +1, 0.55,
+        return GoldSignal("gold_trend", +1,
                           f"EMA{p.ema_fast}>{p.ema_slow} rising ({slope:.2e})")
     if fast < slow and slope <= -p.trend_min_slope and prices[-1] <= fast:
         if p.use_mtf and not _mtf_agrees(prices, -1):
             return None
-        return GoldSignal("gold_trend", -1, 0.55,
+        return GoldSignal("gold_trend", -1,
                           f"EMA{p.ema_fast}<{p.ema_slow} falling ({slope:.2e})")
     return None
 
@@ -83,10 +81,10 @@ def meanrev_signal(prices: list[float], p: GoldParams) -> GoldSignal | None:
     if abs(trend_z) > p.mr_max_trend_z:
         return None   # never fade a strong trend
     if z <= p.mr_entry_z:
-        return GoldSignal("gold_meanrev", +1, 0.50,
+        return GoldSignal("gold_meanrev", +1,
                           f"dip z={z:.2f} in range")
     if z >= -p.mr_entry_z:
-        return GoldSignal("gold_meanrev", -1, 0.50,
+        return GoldSignal("gold_meanrev", -1,
                           f"stretch z={z:.2f} in range")
     return None
 
@@ -119,10 +117,10 @@ def mentor_sweep_signal(prices: list[float], p: GoldParams,
     swept_high = max(recent) > hi * (1 + p.sweep_margin)
     swept_low = min(recent) < lo * (1 - p.sweep_margin)
     if swept_high and last < hi and (max(recent) - last) >= p.sweep_atr_mult * atr:
-        return GoldSignal("mentor_sweep", -1, 0.60,
+        return GoldSignal("mentor_sweep", -1,
                           f"swept high {hi:.2f}, fast rejection back below")
     if swept_low and last > lo and (last - min(recent)) >= p.sweep_atr_mult * atr:
-        return GoldSignal("mentor_sweep", +1, 0.60,
+        return GoldSignal("mentor_sweep", +1,
                           f"swept low {lo:.2f}, fast rejection back above")
     return None
 
@@ -139,10 +137,10 @@ def breakout_signal(prices: list[float], p: GoldParams) -> GoldSignal | None:
     if not expanding:
         return None
     if prices[-1] > hi:
-        return GoldSignal("gold_breakout", +1, 0.60,
+        return GoldSignal("gold_breakout", +1,
                           f"broke {p.bo_lookback}m high {hi:.2f}")
     if prices[-1] < lo:
-        return GoldSignal("gold_breakout", -1, 0.60,
+        return GoldSignal("gold_breakout", -1,
                           f"broke {p.bo_lookback}m low {lo:.2f}")
     return None
 

@@ -33,9 +33,11 @@ GOLD_SPACE = [
     ("vol_target_ref", 2.5e-4, 4.5e-4, False),
 ]
 # risk knobs (stop defines sizing; tp expressed as reward:risk ratio)
+# risk_per_trade is OWNER-DIRECTED (10%) and deliberately NOT evolvable:
+# the old (0.02, 0.06) bounds meant any mutation clamped it and a winning
+# challenger silently overwrote the owner's sizing (caught in review).
 RISK_SPACE = [
     ("stop_loss", 0.003, 0.010, False),
-    ("risk_per_trade", 0.02, 0.06, False),
 ]
 RR_RANGE = (1.5, 3.0)   # tp distance as a multiple of stop distance
 

@@ -93,7 +93,7 @@ class GoldOrchestrator:
                           f"${pos.notional:,.0f} ({lev:.1f}x) @ {price:.2f} "
                           f"— {plan.reason}")
 
-        self.portfolio.equity_curve.append(self.engine.equity(self.portfolio, price))
+        self.portfolio.mark(self.engine.equity(self.portfolio, price))
         return closed
 
     def equity(self, price: float | None = None) -> float:

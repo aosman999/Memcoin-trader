@@ -1,13 +1,12 @@
 """Strategy Mastery — the bot masters what works and benches what doesn't.
 
-Keeps a rolling record of each strategy's recent closed trades and turns
-it into a risk multiplier:
+Keeps a rolling record of each strategy's recent closed trades. BENCH-ONLY
+design (A/B tested: boosting "hot" strategies amplified noise):
 
-  * expectancy > 0 over the window  -> up to 1.25x normal risk (mastered)
-  * mixed / not enough data         -> 1.0x (normal)
-  * expectancy < 0 over >= 8 trades -> BENCHED: risk drops to 0.35x —
+  * expectancy < -0.1R over >= 12 trades -> BENCHED: risk drops to 0.6x —
     the strategy keeps trading small (so it can prove recovery with real
     closed trades) but can no longer hurt the account meaningfully.
+  * everything else -> 1.0x (normal).
 
 Persists to data/gold_mastery.json so what was learned during paper
 trading carries into the demo account run.
@@ -70,7 +69,6 @@ class StrategyMastery:
         parts = []
         for s, h in sorted(self.history.items()):
             exp, n = self.expectancy(s)
-            tag = ("MASTERED" if self.risk_scale(s) > 1 else
-                   "benched" if self.risk_scale(s) < 1 else "normal")
+            tag = "benched" if self.risk_scale(s) < 1 else "normal"
             parts.append(f"{s}: exp {exp:+.2f}R over {n} ({tag})")
         return " | ".join(parts) or "no trades recorded yet"
