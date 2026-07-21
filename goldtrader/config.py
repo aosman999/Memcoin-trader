@@ -57,6 +57,7 @@ class GoldParams:
     journal_mistakes: bool = False       # loss journaling (campaign turns on)
     # anti-chop candidates (A/B tested before adoption)
     use_mtf: bool = False                # 15-min higher-timeframe trend filter
+    confluence_strict: bool = False      # demand ALL indicators agree (A/B first)
     use_governor: bool = False           # multi-day weather governor (A/B first)
     governor_cut: float = 0.5            # risk multiplier after 2 straight red days
     use_regime_sizing: bool = False      # smaller size AGAINST the regime

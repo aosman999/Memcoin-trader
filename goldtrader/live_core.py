@@ -141,7 +141,8 @@ class EntryPipeline:
                                              self.current_regime, now)):
                 continue   # fool-me-twice: benched for today
             if p.use_indicators and not confluence_ok(
-                    sig.strategy, sig.direction, history):
+                    sig.strategy, sig.direction, history,
+                    strict=getattr(p, "confluence_strict", False)):
                 continue
             strat_scale = (self.mastery.risk_scale(sig.strategy)
                            if p.use_mastery else 1.0)

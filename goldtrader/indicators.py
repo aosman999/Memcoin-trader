@@ -81,7 +81,8 @@ def atr_proxy(prices: list[float], period: int = 14) -> float:
                for i in range(1, len(window))) / period
 
 
-def confluence_ok(strategy: str, direction: int, prices: list[float]) -> bool:
+def confluence_ok(strategy: str, direction: int, prices: list[float],
+                  strict: bool = False) -> bool:
     """Does the indicator picture agree with this entry?
 
     trend/breakout: MACD histogram must point the same way, and RSI must
@@ -94,10 +95,20 @@ def confluence_ok(strategy: str, direction: int, prices: list[float]) -> bool:
         # minute-RSI saturates in strong trends — capping it blocked the
         # best entries (caught by A/B testing and a saturation probe).
         hist = macd_histogram(prices)
-        return hist > 0 if direction > 0 else hist < 0
+        ok = hist > 0 if direction > 0 else hist < 0
+        if ok and strict:
+            # strict mode: momentum must also be MEANINGFUL (not a flat
+            # wobble) and RSI must sit on the trade's side of 50
+            r = rsi(prices)
+            atr = atr_proxy(prices)
+            ok = (abs(hist) >= 0.15 * atr if atr > 0 else False) and \
+                 (r >= 50.0 if direction > 0 else r <= 50.0)
+        return ok
     if strategy == "gold_meanrev":
         # RSI must confirm the stretch. (No Bollinger condition: the
         # strategy's z-score entry IS band position — it was redundant.)
         r = rsi(prices)
+        if strict:
+            return r <= 28.0 if direction > 0 else r >= 72.0
         return r <= 34.0 if direction > 0 else r >= 66.0
     return True

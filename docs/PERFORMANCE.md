@@ -85,6 +85,7 @@ live-market evidence (Jul 22+).
 | idea | verdict |
 |---|---|
 | Full vol targeting (shrink in crisis) | crisis median 1.00→0.67: shrinks recovery wins |
+| Strict all-indicator confluence | neutral across 40 seeds (±noise): filtering harder does not raise win rate |
 
 ## Ideas tested and ADOPTED
 
