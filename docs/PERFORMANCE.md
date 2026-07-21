@@ -86,8 +86,21 @@ live-market evidence (Jul 22+).
 |---|---|
 | Full vol targeting (shrink in crisis) | crisis median 1.00→0.67: shrinks recovery wins |
 | Strict all-indicator confluence | neutral across 40 seeds (±noise): filtering harder does not raise win rate |
+| Momentum/ROC continuation strategy | collapsed battery M1-A x2.32→x1.00 |
+| Opening-range breakout strategy | below baseline on 3 of 4 batteries |
+| Bollinger-squeeze breakout strategy | below baseline on 3 of 4 batteries |
+| ADX-proxy trend-strength gate | M1-A x2.32→x1.27, M2-B below water |
+| StochRSI meanrev gate | won all 4 batteries, then FAILED the holdout (x0.79 vs x0.85) — the gate doing its job |
 
 ## Ideas tested and ADOPTED
+
+- **Trend-pullback strategy (Jul 21)** — enter established EMA trends on
+  the retrace-and-turn at the fast EMA instead of only chasing the
+  crossover. Beat baseline on 3 of 4 A/B batteries, PASSED the 911-913
+  cross-model holdout (worst-model x0.97 vs x0.85), then certified on
+  20 virgin seeds (1201-1220), BOTH models: M1 median x1.81→x2.22
+  (+23%), M2 x1.58→x1.80 (+14%), floor x0.133→x0.157. The only
+  survivor of the 6-candidate pre-live hunt (see rejected table).
 
 - Boost-only vol targeting — upsizes modestly in calm tape, never
   shrinks: +17% certified median, better tail, +25% in calm regimes
