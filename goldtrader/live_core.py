@@ -29,7 +29,9 @@ from .mastery import StrategyMastery
 from .mentors import MentorDiscipline
 from .mistake_analyst import MistakeAnalyst
 from .news_agent import NewsAgent
-from .strategies import ALL_STRATEGIES, mentor_sweep_signal
+from .strategies import (ALL_STRATEGIES, mentor_sweep_signal,
+                         momentum_signal, orb_signal, pullback_signal,
+                         squeeze_signal)
 
 DAY_STATE_PATH = os.path.join(DATA_DIR, "live_day_state.json")
 
@@ -128,6 +130,16 @@ class EntryPipeline:
         candidates = list(ALL_STRATEGIES)
         if p.use_mentors:
             candidates.insert(0, lambda h, pp: mentor_sweep_signal(h, pp, now))
+        # candidate strategies (A/B-gated; appended AFTER the certified
+        # trio so flags-off behavior is unchanged)
+        if getattr(p, "use_momentum", False):
+            candidates.append(momentum_signal)
+        if getattr(p, "use_orb", False):
+            candidates.append(lambda h, pp: orb_signal(h, pp, now))
+        if getattr(p, "use_pullback", False):
+            candidates.append(pullback_signal)
+        if getattr(p, "use_squeeze", False):
+            candidates.append(squeeze_signal)
         for strat in candidates:
             sig = strat(history, p)
             if sig is None:
@@ -144,6 +156,19 @@ class EntryPipeline:
                     sig.strategy, sig.direction, history,
                     strict=getattr(p, "confluence_strict", False)):
                 continue
+            # candidate indicator gates (A/B-gated, default off)
+            if (getattr(p, "use_adx_filter", False)
+                    and sig.strategy in ("gold_trend", "gold_breakout")):
+                from .indicators import adx_proxy as _adx
+                if _adx(history) < p.adx_min:
+                    continue
+            if (getattr(p, "use_stochrsi", False)
+                    and sig.strategy == "gold_meanrev"):
+                from .indicators import stoch_rsi as _srsi
+                sr = _srsi(history)
+                if not (sr <= p.stochrsi_lo if sig.direction > 0
+                        else sr >= p.stochrsi_hi):
+                    continue
             strat_scale = (self.mastery.risk_scale(sig.strategy)
                            if p.use_mastery else 1.0)
             # hostile-weather governor: after 2+ straight red days,

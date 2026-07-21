@@ -81,6 +81,37 @@ def atr_proxy(prices: list[float], period: int = 14) -> float:
                for i in range(1, len(window))) / period
 
 
+def adx_proxy(prices: list[float], period: int = 45) -> float:
+    """Trend-strength proxy in [0,1] from minute closes: net directional
+    movement over total movement (the ADX idea without OHLC bars).
+    ~0 = pure chop, ~1 = one-way tape."""
+    if len(prices) < period + 1:
+        return 0.0
+    window = prices[-(period + 1):]
+    up = down = 0.0
+    for i in range(1, len(window)):
+        d = window[i] - window[i - 1]
+        if d > 0:
+            up += d
+        else:
+            down -= d
+    total = up + down
+    return abs(up - down) / total if total > 0 else 0.0
+
+
+def stoch_rsi(prices: list[float], period: int = 14,
+              stoch_window: int = 30) -> float:
+    """Stochastic RSI in [0,1]: where the current RSI sits inside its
+    own recent range. Sharper oversold/overbought detector than raw RSI."""
+    if len(prices) < period + stoch_window + 5:
+        return 0.5
+    rsis = [rsi(prices[: len(prices) - k]) for k in range(stoch_window)]
+    lo, hi = min(rsis), max(rsis)
+    if hi - lo <= 1e-9:
+        return 0.5
+    return (rsis[0] - lo) / (hi - lo)
+
+
 def confluence_ok(strategy: str, direction: int, prices: list[float],
                   strict: bool = False) -> bool:
     """Does the indicator picture agree with this entry?

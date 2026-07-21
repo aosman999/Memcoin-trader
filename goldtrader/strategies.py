@@ -145,4 +145,106 @@ def breakout_signal(prices: list[float], p: GoldParams) -> GoldSignal | None:
     return None
 
 
+def momentum_signal(prices: list[float], p: GoldParams) -> GoldSignal | None:
+    """Rate-of-change continuation: when the last N minutes moved far
+    beyond normal noise (ATR-scaled), join the move."""
+    look = p.mom_lookback
+    if len(prices) < look + 20:
+        return None
+    from .indicators import atr_proxy
+    atr = atr_proxy(prices)
+    if atr <= 0:
+        return None
+    move = prices[-1] - prices[-look]
+    threshold = p.mom_atr_mult * atr * math.sqrt(look)
+    if move >= threshold:
+        return GoldSignal("gold_momentum", +1,
+                          f"{look}m surge +{move:.2f} (> {threshold:.2f})")
+    if move <= -threshold:
+        return GoldSignal("gold_momentum", -1,
+                          f"{look}m plunge {move:.2f} (< -{threshold:.2f})")
+    return None
+
+
+def orb_signal(prices: list[float], p: GoldParams,
+               now: float | None = None) -> GoldSignal | None:
+    """Opening-range breakout: the first 30 min of London (07:00 UTC) or
+    NY (12:30 UTC) defines a range; a break within the next 2h enters."""
+    if now is None:
+        return None
+    import datetime as _dt
+    t = _dt.datetime.utcfromtimestamp(now)
+    mins = t.hour * 60 + t.minute
+    for open_min in (7 * 60, 12 * 60 + 30):        # London, NY
+        since = mins - open_min
+        if not (p.orb_minutes < since <= p.orb_minutes + p.orb_window):
+            continue
+        if len(prices) < since + 5:
+            return None
+        orb = prices[-since:-since + p.orb_minutes] \
+            if since > p.orb_minutes else prices[-since:]
+        if len(orb) < p.orb_minutes:
+            return None
+        hi, lo = max(orb), min(orb)
+        if prices[-1] > hi:
+            return GoldSignal("gold_orb", +1, f"broke opening range hi {hi:.2f}")
+        if prices[-1] < lo:
+            return GoldSignal("gold_orb", -1, f"broke opening range lo {lo:.2f}")
+    return None
+
+
+def pullback_signal(prices: list[float], p: GoldParams) -> GoldSignal | None:
+    """Trend-pullback: established EMA trend, price retraces to touch the
+    fast EMA, then turns back with the trend — the classic add-with-trend
+    entry at a better price than the crossover chase."""
+    need = p.ema_slow + 10
+    if len(prices) < need:
+        return None
+    window = prices[-need:]
+    fast = _ema(window, p.ema_fast)
+    slow = _ema(window, p.ema_slow)
+    slow_prev = _ema(window[:-5], p.ema_slow)
+    slope = (slow - slow_prev) / (5 * slow) if slow else 0.0
+    last, prev = prices[-1], prices[-2]
+    band = p.pullback_band * last
+    if fast > slow and slope >= p.trend_min_slope:
+        if abs(min(prices[-4:]) - fast) <= band and last > prev:
+            return GoldSignal("gold_pullback", +1,
+                              f"pullback to EMA{p.ema_fast} in uptrend")
+    if fast < slow and slope <= -p.trend_min_slope:
+        if abs(max(prices[-4:]) - fast) <= band and last < prev:
+            return GoldSignal("gold_pullback", -1,
+                              f"pullback to EMA{p.ema_fast} in downtrend")
+    return None
+
+
+def squeeze_signal(prices: list[float], p: GoldParams) -> GoldSignal | None:
+    """Bollinger-squeeze breakout: volatility compresses well below its
+    recent norm, then price escapes the band — enter with the escape."""
+    if len(prices) < 260:
+        return None
+    from .indicators import bollinger
+    lo_b, mid, hi_b = bollinger(prices[:-1])
+    if mid <= 0:
+        return None
+    bw_now = (hi_b - lo_b) / mid
+    # reference bandwidth: sampled every 20 min over the last ~4 hours
+    refs = []
+    for k in range(20, 240, 20):
+        l, m, h = bollinger(prices[: len(prices) - k])
+        if m > 0:
+            refs.append((h - l) / m)
+    if not refs:
+        return None
+    ref = sorted(refs)[len(refs) // 2]
+    if ref <= 0 or bw_now > p.squeeze_ratio * ref:
+        return None                       # not compressed enough
+    if prices[-1] > hi_b:
+        return GoldSignal("gold_squeeze", +1, "squeeze break up")
+    if prices[-1] < lo_b:
+        return GoldSignal("gold_squeeze", -1, "squeeze break down")
+    return None
+
+
+# certified core trio — candidates below join only via explicit flags
 ALL_STRATEGIES = (trend_signal, meanrev_signal, breakout_signal)

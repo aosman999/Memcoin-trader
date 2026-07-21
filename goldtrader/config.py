@@ -99,6 +99,24 @@ class GoldParams:
     sweep_atr_mult: float = 1.5          # rejection speed (displacement) filter
     mentor_killzones_only: bool = True   # trade sweeps only at London/NY opens
 
+    # candidate strategies / indicator filters (Jul 21 hunt — every one
+    # A/B-gated; flags stay False unless certified)
+    use_momentum: bool = False           # ROC continuation strategy
+    mom_lookback: int = 30               # minutes measured
+    mom_atr_mult: float = 2.0            # surge threshold in noise units
+    use_orb: bool = False                # opening-range breakout strategy
+    orb_minutes: int = 30                # opening range length
+    orb_window: int = 120                # minutes after the range to trade
+    use_pullback: bool = False           # trend-pullback entry strategy
+    pullback_band: float = 0.0006        # how close to the EMA = a touch
+    use_squeeze: bool = False            # Bollinger-squeeze breakout
+    squeeze_ratio: float = 0.7           # bw must be < ratio * recent median
+    use_adx_filter: bool = False         # trend-strength gate on trend/breakout
+    adx_min: float = 0.25                # minimum directional dominance
+    use_stochrsi: bool = False           # StochRSI gate on meanrev entries
+    stochrsi_lo: float = 0.15            # long needs stochRSI below this
+    stochrsi_hi: float = 0.85            # short needs stochRSI above this
+
     risk: RiskParams = field(default_factory=RiskParams)
 
     # ------------------------------------------------------------------
