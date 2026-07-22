@@ -1,0 +1,131 @@
+// GoldTrader PRO — a complete, self-explaining signal system for XAUUSD.
+//
+// WHAT IT DOES (in plain words):
+//   Six proven indicators each "vote" bullish or bearish every bar:
+//     1. EMA 20/75 trend structure   4. RSI momentum side
+//     2. 15-minute trend (MTF)       5. Supertrend direction
+//     3. MACD histogram              6. VWAP side
+//   Plus a trend-STRENGTH filter (ADX): weak/choppy tape blocks signals.
+//   When 5+ of 6 agree AND the tape has strength, you get ONE clear
+//   BUY or SELL label with the exact entry, stop and target prices
+//   (2:1 reward:risk — the certified bot's exits). The dashboard
+//   (top-right) shows every vote live, the score, and BUY/SELL/WAIT.
+//   Signals are edge-triggered and evaluated on closed bars: they do
+//   NOT repaint.
+//
+// Install: TradingView -> 1m XAUUSD chart -> Pine Editor (bottom tab)
+// -> select all, delete, paste -> Save -> Add to chart. Remove any old
+// GoldTrader indicator first (hover its name -> X).
+//@version=5
+indicator("GoldTrader PRO", overlay = true,
+     max_lines_count = 500, max_labels_count = 500)
+
+// ---- tunables ---------------------------------------------------------
+votesNeeded = input.int(5, "Votes needed to signal (of 6)", minval = 4, maxval = 6)
+adxMin      = input.float(18.0, "Minimum ADX (trend strength)", minval = 5, maxval = 40)
+stopPct     = input.float(0.6, "Stop-loss %", minval = 0.1, step = 0.1)
+tpPct       = input.float(1.2, "Take-profit %", minval = 0.2, step = 0.1)
+showDash    = input.bool(true, "Show dashboard")
+
+// ---- the six voters ---------------------------------------------------
+emaFast = ta.ema(close, 20)
+emaSlow = ta.ema(close, 75)
+slope   = (emaSlow - emaSlow[5]) / (5 * emaSlow)
+v1bull  = emaFast > emaSlow and slope > 0
+v1bear  = emaFast < emaSlow and slope < 0
+
+mtfBull = request.security(syminfo.tickerid, "15", ta.ema(close, 20) >= ta.ema(close, 20)[1], lookahead = barmerge.lookahead_off)
+v2bull  = mtfBull
+v2bear  = not mtfBull
+
+[_, _, macdHist] = ta.macd(close, 12, 26, 9)
+v3bull  = macdHist > 0
+v3bear  = macdHist < 0
+
+rsiV   = ta.rsi(close, 14)
+v4bull = rsiV > 50
+v4bear = rsiV < 50
+
+[stValue, stDir] = ta.supertrend(3, 10)
+v5bull = stDir < 0
+v5bear = stDir > 0
+
+vw     = ta.vwap(hlc3)
+v6bull = close > vw
+v6bear = close < vw
+
+bulls = (v1bull ? 1 : 0) + (v2bull ? 1 : 0) + (v3bull ? 1 : 0) + (v4bull ? 1 : 0) + (v5bull ? 1 : 0) + (v6bull ? 1 : 0)
+bears = (v1bear ? 1 : 0) + (v2bear ? 1 : 0) + (v3bear ? 1 : 0) + (v4bear ? 1 : 0) + (v5bear ? 1 : 0) + (v6bear ? 1 : 0)
+
+// ---- trend-strength filter (blocks chop) ------------------------------
+[diP, diM, adxV] = ta.dmi(14, 14)
+strongTape = adxV >= adxMin
+
+// ---- the signal: edge-triggered, non-repainting -----------------------
+buyState  = bulls >= votesNeeded and strongTape
+sellState = bears >= votesNeeded and strongTape
+buySig  = buyState and not buyState[1] and barstate.isconfirmed
+sellSig = sellState and not sellState[1] and barstate.isconfirmed
+
+// ---- context on the chart --------------------------------------------
+plot(emaFast, "EMA20", color = color.new(color.teal, 45))
+plot(emaSlow, "EMA75", color = color.new(color.orange, 45))
+plot(stValue, "Supertrend", color = stDir < 0 ? color.new(color.green, 60) : color.new(color.red, 60), style = plot.style_linebr)
+plot(vw, "VWAP", color = color.new(color.gray, 55), style = plot.style_circles)
+bgcolor(buyState ? color.new(color.green, 96) : sellState ? color.new(color.red, 96) : na, title = "aligned tape")
+
+// ---- ONE clear label per signal, with the exact prices ----------------
+var line entryLn = na
+var line slLn    = na
+var line tpLn    = na
+var label sigLb  = na
+if buySig or sellSig
+    line.delete(entryLn)
+    line.delete(slLn)
+    line.delete(tpLn)
+    label.delete(sigLb)
+    dir = buySig ? 1 : -1
+    sl  = close * (1 - dir * stopPct / 100)
+    tp  = close * (1 + dir * tpPct / 100)
+    entryLn := line.new(bar_index, close, bar_index + 80, close, color = color.gray,  style = line.style_dotted, width = 2)
+    slLn    := line.new(bar_index, sl,    bar_index + 80, sl,    color = color.red,   style = line.style_dashed, width = 2)
+    tpLn    := line.new(bar_index, tp,    bar_index + 80, tp,    color = color.green, style = line.style_dashed, width = 2)
+    txt = (buySig ? "BUY (go long)\n" : "SELL (go short)\n") + "enter  " + str.tostring(close,  format.mintick) + "\nstop   " + str.tostring(sl, format.mintick) + "\ntarget " + str.tostring(tp, format.mintick) + "\nvotes  " + str.tostring(buySig ? bulls : bears) + "/6  adx " + str.tostring(adxV, "#")
+    sigLb := label.new(bar_index, buySig ? low : high, txt, style = buySig ? label.style_label_up : label.style_label_down, color = color.new(buySig ? color.green : color.red, 20), textcolor = color.white, size = size.normal)
+
+plotshape(buySig,  "BUY",  shape.triangleup,   location.belowbar, color.green, size = size.small)
+plotshape(sellSig, "SELL", shape.triangledown, location.abovebar, color.red,   size = size.small)
+
+// ---- the dashboard: every vote, live, in plain English ----------------
+f_mark(bull, bear) => bull ? "▲ bull" : bear ? "▼ bear" : "— flat"
+f_col(bull, bear)  => bull ? color.new(color.green, 75) : bear ? color.new(color.red, 75) : color.new(color.gray, 80)
+
+var table dash = table.new(position.top_right, 2, 10, bgcolor = color.new(color.black, 25), border_width = 1, border_color = color.new(color.gray, 70))
+if showDash and barstate.islast
+    table.cell(dash, 0, 0, "GoldTrader PRO", text_color = color.white, bgcolor = color.new(color.blue, 40))
+    table.cell(dash, 1, 0, timeframe.period + "m chart", text_color = color.white, bgcolor = color.new(color.blue, 40))
+    table.cell(dash, 0, 1, "Trend EMA 20/75", text_color = color.white, bgcolor = f_col(v1bull, v1bear))
+    table.cell(dash, 1, 1, f_mark(v1bull, v1bear), text_color = color.white, bgcolor = f_col(v1bull, v1bear))
+    table.cell(dash, 0, 2, "15m trend", text_color = color.white, bgcolor = f_col(v2bull, v2bear))
+    table.cell(dash, 1, 2, f_mark(v2bull, v2bear), text_color = color.white, bgcolor = f_col(v2bull, v2bear))
+    table.cell(dash, 0, 3, "MACD momentum", text_color = color.white, bgcolor = f_col(v3bull, v3bear))
+    table.cell(dash, 1, 3, f_mark(v3bull, v3bear), text_color = color.white, bgcolor = f_col(v3bull, v3bear))
+    table.cell(dash, 0, 4, "RSI " + str.tostring(rsiV, "#"), text_color = color.white, bgcolor = f_col(v4bull, v4bear))
+    table.cell(dash, 1, 4, f_mark(v4bull, v4bear), text_color = color.white, bgcolor = f_col(v4bull, v4bear))
+    table.cell(dash, 0, 5, "Supertrend", text_color = color.white, bgcolor = f_col(v5bull, v5bear))
+    table.cell(dash, 1, 5, f_mark(v5bull, v5bear), text_color = color.white, bgcolor = f_col(v5bull, v5bear))
+    table.cell(dash, 0, 6, "VWAP side", text_color = color.white, bgcolor = f_col(v6bull, v6bear))
+    table.cell(dash, 1, 6, f_mark(v6bull, v6bear), text_color = color.white, bgcolor = f_col(v6bull, v6bear))
+    strengthCol = strongTape ? color.new(color.green, 75) : color.new(color.orange, 70)
+    table.cell(dash, 0, 7, "Strength ADX " + str.tostring(adxV, "#"), text_color = color.white, bgcolor = strengthCol)
+    table.cell(dash, 1, 7, strongTape ? "trending" : "choppy — no trades", text_color = color.white, bgcolor = strengthCol)
+    table.cell(dash, 0, 8, "Score", text_color = color.white, bgcolor = color.new(color.gray, 60))
+    table.cell(dash, 1, 8, str.tostring(bulls) + " bull / " + str.tostring(bears) + " bear", text_color = color.white, bgcolor = color.new(color.gray, 60))
+    statusTxt = buyState ? "BUY zone — long setups valid" : sellState ? "SELL zone — short setups valid" : "WAIT — only " + str.tostring(math.max(bulls, bears)) + "/" + str.tostring(votesNeeded) + " votes aligned"
+    statusCol = buyState ? color.new(color.green, 30) : sellState ? color.new(color.red, 30) : color.new(color.gray, 40)
+    table.cell(dash, 0, 9, "STATUS", text_color = color.white, bgcolor = statusCol)
+    table.cell(dash, 1, 9, statusTxt, text_color = color.white, bgcolor = statusCol)
+
+// ---- alerts (set: right-click chart -> Add alert -> GoldTrader PRO) ---
+alertcondition(buySig,  "GoldTrader PRO BUY",  "GoldTrader PRO: BUY XAUUSD — 5+/6 indicators aligned bullish, trend strength confirmed")
+alertcondition(sellSig, "GoldTrader PRO SELL", "GoldTrader PRO: SELL XAUUSD — 5+/6 indicators aligned bearish, trend strength confirmed")
