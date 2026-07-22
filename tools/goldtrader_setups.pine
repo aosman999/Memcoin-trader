@@ -1,18 +1,11 @@
-// GoldTrader setups — the bot's certified entry brain, drawn on your chart.
-// Paste into TradingView: Pine Editor -> New indicator -> replace all -> Save
-// -> Add to chart. Use it on XAUUSD, 1-minute timeframe (the bot's timeframe).
+// GoldTrader setups v2 — the bot's certified entry brain, drawn ON the
+// price chart, clean: one marker per NEW signal (no per-bar spam), and
+// only the latest setup keeps its entry/SL/TP lines.
 //
-// Mirrors the certified champion (data/gold_params.json, 2026-07-21):
-//   trend    — EMA20/EMA75 cross, sloping slow EMA, 15m MTF + MACD agree
-//   pullback — retrace-and-turn at EMA20 inside an established trend (NEW)
-//   meanrev  — z<=-2.2 stretch fade in ranging tape, RSI confirm
-//   breakout — 120m high/low break with range expansion, MACD agree
-// Exits are ALWAYS binary: stop -0.6%, target +1.2% (2:1), drawn per signal.
-//
-// Honest note: the live bot ALSO runs gates this chart cannot see (news
-// shock sentinel, economic calendar, session liquidity weight, 3-loss
-// discipline). So every bot trade appears here, but not every marker here
-// becomes a bot trade. Kill zones (London/NY opens) are shaded.
+// Install: TradingView -> Pine Editor (bottom tab) -> select all, delete,
+// paste this -> Save -> Add to chart. If an old version is on the chart,
+// remove it first (hover its name -> X). Designed for XAUUSD 1-minute —
+// on other timeframes it shows the same logic on those bars.
 //@version=5
 indicator("GoldTrader setups (certified champion)", overlay = true,
      max_lines_count = 500, max_labels_count = 500)
@@ -36,79 +29,76 @@ emaSlow = ta.ema(close, emaSlowLen)
 slope   = (emaSlow - emaSlow[5]) / (5 * emaSlow)
 [_, _, macdHist] = ta.macd(close, 12, 26, 9)
 rsiV    = ta.rsi(close, 14)
-mtfUp   = request.security(syminfo.tickerid, "15",
-     ta.ema(close, 20) >= ta.ema(close, 20)[1], lookahead = barmerge.lookahead_off)
-mtfDown = request.security(syminfo.tickerid, "15",
-     ta.ema(close, 20) <= ta.ema(close, 20)[1], lookahead = barmerge.lookahead_off)
+mtfUp   = request.security(syminfo.tickerid, "15", ta.ema(close, 20) >= ta.ema(close, 20)[1], lookahead = barmerge.lookahead_off)
+mtfDown = request.security(syminfo.tickerid, "15", ta.ema(close, 20) <= ta.ema(close, 20)[1], lookahead = barmerge.lookahead_off)
 
-// ---- 1. trend (EMA cross + slope + MTF + MACD confluence) -------------
-trendLong  = emaFast > emaSlow and slope >= minSlope and close >= emaFast
-     and mtfUp and macdHist > 0
-trendShort = emaFast < emaSlow and slope <= -minSlope and close <= emaFast
-     and mtfDown and macdHist < 0
-
-// ---- 2. pullback (NEW: certified 2026-07-21) --------------------------
-pbLong  = emaFast > emaSlow and slope >= minSlope
-     and math.abs(ta.lowest(close, 4) - emaFast) <= pbBand * close
-     and close > close[1] and macdHist > 0
-pbShort = emaFast < emaSlow and slope <= -minSlope
-     and math.abs(ta.highest(close, 4) - emaFast) <= pbBand * close
-     and close < close[1] and macdHist < 0
-
-// ---- 3. mean reversion (z-score fade in ranging tape + RSI) -----------
+// ---- raw conditions ---------------------------------------------------
+trendLongC  = emaFast > emaSlow and slope >= minSlope and close >= emaFast and mtfUp and macdHist > 0
+trendShortC = emaFast < emaSlow and slope <= -minSlope and close <= emaFast and mtfDown and macdHist < 0
+pbLongC  = emaFast > emaSlow and slope >= minSlope and math.abs(ta.lowest(close, 4) - emaFast) <= pbBand * close and close > close[1] and macdHist > 0
+pbShortC = emaFast < emaSlow and slope <= -minSlope and math.abs(ta.highest(close, 4) - emaFast) <= pbBand * close and close < close[1] and macdHist < 0
 mrMean  = ta.sma(close, mrWindow)
 mrStd   = ta.stdev(close, mrWindow)
 zScore  = mrStd > 0 ? (close - mrMean) / mrStd : 0.0
 trendZ  = mrStd > 0 ? (mrMean - ta.sma(close[mrWindow], mrWindow)) / mrStd : 99
 ranging = math.abs(trendZ) <= mrMaxTrendZ
-mrLong  = ranging and zScore <= -mrEntryZ and rsiV <= 34
-mrShort = ranging and zScore >= mrEntryZ and rsiV >= 66
-
-// ---- 4. breakout (rolling high/low break + range expansion + MACD) ----
+mrLongC  = ranging and zScore <= -mrEntryZ and rsiV <= 34
+mrShortC = ranging and zScore >= mrEntryZ and rsiV >= 66
 boHi        = ta.highest(close[1], boLookback)
 boLo        = ta.lowest(close[1], boLookback)
 recentRange = ta.highest(close, 15) - ta.lowest(close, 15)
 olderRange  = (ta.highest(close[61], 60) - ta.lowest(close[61], 60)) / 4
 expanding   = olderRange > 0 and recentRange >= boExpansion * olderRange
-boLong      = expanding and close > boHi and macdHist > 0
-boShort     = expanding and close < boLo and macdHist < 0
+boLongC     = expanding and close > boHi and macdHist > 0
+boShortC    = expanding and close < boLo and macdHist < 0
 
-// ---- kill zones (London 07-10 UTC, NY 12-15 UTC): mentor-sweep hours --
-inKZ = (hour(time, "GMT") >= 7 and hour(time, "GMT") < 10)
-     or (hour(time, "GMT") >= 12 and hour(time, "GMT") < 15)
-bgcolor(inKZ ? color.new(color.yellow, 94) : na, title = "kill zones")
-
-// ---- draw the EMAs the bot watches ------------------------------------
-plot(emaFast, "EMA20", color = color.new(color.teal, 30))
-plot(emaSlow, "EMA75", color = color.new(color.orange, 30))
-
-// ---- setup markers ----------------------------------------------------
-plotshape(trendLong,  "trend long",  shape.triangleup,   location.belowbar, color.green,  text = "T")
-plotshape(trendShort, "trend short", shape.triangledown, location.abovebar, color.red,    text = "T")
-plotshape(pbLong,     "pullback long",  shape.triangleup,   location.belowbar, color.lime,   text = "P")
-plotshape(pbShort,    "pullback short", shape.triangledown, location.abovebar, color.maroon, text = "P")
-plotshape(mrLong,     "meanrev long",  shape.triangleup,   location.belowbar, color.blue,   text = "M")
-plotshape(mrShort,    "meanrev short", shape.triangledown, location.abovebar, color.purple, text = "M")
-plotshape(boLong,     "breakout long",  shape.triangleup,   location.belowbar, color.aqua,   text = "B")
-plotshape(boShort,    "breakout short", shape.triangledown, location.abovebar, color.fuchsia, text = "B")
-
-// ---- SL/TP lines per signal (binary 2:1 exits, exactly like the bot) --
+// ---- fire ONCE per new signal (kills the per-bar spam) ----------------
+trendLong  = trendLongC  and not trendLongC[1]
+trendShort = trendShortC and not trendShortC[1]
+pbLong     = pbLongC     and not pbLongC[1]
+pbShort    = pbShortC    and not pbShortC[1]
+mrLong     = mrLongC     and not mrLongC[1]
+mrShort    = mrShortC    and not mrShortC[1]
+boLong     = boLongC     and not boLongC[1]
+boShort    = boShortC    and not boShortC[1]
 anyLong  = trendLong or pbLong or mrLong or boLong
 anyShort = trendShort or pbShort or mrShort or boShort
-if anyLong or anyShort
-    dir  = anyLong ? 1 : -1
-    sl   = close * (1 - dir * stopFrac)
-    tp   = close * (1 + dir * tpFrac)
-    line.new(bar_index, close, bar_index + 40, close, color = color.gray,  style = line.style_dotted)
-    line.new(bar_index, sl,    bar_index + 40, sl,    color = color.red,   style = line.style_dashed)
-    line.new(bar_index, tp,    bar_index + 40, tp,    color = color.green, style = line.style_dashed)
-    label.new(bar_index, tp, (anyLong ? "LONG " : "SHORT ")
-         + (trendLong or trendShort ? "trend" : pbLong or pbShort ? "pullback"
-         : mrLong or mrShort ? "meanrev" : "breakout"),
-         style = anyLong ? label.style_label_down : label.style_label_up,
-         color = color.new(anyLong ? color.green : color.red, 60),
-         textcolor = color.white, size = size.small)
 
-// ---- phone/desktop alerts straight from TradingView -------------------
+// ---- context: the EMAs the bot watches + kill-zone shading ------------
+plot(emaFast, "EMA20", color = color.new(color.teal, 40))
+plot(emaSlow, "EMA75", color = color.new(color.orange, 40))
+inKZ = (hour(time, "GMT") >= 7 and hour(time, "GMT") < 10) or (hour(time, "GMT") >= 12 and hour(time, "GMT") < 15)
+bgcolor(inKZ ? color.new(color.yellow, 96) : na, title = "kill zones")
+
+// ---- one clean marker per signal --------------------------------------
+plotshape(trendLong,  "trend long",     shape.triangleup,   location.belowbar, color.green,   text = "T", size = size.small)
+plotshape(trendShort, "trend short",    shape.triangledown, location.abovebar, color.red,     text = "T", size = size.small)
+plotshape(pbLong,     "pullback long",  shape.triangleup,   location.belowbar, color.lime,    text = "P", size = size.small)
+plotshape(pbShort,    "pullback short", shape.triangledown, location.abovebar, color.maroon,  text = "P", size = size.small)
+plotshape(mrLong,     "meanrev long",   shape.triangleup,   location.belowbar, color.blue,    text = "M", size = size.small)
+plotshape(mrShort,    "meanrev short",  shape.triangledown, location.abovebar, color.purple,  text = "M", size = size.small)
+plotshape(boLong,     "breakout long",  shape.triangleup,   location.belowbar, color.aqua,    text = "B", size = size.small)
+plotshape(boShort,    "breakout short", shape.triangledown, location.abovebar, color.fuchsia, text = "B", size = size.small)
+
+// ---- entry/SL/TP for the LATEST setup only (old lines auto-erase) -----
+var line entryLn = na
+var line slLn    = na
+var line tpLn    = na
+var label sigLb  = na
+if (anyLong or anyShort) and barstate.isconfirmed
+    line.delete(entryLn)
+    line.delete(slLn)
+    line.delete(tpLn)
+    label.delete(sigLb)
+    dir = anyLong ? 1 : -1
+    sl  = close * (1 - dir * stopFrac)
+    tp  = close * (1 + dir * tpFrac)
+    entryLn := line.new(bar_index, close, bar_index + 60, close, color = color.gray,  style = line.style_dotted, width = 2)
+    slLn    := line.new(bar_index, sl,    bar_index + 60, sl,    color = color.red,   style = line.style_dashed, width = 2)
+    tpLn    := line.new(bar_index, tp,    bar_index + 60, tp,    color = color.green, style = line.style_dashed, width = 2)
+    sName = trendLong or trendShort ? "trend" : pbLong or pbShort ? "pullback" : mrLong or mrShort ? "meanrev" : "breakout"
+    sigLb := label.new(bar_index, tp, (anyLong ? "LONG " : "SHORT ") + sName, style = anyLong ? label.style_label_down : label.style_label_up, color = color.new(anyLong ? color.green : color.red, 55), textcolor = color.white, size = size.small)
+
+// ---- phone/desktop alerts ---------------------------------------------
 alertcondition(anyLong,  "GoldTrader LONG setup",  "GoldTrader: LONG setup on XAUUSD")
 alertcondition(anyShort, "GoldTrader SHORT setup", "GoldTrader: SHORT setup on XAUUSD")
