@@ -140,6 +140,9 @@ class EntryPipeline:
             candidates.append(pullback_signal)
         if getattr(p, "use_squeeze", False):
             candidates.append(squeeze_signal)
+        if getattr(p, "use_htf", False):
+            from .strategies import htf_signal
+            candidates.append(htf_signal)
         for strat in candidates:
             sig = strat(history, p)
             if sig is None:

@@ -116,6 +116,9 @@ class GoldParams:
     use_stochrsi: bool = False           # StochRSI gate on meanrev entries
     stochrsi_lo: float = 0.15            # long needs stochRSI below this
     stochrsi_hi: float = 0.85            # short needs stochRSI above this
+    use_htf: bool = False                # multi-timeframe ENTRIES (5m/15m
+                                         # resampled strategy runs; A/B first)
+    htf_frames: tuple = (5, 15)          # minutes per higher-timeframe bar
 
     risk: RiskParams = field(default_factory=RiskParams)
 

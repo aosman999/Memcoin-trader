@@ -246,5 +246,28 @@ def squeeze_signal(prices: list[float], p: GoldParams) -> GoldSignal | None:
     return None
 
 
+def htf_signal(prices: list[float], p: GoldParams) -> GoldSignal | None:
+    """Higher-timeframe entries: the certified strategies re-run on 5m/15m
+    resampled closes, so setups invisible at 1-minute resolution (a clean
+    15m trend, a 5m range break) can open trades too. Indicator confluence
+    is checked on the SAME timeframe as the signal. Exits stay the owner's
+    binary 2:1 regardless of the entry timeframe."""
+    from .indicators import confluence_ok
+    for frame in p.htf_frames:
+        bars = prices[::-1][::frame][::-1]     # last bar = latest close
+        if len(bars) < 30:
+            continue
+        for strat in (trend_signal, meanrev_signal, breakout_signal):
+            sig = strat(bars, p)
+            if sig is None:
+                continue
+            if p.use_indicators and not confluence_ok(
+                    sig.strategy, sig.direction, bars):
+                continue
+            return GoldSignal(f"{sig.strategy}@{frame}m", sig.direction,
+                              f"{frame}m: {sig.reason}")
+    return None
+
+
 # certified core trio — candidates below join only via explicit flags
 ALL_STRATEGIES = (trend_signal, meanrev_signal, breakout_signal)
