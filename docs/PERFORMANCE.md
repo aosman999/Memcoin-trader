@@ -91,6 +91,7 @@ live-market evidence (Jul 22+).
 | Bollinger-squeeze breakout strategy | below baseline on 3 of 4 batteries |
 | ADX-proxy trend-strength gate | M1-A x2.32→x1.27, M2-B below water |
 | StochRSI meanrev gate | won all 4 batteries, then FAILED the holdout (x0.79 vs x0.85) — the gate doing its job |
+| Multi-timeframe ENTRIES (5m/15m resampled strategy runs) | split batteries (M1 down, M2 up), then FAILED the holdout (worst-model x0.68 vs x0.97). The bot keeps multi-timeframe CONTEXT (15m MTF filter, 75m EMA, 2-4h lookbacks) — extra entry timeframes added correlated risk, not edge |
 
 ## Ideas tested and ADOPTED
 
