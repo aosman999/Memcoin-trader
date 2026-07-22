@@ -119,19 +119,14 @@ def cmd_mt5(args: argparse.Namespace) -> None:
     run_mt5(minutes=args.minutes, poll_seconds=args.interval)
 
 
-def cmd_mac(args: argparse.Namespace) -> None:
-    from .metaapi_bridge import run_mac
-    if not args.forever:
-        run_mac(minutes=args.minutes, poll_seconds=args.interval)
-        return
-    # supervised mode: a crashed bot earns nothing. Auto-restart with
-    # backoff; alert Telegram on every crash; give up only on a
-    # crash-loop (5 failures within 10 minutes).
+def _run_supervised(run_fn, minutes: float, interval: float) -> None:
+    """A crashed bot earns nothing: auto-restart with backoff, Telegram
+    alerts on every crash, give up only on a crash-loop (5 in 10 min)."""
     from .telegram import send as tg_send
     crashes: list[float] = []
     while True:
         try:
-            run_mac(minutes=args.minutes, poll_seconds=args.interval)
+            run_fn(minutes=minutes, poll_seconds=interval)
             print("session finished cleanly — restarting for the next one")
         except SystemExit as e:
             print(f"fatal (not restartable): {e}")
@@ -150,6 +145,22 @@ def cmd_mac(args: argparse.Namespace) -> None:
                         "Check the terminal.")
                 raise
             time.sleep(60)
+
+
+def cmd_mac(args: argparse.Namespace) -> None:
+    from .metaapi_bridge import run_mac
+    if not args.forever:
+        run_mac(minutes=args.minutes, poll_seconds=args.interval)
+        return
+    _run_supervised(run_mac, args.minutes, args.interval)
+
+
+def cmd_oanda(args: argparse.Namespace) -> None:
+    from .oanda_bridge import run_oanda
+    if not args.forever:
+        run_oanda(minutes=args.minutes, poll_seconds=args.interval)
+        return
+    _run_supervised(run_oanda, args.minutes, args.interval)
 
 
 def cmd_evolve(args: argparse.Namespace) -> None:
@@ -215,6 +226,14 @@ def main() -> None:
     mac.add_argument("--forever", action="store_true",
                      help="supervised: auto-restart on crash, Telegram alerts")
     mac.set_defaults(fn=cmd_mac)
+
+    oa = sub.add_parser("oanda", help="trade a FREE OANDA practice (demo) "
+                                      "gold account from any OS — no fees")
+    oa.add_argument("--minutes", type=float, default=480.0)
+    oa.add_argument("--interval", type=float, default=15.0)
+    oa.add_argument("--forever", action="store_true",
+                    help="supervised: auto-restart on crash, Telegram alerts")
+    oa.set_defaults(fn=cmd_oanda)
 
     e = sub.add_parser("evolve", help="Gold Strategy Lab: evolve parameters")
     e.add_argument("--generations", type=int, default=4)

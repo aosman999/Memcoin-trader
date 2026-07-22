@@ -201,3 +201,47 @@ class TestMT5Bridge(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestOandaBridge(unittest.TestCase):
+    def test_refuses_non_practice_account(self):
+        from goldtrader.oanda_bridge import OandaPractice
+        with self.assertRaises(SystemExit):
+            OandaPractice({"api_token": "t", "account_id": "001-004-123-001"})
+
+    def test_accepts_practice_account(self):
+        from goldtrader.oanda_bridge import OandaPractice, PRACTICE_HOST
+        c = OandaPractice({"api_token": "t", "account_id": "101-004-123-001"})
+        self.assertTrue(c.base.startswith(PRACTICE_HOST))
+
+    def test_missing_config_exits(self):
+        from goldtrader import oanda_bridge
+        old = oanda_bridge.OANDA_CONFIG_PATH
+        oanda_bridge.OANDA_CONFIG_PATH = "/nonexistent/oanda.json"
+        try:
+            with self.assertRaises(SystemExit):
+                oanda_bridge._load_config()
+        finally:
+            oanda_bridge.OANDA_CONFIG_PATH = old
+
+    def test_size_units_risk_based(self):
+        from goldtrader.oanda_bridge import size_units
+        # $3000, gold $4100, 0.6% stop, 10% risk -> notional $50k -> 12 oz
+        u = size_units(3000.0, 4100.0, 0.006, 1.0, 0.10, 200.0,
+                       margin_available=3000.0, margin_rate=0.05)
+        self.assertEqual(u, 12)
+
+    def test_size_units_margin_clamp(self):
+        from goldtrader.oanda_bridge import size_units
+        # tiny available margin must shrink the position, not error
+        u = size_units(3000.0, 4100.0, 0.006, 1.0, 0.10, 200.0,
+                       margin_available=500.0, margin_rate=0.05)
+        self.assertLessEqual(u * 4100.0, 500.0 * 0.95 / 0.05 + 4100.0)
+        self.assertGreater(u, 0)
+
+    def test_size_units_too_small_account(self):
+        from goldtrader.oanda_bridge import size_units
+        # $100 account: 1 oz risks ~$24.6 > 2x the $10 budget -> refuse
+        u = size_units(100.0, 4100.0, 0.006, 1.0, 0.10, 200.0,
+                       margin_available=100.0, margin_rate=0.05)
+        self.assertEqual(u, 0)

@@ -3,12 +3,23 @@
 Everything below is copy-paste. Total time: ~10 minutes the first day,
 one command every day after.
 
+**Plan A is OANDA practice** (July 2026: MetaApi now demands a paid
+deposit to deploy accounts — OANDA's practice API is fully free).
+The MetaApi path below still works if you ever choose to pay for it.
+
 ## Before the laptop (do these from your phone, any time)
 
-1. **MetaApi** (free): sign up at https://app.metaapi.cloud →
+1. **OANDA** (free, no card): sign up for an **fxTrade Practice**
+   account at https://www.oanda.com → log in → Account settings →
+   **Manage API Access** → generate a personal access **token** →
+   note your v20 **account id** (format 101-XXX-XXXXXXX-XXX).
+   Create `data/oanda_config.json` (gitignored):
+   `{"api_token": "...", "account_id": "101-...", "instrument": "XAU_USD"}`
+   Then trade with `python3 -m goldtrader oanda --forever`.
+2. *(alternative, paid)* **MetaApi**: sign up at https://app.metaapi.cloud →
    Trading accounts → Add account → MT5, your demo login, password and server (from your MT5 signup) → **Deploy**.
    Copy the account's **id** (uuid) and create an **API token**.
-2. **Telegram**: use your own bot token and chat id (see docs/GOLD.md).
+3. **Telegram**: use your own bot token and chat id (see docs/GOLD.md).
 
 ## Day one — on the MacBook
 

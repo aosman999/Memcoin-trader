@@ -69,11 +69,20 @@ def run_preflight() -> int:
     # 3. credentials
     mac_cfg = os.path.join(DATA_DIR, "metaapi_config.json")
     win_cfg = os.path.join(DATA_DIR, "mt5_config.json")
+    oanda_cfg = os.path.join(DATA_DIR, "oanda_config.json")
     has_mac, has_win = os.path.exists(mac_cfg), os.path.exists(win_cfg)
-    failures += not _check("broker config (metaapi_config.json or mt5_config.json)",
-                           has_mac or has_win,
-                           "mac" if has_mac else "windows" if has_win else
+    has_oanda = os.path.exists(oanda_cfg)
+    failures += not _check("broker config (oanda/metaapi/mt5 _config.json)",
+                           has_mac or has_win or has_oanda,
+                           "oanda" if has_oanda else "mac" if has_mac
+                           else "windows" if has_win else
                            "create one — see docs/GOLD.md")
+    if has_oanda:
+        cfg = json.load(open(oanda_cfg)) if os.path.exists(oanda_cfg) else {}
+        failures += not _check(
+            "OANDA account is PRACTICE (101-…)",
+            str(cfg.get("account_id", "")).startswith("101-"),
+            str(cfg.get("account_id", "missing")))
     tg_cfg = os.path.join(DATA_DIR, "telegram_config.json")
     has_tg = os.path.exists(tg_cfg)
     _check("telegram config", has_tg, "" if has_tg else "alerts disabled",
@@ -97,6 +106,9 @@ def run_preflight() -> int:
                            f"https://mt-client-api-v1.{region}.agiliumtrade.ai/"))
         except (json.JSONDecodeError, OSError):
             failures += not _check("metaapi_config.json readable", False)
+    if has_oanda:
+        checks.append(("OANDA practice endpoint",
+                       "https://api-fxpractice.oanda.com/"))
     for name, url in checks:
         failures += not _check(name, _reachable(url))
 
