@@ -70,13 +70,23 @@ def run_preflight() -> int:
     mac_cfg = os.path.join(DATA_DIR, "metaapi_config.json")
     win_cfg = os.path.join(DATA_DIR, "mt5_config.json")
     oanda_cfg = os.path.join(DATA_DIR, "oanda_config.json")
+    ct_cfg = os.path.join(DATA_DIR, "ctrader_config.json")
     has_mac, has_win = os.path.exists(mac_cfg), os.path.exists(win_cfg)
-    has_oanda = os.path.exists(oanda_cfg)
-    failures += not _check("broker config (oanda/metaapi/mt5 _config.json)",
-                           has_mac or has_win or has_oanda,
-                           "oanda" if has_oanda else "mac" if has_mac
-                           else "windows" if has_win else
-                           "create one — see docs/GOLD.md")
+    has_oanda, has_ct = os.path.exists(oanda_cfg), os.path.exists(ct_cfg)
+    failures += not _check("broker config (ctrader/oanda/metaapi/mt5 _config.json)",
+                           has_mac or has_win or has_oanda or has_ct,
+                           "ctrader" if has_ct else "oanda" if has_oanda
+                           else "mac" if has_mac else "windows" if has_win
+                           else "create one — see docs/GOLD.md")
+    if has_ct:
+        import socket as _socket
+        try:
+            _socket.create_connection(("demo.ctraderapi.com", 5036),
+                                      timeout=10).close()
+            ok = True
+        except OSError:
+            ok = False
+        failures += not _check("cTrader demo endpoint reachable", ok)
     if has_oanda:
         cfg = json.load(open(oanda_cfg)) if os.path.exists(oanda_cfg) else {}
         failures += not _check(

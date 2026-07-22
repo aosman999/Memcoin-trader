@@ -245,3 +245,51 @@ class TestOandaBridge(unittest.TestCase):
         u = size_units(100.0, 4100.0, 0.006, 1.0, 0.10, 200.0,
                        margin_available=100.0, margin_rate=0.05)
         self.assertEqual(u, 0)
+
+
+class TestCTraderBridge(unittest.TestCase):
+    def test_demo_host_hardcoded(self):
+        from goldtrader import ctrader_bridge as cb
+        self.assertEqual(cb.DEMO_HOST, "demo.ctraderapi.com")
+        self.assertNotIn("live", cb.DEMO_HOST)
+
+    def test_norm_symbol(self):
+        from goldtrader.ctrader_bridge import norm_symbol
+        for raw in ("XAUUSD", "XAU/USD", "xauusd", "XAUUSD.r", "Xau/Usd"):
+            self.assertEqual(norm_symbol(raw), "XAUUSD")
+
+    def test_frame_roundtrip(self):
+        from goldtrader.ctrader_bridge import WebSocketClient
+        payload = b'{"payloadType": 51, "payload": {}}'
+        frame = WebSocketClient.encode_frame(payload)
+        self.assertEqual(frame[0], 0x81)             # FIN + text
+        n = frame[1] & 0x7F
+        self.assertTrue(frame[1] & 0x80)             # masked
+        mask, data = frame[2:6], frame[6:6 + n]
+        out = bytes(b ^ mask[i % 4] for i, b in enumerate(data))
+        self.assertEqual(out, payload)
+
+    def test_frame_long_payload(self):
+        from goldtrader.ctrader_bridge import WebSocketClient
+        payload = b"x" * 300
+        frame = WebSocketClient.encode_frame(payload)
+        self.assertEqual(frame[1] & 0x7F, 126)
+        import struct as st
+        self.assertEqual(st.unpack(">H", frame[2:4])[0], 300)
+
+    def test_missing_config_exits(self):
+        from goldtrader import ctrader_bridge
+        old = ctrader_bridge.CTRADER_CONFIG_PATH
+        ctrader_bridge.CTRADER_CONFIG_PATH = "/nonexistent/ct.json"
+        try:
+            with self.assertRaises(SystemExit):
+                ctrader_bridge._load_config()
+        finally:
+            ctrader_bridge.CTRADER_CONFIG_PATH = old
+
+    def test_conversion_scales(self):
+        from goldtrader import ctrader_bridge as cb
+        # 12 oz -> volume 1200; $24.60 SL distance -> 2,460,000 rel units
+        self.assertEqual(int(12 * cb.VOLUME_SCALE), 1200)
+        self.assertEqual(int(round(24.60 * cb.REL_PRICE_SCALE)), 2460000)
+        self.assertEqual(411809500 / cb.SPOT_PRICE_SCALE, 4118.095)

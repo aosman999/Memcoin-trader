@@ -163,6 +163,14 @@ def cmd_oanda(args: argparse.Namespace) -> None:
     _run_supervised(run_oanda, args.minutes, args.interval)
 
 
+def cmd_ctrader(args: argparse.Namespace) -> None:
+    from .ctrader_bridge import run_ctrader
+    if not args.forever:
+        run_ctrader(minutes=args.minutes, poll_seconds=args.interval)
+        return
+    _run_supervised(run_ctrader, args.minutes, args.interval)
+
+
 def cmd_evolve(args: argparse.Namespace) -> None:
     from .strategy_lab import GoldStrategyLab
     mode = "BOTH market models (robust)" if args.cross_model else "the simulator"
@@ -226,6 +234,14 @@ def main() -> None:
     mac.add_argument("--forever", action="store_true",
                      help="supervised: auto-restart on crash, Telegram alerts")
     mac.set_defaults(fn=cmd_mac)
+
+    ct = sub.add_parser("ctrader", help="trade a FREE cTrader demo account "
+                                        "from any OS — email-only signup")
+    ct.add_argument("--minutes", type=float, default=480.0)
+    ct.add_argument("--interval", type=float, default=15.0)
+    ct.add_argument("--forever", action="store_true",
+                    help="supervised: auto-restart on crash, Telegram alerts")
+    ct.set_defaults(fn=cmd_ctrader)
 
     oa = sub.add_parser("oanda", help="trade a FREE OANDA practice (demo) "
                                       "gold account from any OS — no fees")
