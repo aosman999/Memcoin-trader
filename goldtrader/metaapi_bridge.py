@@ -175,11 +175,15 @@ def run_mac(minutes: float = 480.0, poll_seconds: float = 15.0) -> None:
         info = api.account_information() or {}
         equity = float(info.get("equity", 0) or 0) or day.day_start_equity
 
+        prev_day, prev_start = day.day, day.day_start_equity
         if day.roll_if_new_day(equity, now):
             pipeline.gov_red_streak = day.red_streak
-            if day.day_start_equity > 0:
-                tg_send(f"🥇 Gold bot new UTC day {day.day}: equity "
-                        f"{equity:,.2f}, governor red-streak {day.red_streak}")
+            if prev_start > 0:
+                pnl = equity - prev_start
+                tg_send(f"🥇 Daily report {prev_day}: {pnl:+,.2f} USD "
+                        f"({pnl / prev_start * 100:+.2f}%). Equity now "
+                        f"{equity:,.2f}. New UTC day {day.day}; governor "
+                        f"red-streak {day.red_streak}")
         day.note_equity(equity)
 
         if not day.halted and day.loss_stop_hit(equity, params.risk.daily_loss_limit):
