@@ -9,6 +9,16 @@ The MetaApi path below still works if you ever choose to pay for it.
 
 ## Before the laptop (do these from your phone, any time)
 
+0. **cTrader** (free, email-only — owner's chosen path): create a
+   cTrader-platform DEMO account at any cTrader broker (e.g. FxPro:
+   Create Account → platform **cTrader** → Demo, $3,000, 1:200), log
+   into the cTrader app/web with the same email (that's your cTrader
+   ID), then at https://openapi.ctrader.com register an application
+   (any name, redirect http://localhost) and generate an access token
+   with the **trading** scope. Create `data/ctrader_config.json`
+   (gitignored):
+   `{"client_id": "...", "client_secret": "...", "access_token": "...", "symbol": "XAUUSD"}`
+   Then trade with `python3 -m goldtrader ctrader --forever`.
 1. **OANDA** (free, no card): sign up for an **fxTrade Practice**
    account at https://www.oanda.com → log in → Account settings →
    **Manage API Access** → generate a personal access **token** →
