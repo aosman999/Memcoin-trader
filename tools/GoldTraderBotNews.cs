@@ -1,8 +1,18 @@
-// GoldTraderBot — the certified gold strategy as a NATIVE cTrader cBot.
+// GoldTraderBotNews — the certified gold strategy as a NATIVE cTrader
+// cBot, WITH the economic-calendar news agent.
 //
 // Runs entirely inside cTrader (Automate tab). No Open API, no API keys,
-// no webhooks, no external executor, no network access at all
-// (AccessRights.None enforces that).
+// no webhooks, no external executor.
+//
+// NETWORK: unlike GoldTraderBot.cs (AccessRights.None, zero network),
+// this build uses AccessRights.FullAccess because cTrader makes network
+// access all-or-nothing. It makes exactly ONE outbound request per hour,
+// read-only, to the weekly economic calendar
+// (nfs.faireconomy.media/ff_calendar_thisweek.json), and nothing else.
+// It stands aside 10 minutes before and 15 minutes after each
+// high-impact event. Prefer GoldTraderBot.cs if you want a bot that
+// cannot reach the network at all — the price-shock sentinel, which
+// catches news as it hits the tape, runs in BOTH builds.
 //
 // DEMO-ONLY LOCK: refuses to run on a live account. Checked in OnStart
 // AND on every bar; if the account is live the bot stops immediately
