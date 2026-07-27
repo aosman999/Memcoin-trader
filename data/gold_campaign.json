@@ -1,6 +1,6 @@
 {
-  "day": 9,
-  "equity": 5969.284805088197,
+  "day": 10,
+  "equity": 6952.690815939362,
   "starting_bankroll": 3000.0,
   "history": [
     {
@@ -109,6 +109,18 @@
       "win_rate": 100,
       "guard": "",
       "real_spot_anchor": 4045.0
+    },
+    {
+      "date": "2026-07-27",
+      "day": 10,
+      "start_equity": 5969.2848,
+      "end_equity": 6952.6908,
+      "pnl": 983.406,
+      "pnl_pct": 16.474,
+      "trades": 6,
+      "win_rate": 50,
+      "guard": "",
+      "real_spot_anchor": 4090.0
     }
   ]
 }
