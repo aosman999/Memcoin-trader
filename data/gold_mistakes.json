@@ -1248,5 +1248,35 @@
     "exit_reason": "stop_loss",
     "hold_minutes": 147.0,
     "pnl_usd": -599.47
+  },
+  {
+    "day": "2023-11-15",
+    "strategy": "gold_pullback",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 122.0,
+    "pnl_usd": -1594.75
+  },
+  {
+    "day": "2023-11-15",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 179.0,
+    "pnl_usd": -1161.77
+  },
+  {
+    "day": "2023-11-15",
+    "strategy": "gold_trend",
+    "side": "long",
+    "regime": "ranging",
+    "session_weight": 1.2,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 304.0,
+    "pnl_usd": -1270.72
   }
 ]
