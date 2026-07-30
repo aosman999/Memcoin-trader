@@ -37,10 +37,28 @@ namespace cAlgo.Robots
         [Parameter("Risk per trade (%)", DefaultValue = 10.0, MinValue = 0.1, MaxValue = 20.0, Group = "Risk")]
         public double RiskPercent { get; set; }
 
-        [Parameter("Stop loss (%)", DefaultValue = 0.6, MinValue = 0.05, Group = "Risk")]
+        [Parameter("Adaptive exits (ATR-based)", DefaultValue = true, Group = "Exits")]
+        public bool UseAdaptiveExits { get; set; }
+
+        [Parameter("ATR period", DefaultValue = 14, MinValue = 5, Group = "Exits")]
+        public int AtrPeriod { get; set; }
+
+        [Parameter("Stop = ATR x", DefaultValue = 1.5, MinValue = 0.3, Group = "Exits")]
+        public double AtrStopMultiple { get; set; }
+
+        [Parameter("Reward:risk", DefaultValue = 2.0, MinValue = 0.5, Group = "Exits")]
+        public double RewardRisk { get; set; }
+
+        [Parameter("Min stop (%)", DefaultValue = 0.25, MinValue = 0.05, Group = "Exits")]
+        public double MinStopPercent { get; set; }
+
+        [Parameter("Max stop (%)", DefaultValue = 1.2, MinValue = 0.1, Group = "Exits")]
+        public double MaxStopPercent { get; set; }
+
+        [Parameter("Fixed stop (%) when adaptive off", DefaultValue = 0.6, MinValue = 0.05, Group = "Exits")]
         public double StopPercent { get; set; }
 
-        [Parameter("Take profit (%)", DefaultValue = 1.2, MinValue = 0.1, Group = "Risk")]
+        [Parameter("Fixed target (%) when adaptive off", DefaultValue = 1.2, MinValue = 0.1, Group = "Exits")]
         public double TakeProfitPercent { get; set; }
 
         [Parameter("Daily loss stop (%)", DefaultValue = 15.0, MinValue = 1.0, Group = "Risk")]
@@ -61,6 +79,7 @@ namespace cAlgo.Robots
         private RelativeStrengthIndex _rsi;
         private MacdHistogram _macd;
         private DirectionalMovementSystem _dms;
+        private AverageTrueRange _atr;
         private int _barCount;
         private bool _stopped;
 
@@ -79,6 +98,7 @@ namespace cAlgo.Robots
             _rsi = Indicators.RelativeStrengthIndex(Bars.ClosePrices, 14);
             _macd = Indicators.MacdHistogram(Bars.ClosePrices, 26, 12, 9);
             _dms = Indicators.DirectionalMovementSystem(14);
+            _atr = Indicators.AverageTrueRange(AtrPeriod, MovingAverageType.Simple);
 
             Print("GoldBot started | {0} | account {1} (DEMO) | balance {2:F2} | bars {3}",
                   SymbolName, Account.Number, Account.Balance, Bars.ClosePrices.Count);
@@ -169,8 +189,28 @@ namespace cAlgo.Robots
             if (price <= 0)
                 return;
 
-            var stopDist = price * (StopPercent / 100.0);
-            var tpDist = price * (TakeProfitPercent / 100.0);
+            // ---- exits: adaptive to current volatility -------------------
+            // The bot sets the distance from what the market is actually
+            // doing (ATR), clamped so it can never be absurdly tight or
+            // wide. Levels still go to the broker so they survive a crash.
+            double stopDist;
+            double tpDist;
+            if (UseAdaptiveExits)
+            {
+                var atr = _atr.Result.Last(0);
+                var minDist = price * (MinStopPercent / 100.0);
+                var maxDist = price * (MaxStopPercent / 100.0);
+                stopDist = atr * AtrStopMultiple;
+                if (double.IsNaN(stopDist) || stopDist <= 0)
+                    stopDist = price * (StopPercent / 100.0);
+                stopDist = Math.Max(minDist, Math.Min(maxDist, stopDist));
+                tpDist = stopDist * RewardRisk;
+            }
+            else
+            {
+                stopDist = price * (StopPercent / 100.0);
+                tpDist = price * (TakeProfitPercent / 100.0);
+            }
             if (stopDist <= 0)
                 return;
 
@@ -193,9 +233,11 @@ namespace cAlgo.Robots
 
             var result = ExecuteMarketOrder(side, SymbolName, units, Label, stopPips, tpPips);
             if (result.IsSuccessful)
-                Print("OPEN {0} {1} units @ {2:F2} | stop {3:F2} | target {4:F2} | {5}/6 votes, ADX {6:F0}",
+                Print("OPEN {0} {1} units @ {2:F2} | stop {3:F2} ({4:F2}%) | target {5:F2} ({6:F2}%) | {7}/6 votes, ADX {8:F0}",
                       side, units, price, price - direction * stopDist,
-                      price + direction * tpDist, votes, adx);
+                      stopDist / price * 100.0,
+                      price + direction * tpDist,
+                      tpDist / price * 100.0, votes, adx);
             else
                 Print("ORDER FAILED: {0}", result.Error);
         }
