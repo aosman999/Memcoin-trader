@@ -46,8 +46,20 @@ namespace cAlgo.Robots
         [Parameter("Stop = ATR x", DefaultValue = 1.5, MinValue = 0.3, Group = "Exits")]
         public double AtrStopMultiple { get; set; }
 
-        [Parameter("Reward:risk", DefaultValue = 2.0, MinValue = 0.5, Group = "Exits")]
-        public double RewardRisk { get; set; }
+        [Parameter("Target scales with conviction", DefaultValue = true, Group = "Exits")]
+        public bool ScaleTargetByConviction { get; set; }
+
+        [Parameter("Reward:risk MIN (weak setup)", DefaultValue = 1.5, MinValue = 0.5, Group = "Exits")]
+        public double RewardRiskMin { get; set; }
+
+        [Parameter("Reward:risk MAX (strong setup)", DefaultValue = 4.0, MinValue = 1.0, Group = "Exits")]
+        public double RewardRiskMax { get; set; }
+
+        [Parameter("Early exit on signal flip", DefaultValue = true, Group = "Exits")]
+        public bool EarlyExit { get; set; }
+
+        [Parameter("Exit when opposite votes >=", DefaultValue = 4, MinValue = 3, MaxValue = 6, Group = "Exits")]
+        public int ExitOppositeVotes { get; set; }
 
         [Parameter("Min stop (%)", DefaultValue = 0.25, MinValue = 0.05, Group = "Exits")]
         public double MinStopPercent { get; set; }
@@ -125,30 +137,10 @@ namespace cAlgo.Robots
         {
             _barCount++;
 
-            // ---- time stop on any open position --------------------------
-            foreach (var pos in OwnPositions().ToList())
-            {
-                if ((Server.TimeInUtc - pos.EntryTime).TotalMinutes >= MaxHoldMinutes)
-                {
-                    Print("Closing {0} — max hold {1} min reached.", pos.Id, MaxHoldMinutes);
-                    ClosePosition(pos);
-                }
-            }
-
             if (Bars.ClosePrices.Count < 120)
                 return;
 
-            // ---- daily loss stop -----------------------------------------
-            var dayStart = DayStartEquity();
-            if (dayStart > 0 &&
-                Account.Equity <= dayStart * (1.0 - DailyLossStopPercent / 100.0))
-            {
-                foreach (var pos in OwnPositions().ToList())
-                    ClosePosition(pos);
-                return;
-            }
-
-            // ---- the six voters ------------------------------------------
+            // ---- read the market once ------------------------------------
             var close = Bars.ClosePrices.Last(0);
             var emaFast = _emaFast.Result.Last(0);
             var emaFastPrev = _emaFast.Result.Last(3);
@@ -168,9 +160,44 @@ namespace cAlgo.Robots
             var bears = 6 - bulls;
 
             if (StatusEveryBars > 0 && _barCount % StatusEveryBars == 0)
-                Print("status: price {0:F2} | {1} bull / {2} bear | ADX {3:F1} | RSI {4:F0}",
-                      close, bulls, bears, adx, rsi);
+                Print("status: price {0:F2} | {1} bull / {2} bear | ADX {3:F1} | ATR {4:F2}",
+                      close, bulls, bears, adx, _atr.Result.Last(0));
 
+            // ---- manage open positions: time stop + early exit -----------
+            foreach (var pos in OwnPositions().ToList())
+            {
+                if ((Server.TimeInUtc - pos.EntryTime).TotalMinutes >= MaxHoldMinutes)
+                {
+                    Print("Closing {0} — max hold {1} min reached.", pos.Id, MaxHoldMinutes);
+                    ClosePosition(pos);
+                    continue;
+                }
+                // early exit: the confluence has flipped against the trade,
+                // so close now rather than wait for the stop or target.
+                if (EarlyExit)
+                {
+                    var flippedLong = pos.TradeType == TradeType.Buy && bears >= ExitOppositeVotes;
+                    var flippedShort = pos.TradeType == TradeType.Sell && bulls >= ExitOppositeVotes;
+                    if (flippedLong || flippedShort)
+                    {
+                        Print("EARLY EXIT {0} — signal flipped to {1} bull / {2} bear | P&L {3:F2}",
+                              pos.Id, bulls, bears, pos.NetProfit);
+                        ClosePosition(pos);
+                    }
+                }
+            }
+
+            // ---- daily loss stop -----------------------------------------
+            var dayStart = DayStartEquity();
+            if (dayStart > 0 &&
+                Account.Equity <= dayStart * (1.0 - DailyLossStopPercent / 100.0))
+            {
+                foreach (var pos in OwnPositions().ToList())
+                    ClosePosition(pos);
+                return;
+            }
+
+            // ---- entry ---------------------------------------------------
             if (OwnPositions().Any())
                 return;                              // one position at a time
 
@@ -183,6 +210,16 @@ namespace cAlgo.Robots
                 OpenTrade(-1, bears, adx);
         }
 
+        // Conviction 0..1 from vote margin and trend strength → maps the
+        // reward:risk between the MIN and MAX so strong setups aim further.
+        private double ConvictionRewardRisk(int votes, double adx)
+        {
+            var voteScore = (votes - VotesNeeded) / (6.0 - VotesNeeded + 1.0); // 0..1
+            var adxScore = Math.Max(0.0, Math.Min(1.0, (adx - AdxMin) / 25.0)); // 0..1
+            var conviction = Math.Max(0.0, Math.Min(1.0, 0.5 * voteScore + 0.5 * adxScore));
+            return RewardRiskMin + conviction * (RewardRiskMax - RewardRiskMin);
+        }
+
         private void OpenTrade(int direction, int votes, double adx)
         {
             var price = direction > 0 ? Symbol.Ask : Symbol.Bid;
@@ -193,6 +230,10 @@ namespace cAlgo.Robots
             // The bot sets the distance from what the market is actually
             // doing (ATR), clamped so it can never be absurdly tight or
             // wide. Levels still go to the broker so they survive a crash.
+            // reward:risk depends on how strong THIS setup is, so the target
+            // varies trade to trade (a strong signal aims further).
+            var rr = ScaleTargetByConviction ? ConvictionRewardRisk(votes, adx) : RewardRiskMin;
+
             double stopDist;
             double tpDist;
             if (UseAdaptiveExits)
@@ -204,12 +245,12 @@ namespace cAlgo.Robots
                 if (double.IsNaN(stopDist) || stopDist <= 0)
                     stopDist = price * (StopPercent / 100.0);
                 stopDist = Math.Max(minDist, Math.Min(maxDist, stopDist));
-                tpDist = stopDist * RewardRisk;
+                tpDist = stopDist * rr;
             }
             else
             {
                 stopDist = price * (StopPercent / 100.0);
-                tpDist = price * (TakeProfitPercent / 100.0);
+                tpDist = stopDist * rr;
             }
             if (stopDist <= 0)
                 return;
@@ -233,11 +274,11 @@ namespace cAlgo.Robots
 
             var result = ExecuteMarketOrder(side, SymbolName, units, Label, stopPips, tpPips);
             if (result.IsSuccessful)
-                Print("OPEN {0} {1} units @ {2:F2} | stop {3:F2} ({4:F2}%) | target {5:F2} ({6:F2}%) | {7}/6 votes, ADX {8:F0}",
+                Print("OPEN {0} {1} units @ {2:F2} | stop {3:F2} ({4:F2}%) | target {5:F2} ({6:F2}%) | RR {7:F1} | {8}/6 votes, ADX {9:F0}",
                       side, units, price, price - direction * stopDist,
                       stopDist / price * 100.0,
                       price + direction * tpDist,
-                      tpDist / price * 100.0, votes, adx);
+                      tpDist / price * 100.0, rr, votes, adx);
             else
                 Print("ORDER FAILED: {0}", result.Error);
         }
