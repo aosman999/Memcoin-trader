@@ -34,6 +34,9 @@ namespace cAlgo.Robots
         [Parameter("Minimum ADX", DefaultValue = 18.0, MinValue = 0, MaxValue = 50, Group = "Signal")]
         public double AdxMin { get; set; }
 
+        [Parameter("Multi-timeframe alignment (m15 + h1)", DefaultValue = true, Group = "Signal")]
+        public bool UseMtfAlignment { get; set; }
+
         [Parameter("Risk per trade (%)", DefaultValue = 10.0, MinValue = 0.1, MaxValue = 20.0, Group = "Risk")]
         public double RiskPercent { get; set; }
 
@@ -159,9 +162,14 @@ namespace cAlgo.Robots
             if (close > past) bulls++;
             var bears = 6 - bulls;
 
+            // ---- higher-timeframe trend bias (resampled from the 1m
+            // series, so no risky GetBars). +1 up, -1 down, 0 unknown. -----
+            var h1Bias = UseMtfAlignment ? TrendBias(Resample(60, 140)) : 0;
+            var m15Bias = UseMtfAlignment ? TrendBias(Resample(15, 260)) : 0;
+
             if (StatusEveryBars > 0 && _barCount % StatusEveryBars == 0)
-                Print("status: price {0:F2} | {1} bull / {2} bear | ADX {3:F1} | ATR {4:F2}",
-                      close, bulls, bears, adx, _atr.Result.Last(0));
+                Print("status: price {0:F2} | m1 {1}b/{2}b | m15 {3} | h1 {4} | ADX {5:F1}",
+                      close, bulls, bears, BiasText(m15Bias), BiasText(h1Bias), adx);
 
             // ---- manage open positions: time stop + early exit -----------
             foreach (var pos in OwnPositions().ToList())
@@ -204,10 +212,20 @@ namespace cAlgo.Robots
             if (adx < AdxMin)
                 return;                              // chop filter
 
-            if (bulls >= VotesNeeded)
+            // multi-timeframe: only trade WITH the higher timeframes.
+            // A long needs m15 and h1 not pointing down; short the reverse.
+            var longOk = !UseMtfAlignment || (h1Bias >= 0 && m15Bias >= 0);
+            var shortOk = !UseMtfAlignment || (h1Bias <= 0 && m15Bias <= 0);
+
+            if (bulls >= VotesNeeded && longOk)
                 OpenTrade(1, bulls, adx);
-            else if (bears >= VotesNeeded && AllowShort)
+            else if (bears >= VotesNeeded && AllowShort && shortOk)
                 OpenTrade(-1, bears, adx);
+            else if (UseMtfAlignment && (bulls >= VotesNeeded || bears >= VotesNeeded)
+                     && StatusEveryBars > 0)
+                Print("skip: m1 says {0} but m15/h1 disagree (m15 {1}, h1 {2})",
+                      bulls >= VotesNeeded ? "BUY" : "SELL",
+                      BiasText(m15Bias), BiasText(h1Bias));
         }
 
         // Conviction 0..1 from vote margin and trend strength → maps the
@@ -281,6 +299,47 @@ namespace cAlgo.Robots
                       tpDist / price * 100.0, rr, votes, adx);
             else
                 Print("ORDER FAILED: {0}", result.Error);
+        }
+
+        // Build a higher-timeframe close series by taking every `factor`-th
+        // 1-minute close (factor 15 = m15, 60 = h1), newest last.
+        private double[] Resample(int factor, int maxBars)
+        {
+            var have = Bars.ClosePrices.Count;
+            var n = Math.Min(maxBars, have / factor);
+            if (n < 80)
+                return new double[0];
+            var o = new double[n];
+            for (var i = 0; i < n; i++)
+                o[n - 1 - i] = Bars.ClosePrices.Last(i * factor);
+            return o;
+        }
+
+        // Trend direction of a series: EMA20 vs EMA75. +1 up, -1 down,
+        // 0 = not enough data (treated as "don't block").
+        private static int TrendBias(double[] closes)
+        {
+            if (closes.Length < 80)
+                return 0;
+            var fast = Ema(closes, 20);
+            var slow = Ema(closes, 75);
+            return fast > slow ? 1 : -1;
+        }
+
+        private static double Ema(double[] v, int period)
+        {
+            if (v.Length == 0)
+                return 0.0;
+            var k = 2.0 / (period + 1);
+            var e = v[0];
+            for (var i = 1; i < v.Length; i++)
+                e = v[i] * k + e * (1 - k);
+            return e;
+        }
+
+        private static string BiasText(int b)
+        {
+            return b > 0 ? "UP" : b < 0 ? "DOWN" : "?";
         }
 
         private System.Collections.Generic.IEnumerable<Position> OwnPositions()
