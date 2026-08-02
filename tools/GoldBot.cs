@@ -1,12 +1,9 @@
 // GoldBot — confluence gold strategy for cTrader (C#).
 //
-// Built ONLY from API calls verified working on the owner's machine
-// (Account, Bars, Print, Indicators on the chart series). Deliberately
-// avoids the constructs that caused the earlier NullReferenceException:
-//   * no MarketData.GetBars (second timeframe loading)
-//   * no Supertrend indicator
-//   * no TickVolumes / VWAP
-// The 15m trend read is derived from the 1m series instead.
+// Runs on m1 for entries/exits, but reads the real m15, h1 and h4
+// timeframes for trend alignment (loaded via MarketData.GetBars, each
+// wrapped so a load failure degrades to neutral instead of crashing).
+// Avoids Supertrend and TickVolumes/VWAP (other earlier crash suspects).
 //
 // Six voters, each bull or bear on every bar:
 //   1. EMA20 > EMA75            4. RSI > 50
@@ -98,6 +95,9 @@ namespace cAlgo.Robots
         private MacdHistogram _macd;
         private DirectionalMovementSystem _dms;
         private AverageTrueRange _atr;
+        private ExponentialMovingAverage _m15Fast, _m15Slow;
+        private ExponentialMovingAverage _h1Fast, _h1Slow;
+        private ExponentialMovingAverage _h4Fast, _h4Slow;
         private int _barCount;
         private bool _stopped;
 
@@ -117,6 +117,13 @@ namespace cAlgo.Robots
             _macd = Indicators.MacdHistogram(Bars.ClosePrices, 26, 12, 9);
             _dms = Indicators.DirectionalMovementSystem(14);
             _atr = Indicators.AverageTrueRange(AtrPeriod, MovingAverageType.Simple);
+
+            // Load the real higher timeframes for alignment (m15/h1/h4).
+            // Protected: if a timeframe fails to load, it's treated as
+            // neutral and the bot keeps running.
+            LoadTf(TimeFrame.Minute15, "m15", ref _m15Fast, ref _m15Slow);
+            LoadTf(TimeFrame.Hour, "h1", ref _h1Fast, ref _h1Slow);
+            LoadTf(TimeFrame.Hour4, "h4", ref _h4Fast, ref _h4Slow);
 
             Print("GoldBot started | {0} | account {1} (DEMO) | balance {2:F2} | bars {3}",
                   SymbolName, Account.Number, Account.Balance, Bars.ClosePrices.Count);
@@ -169,14 +176,16 @@ namespace cAlgo.Robots
             if (close > past) bulls++;
             var bears = 6 - bulls;
 
-            // ---- higher-timeframe trend bias (resampled from the 1m
-            // series, so no risky GetBars). +1 up, -1 down, 0 unknown. -----
-            var h1Bias = UseMtfAlignment ? TrendBias(Resample(60, 140)) : 0;
-            var m15Bias = UseMtfAlignment ? TrendBias(Resample(15, 260)) : 0;
+            // ---- higher-timeframe trend bias (real m15/h1/h4 series).
+            // +1 up, -1 down, 0 unknown/unavailable (treated as neutral). --
+            var m15Bias = UseMtfAlignment ? TfBias(_m15Fast, _m15Slow) : 0;
+            var h1Bias = UseMtfAlignment ? TfBias(_h1Fast, _h1Slow) : 0;
+            var h4Bias = UseMtfAlignment ? TfBias(_h4Fast, _h4Slow) : 0;
 
             if (StatusEveryBars > 0 && _barCount % StatusEveryBars == 0)
-                Print("status: price {0:F2} | m1 {1}b/{2}b | m15 {3} | h1 {4} | ADX {5:F1}",
-                      close, bulls, bears, BiasText(m15Bias), BiasText(h1Bias), adx);
+                Print("status: price {0:F2} | m1 {1}b/{2}b | m15 {3} | h1 {4} | h4 {5} | ADX {6:F1}",
+                      close, bulls, bears, BiasText(m15Bias), BiasText(h1Bias),
+                      BiasText(h4Bias), adx);
 
             // ---- manage open positions: time stop + early exit -----------
             foreach (var pos in OwnPositions().ToList())
@@ -222,10 +231,10 @@ namespace cAlgo.Robots
             if (adx < AdxMin)
                 return;                              // chop filter
 
-            // multi-timeframe: only trade WITH the higher timeframes.
-            // A long needs m15 and h1 not pointing down; short the reverse.
-            var longOk = !UseMtfAlignment || (h1Bias >= 0 && m15Bias >= 0);
-            var shortOk = !UseMtfAlignment || (h1Bias <= 0 && m15Bias <= 0);
+            // multi-timeframe: only trade WITH all higher timeframes.
+            // A long needs m15/h1/h4 not pointing down; short the reverse.
+            var longOk = !UseMtfAlignment || (m15Bias >= 0 && h1Bias >= 0 && h4Bias >= 0);
+            var shortOk = !UseMtfAlignment || (m15Bias <= 0 && h1Bias <= 0 && h4Bias <= 0);
 
             if (bulls >= VotesNeeded && longOk)
                 OpenTrade(1, bulls, adx);
@@ -233,9 +242,9 @@ namespace cAlgo.Robots
                 OpenTrade(-1, bears, adx);
             else if (UseMtfAlignment && (bulls >= VotesNeeded || bears >= VotesNeeded)
                      && StatusEveryBars > 0)
-                Print("skip: m1 says {0} but m15/h1 disagree (m15 {1}, h1 {2})",
+                Print("skip: m1 says {0} but higher TFs disagree (m15 {1}, h1 {2}, h4 {3})",
                       bulls >= VotesNeeded ? "BUY" : "SELL",
-                      BiasText(m15Bias), BiasText(h1Bias));
+                      BiasText(m15Bias), BiasText(h1Bias), BiasText(h4Bias));
         }
 
         // Conviction 0..1 from vote margin and trend strength → maps the
@@ -311,40 +320,44 @@ namespace cAlgo.Robots
                 Print("ORDER FAILED: {0}", result.Error);
         }
 
-        // Build a higher-timeframe close series by taking every `factor`-th
-        // 1-minute close (factor 15 = m15, 60 = h1), newest last.
-        private double[] Resample(int factor, int maxBars)
+        // Load a higher timeframe and build its EMA20/EMA75. Protected:
+        // any failure leaves the EMAs null (treated as neutral) and the
+        // bot keeps running rather than crashing.
+        private void LoadTf(TimeFrame tf, string name,
+                            ref ExponentialMovingAverage fast,
+                            ref ExponentialMovingAverage slow)
         {
-            var have = Bars.ClosePrices.Count;
-            var n = Math.Min(maxBars, have / factor);
-            if (n < 80)
-                return new double[0];
-            var o = new double[n];
-            for (var i = 0; i < n; i++)
-                o[n - 1 - i] = Bars.ClosePrices.Last(i * factor);
-            return o;
+            try
+            {
+                var bars = MarketData.GetBars(tf);
+                fast = Indicators.ExponentialMovingAverage(bars.ClosePrices, 20);
+                slow = Indicators.ExponentialMovingAverage(bars.ClosePrices, 75);
+                Print("Loaded {0} for alignment ({1} bars).", name, bars.ClosePrices.Count);
+            }
+            catch (Exception ex)
+            {
+                Print("Could not load {0} ({1}) — treated as neutral.", name, ex.GetType().Name);
+                fast = null;
+                slow = null;
+            }
         }
 
-        // Trend direction of a series: EMA20 vs EMA75. +1 up, -1 down,
-        // 0 = not enough data (treated as "don't block").
-        private static int TrendBias(double[] closes)
+        // Trend direction of a loaded timeframe: EMA20 vs EMA75.
+        // +1 up, -1 down, 0 = unavailable / not enough data.
+        private static int TfBias(ExponentialMovingAverage fast, ExponentialMovingAverage slow)
         {
-            if (closes.Length < 80)
+            if (fast == null || slow == null)
                 return 0;
-            var fast = Ema(closes, 20);
-            var slow = Ema(closes, 75);
-            return fast > slow ? 1 : -1;
-        }
-
-        private static double Ema(double[] v, int period)
-        {
-            if (v.Length == 0)
-                return 0.0;
-            var k = 2.0 / (period + 1);
-            var e = v[0];
-            for (var i = 1; i < v.Length; i++)
-                e = v[i] * k + e * (1 - k);
-            return e;
+            try
+            {
+                if (fast.Result.Count < 76)
+                    return 0;
+                return fast.Result.Last(0) > slow.Result.Last(0) ? 1 : -1;
+            }
+            catch
+            {
+                return 0;
+            }
         }
 
         private static string BiasText(int b)
