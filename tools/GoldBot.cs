@@ -117,8 +117,12 @@ namespace cAlgo.Robots
 
             Print("GoldBot started | {0} | account {1} (DEMO) | balance {2:F2} | bars {3}",
                   SymbolName, Account.Number, Account.Balance, Bars.ClosePrices.Count);
-            Print("Config: {0}/6 votes | ADX>={1} | stop {2}% | target {3}% | risk {4}%",
-                  VotesNeeded, AdxMin, StopPercent, TakeProfitPercent, RiskPercent);
+            Print("Config: {0}/6 votes | ADX>={1} | MTF {2} | adaptive stop {3} | conviction target {4} | early exit {5} | risk {6}%",
+                  VotesNeeded, AdxMin,
+                  UseMtfAlignment ? "ON" : "OFF",
+                  UseAdaptiveExits ? "ON" : "OFF",
+                  ScaleTargetByConviction ? "ON" : "OFF",
+                  EarlyExit ? "ON" : "OFF", RiskPercent);
         }
 
         protected override void OnBar()
