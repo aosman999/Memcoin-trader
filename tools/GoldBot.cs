@@ -61,8 +61,11 @@ namespace cAlgo.Robots
         [Parameter("Early exit on signal flip", DefaultValue = true, Group = "Exits")]
         public bool EarlyExit { get; set; }
 
-        [Parameter("Exit when opposite votes >=", DefaultValue = 4, MinValue = 3, MaxValue = 6, Group = "Exits")]
+        [Parameter("Exit when opposite votes >= (5-6 = only strong flips)", DefaultValue = 6, MinValue = 3, MaxValue = 6, Group = "Exits")]
         public int ExitOppositeVotes { get; set; }
+
+        [Parameter("Early exit only if trade is losing", DefaultValue = true, Group = "Exits")]
+        public bool EarlyExitOnlyIfLosing { get; set; }
 
         [Parameter("Min stop (%)", DefaultValue = 0.25, MinValue = 0.05, Group = "Exits")]
         public double MinStopPercent { get; set; }
@@ -186,13 +189,16 @@ namespace cAlgo.Robots
                 }
                 // early exit: the confluence has flipped against the trade,
                 // so close now rather than wait for the stop or target.
-                if (EarlyExit)
+                // early exit ONLY IF NEEDED: the signal has strongly flipped
+                // AND (optionally) the trade is actually losing. A winning
+                // trade heading to target is never cut.
+                if (EarlyExit && !(EarlyExitOnlyIfLosing && pos.NetProfit >= 0))
                 {
                     var flippedLong = pos.TradeType == TradeType.Buy && bears >= ExitOppositeVotes;
                     var flippedShort = pos.TradeType == TradeType.Sell && bulls >= ExitOppositeVotes;
                     if (flippedLong || flippedShort)
                     {
-                        Print("EARLY EXIT {0} — signal flipped to {1} bull / {2} bear | P&L {3:F2}",
+                        Print("EARLY EXIT {0} — strong reversal ({1} bull / {2} bear) | P&L {3:F2}",
                               pos.Id, bulls, bears, pos.NetProfit);
                         ClosePosition(pos);
                     }
