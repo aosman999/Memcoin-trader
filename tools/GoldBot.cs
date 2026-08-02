@@ -1,19 +1,15 @@
-// GoldBot — confluence gold strategy for cTrader (C#).
-//
-// Runs on m1 for entries/exits, but reads the real m15, h1 and h4
-// timeframes for trend alignment (loaded via MarketData.GetBars, each
-// wrapped so a load failure degrades to neutral instead of crashing).
-// Avoids Supertrend and TickVolumes/VWAP (other earlier crash suspects).
+// GoldBot — confluence gold strategy for cTrader (C#). Single timeframe:
+// runs on whatever chart you attach it to (use m1), no multi-timeframe.
 //
 // Six voters, each bull or bear on every bar:
 //   1. EMA20 > EMA75            4. RSI > 50
 //   2. price > EMA75            5. EMA20 rising (vs 3 bars back)
 //   3. MACD histogram > 0       6. price > price 20 bars back
 // Enters when >= VotesNeeded agree AND ADX >= AdxMin (chop filter).
-// Exits: binary 2:1 broker-side (stop -0.6%, target +1.2%).
+// Exits: adaptive ATR stop, target scaled by conviction, plus an early
+// exit only on a strong reversal while losing. Levels go broker-side.
 // Safety: demo-only lock, one position at a time, -15% daily loss stop,
-// max hold, small-account guard. Everything wrapped in try/catch so any
-// error prints its location instead of killing the bot.
+// max hold, small-account guard. OnBar wrapped in try/catch.
 using System;
 using System.Linq;
 using cAlgo.API;
@@ -31,10 +27,7 @@ namespace cAlgo.Robots
         [Parameter("Minimum ADX", DefaultValue = 18.0, MinValue = 0, MaxValue = 50, Group = "Signal")]
         public double AdxMin { get; set; }
 
-        [Parameter("Multi-timeframe alignment (m15 + h1)", DefaultValue = true, Group = "Signal")]
-        public bool UseMtfAlignment { get; set; }
-
-        [Parameter("Risk per trade (%)", DefaultValue = 10.0, MinValue = 0.1, MaxValue = 20.0, Group = "Risk")]
+        [Parameter("Risk per trade (%)", DefaultValue = 13.5, MinValue = 0.1, MaxValue = 20.0, Group = "Risk")]
         public double RiskPercent { get; set; }
 
         [Parameter("Adaptive exits (ATR-based)", DefaultValue = true, Group = "Exits")]
@@ -73,9 +66,6 @@ namespace cAlgo.Robots
         [Parameter("Fixed stop (%) when adaptive off", DefaultValue = 0.6, MinValue = 0.05, Group = "Exits")]
         public double StopPercent { get; set; }
 
-        [Parameter("Fixed target (%) when adaptive off", DefaultValue = 1.2, MinValue = 0.1, Group = "Exits")]
-        public double TakeProfitPercent { get; set; }
-
         [Parameter("Daily loss stop (%)", DefaultValue = 15.0, MinValue = 1.0, Group = "Risk")]
         public double DailyLossStopPercent { get; set; }
 
@@ -95,9 +85,6 @@ namespace cAlgo.Robots
         private MacdHistogram _macd;
         private DirectionalMovementSystem _dms;
         private AverageTrueRange _atr;
-        private ExponentialMovingAverage _m15Fast, _m15Slow;
-        private ExponentialMovingAverage _h1Fast, _h1Slow;
-        private ExponentialMovingAverage _h4Fast, _h4Slow;
         private int _barCount;
         private bool _stopped;
 
@@ -118,18 +105,10 @@ namespace cAlgo.Robots
             _dms = Indicators.DirectionalMovementSystem(14);
             _atr = Indicators.AverageTrueRange(AtrPeriod, MovingAverageType.Simple);
 
-            // Load the real higher timeframes for alignment (m15/h1/h4).
-            // Protected: if a timeframe fails to load, it's treated as
-            // neutral and the bot keeps running.
-            LoadTf(TimeFrame.Minute15, "m15", ref _m15Fast, ref _m15Slow);
-            LoadTf(TimeFrame.Hour, "h1", ref _h1Fast, ref _h1Slow);
-            LoadTf(TimeFrame.Hour4, "h4", ref _h4Fast, ref _h4Slow);
-
             Print("GoldBot started | {0} | account {1} (DEMO) | balance {2:F2} | bars {3}",
                   SymbolName, Account.Number, Account.Balance, Bars.ClosePrices.Count);
-            Print("Config: {0}/6 votes | ADX>={1} | MTF {2} | adaptive stop {3} | conviction target {4} | early exit {5} | risk {6}%",
+            Print("Config: {0}/6 votes | ADX>={1} | adaptive stop {2} | conviction target {3} | early exit {4} | risk {5}%",
                   VotesNeeded, AdxMin,
-                  UseMtfAlignment ? "ON" : "OFF",
                   UseAdaptiveExits ? "ON" : "OFF",
                   ScaleTargetByConviction ? "ON" : "OFF",
                   EarlyExit ? "ON" : "OFF", RiskPercent);
@@ -157,7 +136,6 @@ namespace cAlgo.Robots
             if (Bars.ClosePrices.Count < 120)
                 return;
 
-            // ---- read the market once ------------------------------------
             var close = Bars.ClosePrices.Last(0);
             var emaFast = _emaFast.Result.Last(0);
             var emaFastPrev = _emaFast.Result.Last(3);
@@ -176,18 +154,10 @@ namespace cAlgo.Robots
             if (close > past) bulls++;
             var bears = 6 - bulls;
 
-            // ---- higher-timeframe trend bias (real m15/h1/h4 series).
-            // +1 up, -1 down, 0 unknown/unavailable (treated as neutral). --
-            var m15Bias = UseMtfAlignment ? TfBias(_m15Fast, _m15Slow) : 0;
-            var h1Bias = UseMtfAlignment ? TfBias(_h1Fast, _h1Slow) : 0;
-            var h4Bias = UseMtfAlignment ? TfBias(_h4Fast, _h4Slow) : 0;
-
             if (StatusEveryBars > 0 && _barCount % StatusEveryBars == 0)
-                Print("status: price {0:F2} | m1 {1}b/{2}b | m15 {3} | h1 {4} | h4 {5} | ADX {6:F1}",
-                      close, bulls, bears, BiasText(m15Bias), BiasText(h1Bias),
-                      BiasText(h4Bias), adx);
+                Print("status: price {0:F2} | {1} bull / {2} bear | ADX {3:F1} | ATR {4:F2}",
+                      close, bulls, bears, adx, _atr.Result.Last(0));
 
-            // ---- manage open positions: time stop + early exit -----------
             foreach (var pos in OwnPositions().ToList())
             {
                 if ((Server.TimeInUtc - pos.EntryTime).TotalMinutes >= MaxHoldMinutes)
@@ -196,11 +166,6 @@ namespace cAlgo.Robots
                     ClosePosition(pos);
                     continue;
                 }
-                // early exit: the confluence has flipped against the trade,
-                // so close now rather than wait for the stop or target.
-                // early exit ONLY IF NEEDED: the signal has strongly flipped
-                // AND (optionally) the trade is actually losing. A winning
-                // trade heading to target is never cut.
                 if (EarlyExit && !(EarlyExitOnlyIfLosing && pos.NetProfit >= 0))
                 {
                     var flippedLong = pos.TradeType == TradeType.Buy && bears >= ExitOppositeVotes;
@@ -214,7 +179,6 @@ namespace cAlgo.Robots
                 }
             }
 
-            // ---- daily loss stop -----------------------------------------
             var dayStart = DayStartEquity();
             if (dayStart > 0 &&
                 Account.Equity <= dayStart * (1.0 - DailyLossStopPercent / 100.0))
@@ -224,35 +188,22 @@ namespace cAlgo.Robots
                 return;
             }
 
-            // ---- entry ---------------------------------------------------
             if (OwnPositions().Any())
-                return;                              // one position at a time
+                return;
 
             if (adx < AdxMin)
-                return;                              // chop filter
+                return;
 
-            // multi-timeframe: only trade WITH all higher timeframes.
-            // A long needs m15/h1/h4 not pointing down; short the reverse.
-            var longOk = !UseMtfAlignment || (m15Bias >= 0 && h1Bias >= 0 && h4Bias >= 0);
-            var shortOk = !UseMtfAlignment || (m15Bias <= 0 && h1Bias <= 0 && h4Bias <= 0);
-
-            if (bulls >= VotesNeeded && longOk)
+            if (bulls >= VotesNeeded)
                 OpenTrade(1, bulls, adx);
-            else if (bears >= VotesNeeded && AllowShort && shortOk)
+            else if (bears >= VotesNeeded && AllowShort)
                 OpenTrade(-1, bears, adx);
-            else if (UseMtfAlignment && (bulls >= VotesNeeded || bears >= VotesNeeded)
-                     && StatusEveryBars > 0)
-                Print("skip: m1 says {0} but higher TFs disagree (m15 {1}, h1 {2}, h4 {3})",
-                      bulls >= VotesNeeded ? "BUY" : "SELL",
-                      BiasText(m15Bias), BiasText(h1Bias), BiasText(h4Bias));
         }
 
-        // Conviction 0..1 from vote margin and trend strength → maps the
-        // reward:risk between the MIN and MAX so strong setups aim further.
         private double ConvictionRewardRisk(int votes, double adx)
         {
-            var voteScore = (votes - VotesNeeded) / (6.0 - VotesNeeded + 1.0); // 0..1
-            var adxScore = Math.Max(0.0, Math.Min(1.0, (adx - AdxMin) / 25.0)); // 0..1
+            var voteScore = (votes - VotesNeeded) / (6.0 - VotesNeeded + 1.0);
+            var adxScore = Math.Max(0.0, Math.Min(1.0, (adx - AdxMin) / 25.0));
             var conviction = Math.Max(0.0, Math.Min(1.0, 0.5 * voteScore + 0.5 * adxScore));
             return RewardRiskMin + conviction * (RewardRiskMax - RewardRiskMin);
         }
@@ -263,12 +214,6 @@ namespace cAlgo.Robots
             if (price <= 0)
                 return;
 
-            // ---- exits: adaptive to current volatility -------------------
-            // The bot sets the distance from what the market is actually
-            // doing (ATR), clamped so it can never be absurdly tight or
-            // wide. Levels still go to the broker so they survive a crash.
-            // reward:risk depends on how strong THIS setup is, so the target
-            // varies trade to trade (a strong signal aims further).
             var rr = ScaleTargetByConviction ? ConvictionRewardRisk(votes, adx) : RewardRiskMin;
 
             double stopDist;
@@ -318,51 +263,6 @@ namespace cAlgo.Robots
                       tpDist / price * 100.0, rr, votes, adx);
             else
                 Print("ORDER FAILED: {0}", result.Error);
-        }
-
-        // Load a higher timeframe and build its EMA20/EMA75. Protected:
-        // any failure leaves the EMAs null (treated as neutral) and the
-        // bot keeps running rather than crashing.
-        private void LoadTf(TimeFrame tf, string name,
-                            ref ExponentialMovingAverage fast,
-                            ref ExponentialMovingAverage slow)
-        {
-            try
-            {
-                var bars = MarketData.GetBars(tf);
-                fast = Indicators.ExponentialMovingAverage(bars.ClosePrices, 20);
-                slow = Indicators.ExponentialMovingAverage(bars.ClosePrices, 75);
-                Print("Loaded {0} for alignment ({1} bars).", name, bars.ClosePrices.Count);
-            }
-            catch (Exception ex)
-            {
-                Print("Could not load {0} ({1}) — treated as neutral.", name, ex.GetType().Name);
-                fast = null;
-                slow = null;
-            }
-        }
-
-        // Trend direction of a loaded timeframe: EMA20 vs EMA75.
-        // +1 up, -1 down, 0 = unavailable / not enough data.
-        private static int TfBias(ExponentialMovingAverage fast, ExponentialMovingAverage slow)
-        {
-            if (fast == null || slow == null)
-                return 0;
-            try
-            {
-                if (fast.Result.Count < 76)
-                    return 0;
-                return fast.Result.Last(0) > slow.Result.Last(0) ? 1 : -1;
-            }
-            catch
-            {
-                return 0;
-            }
-        }
-
-        private static string BiasText(int b)
-        {
-            return b > 0 ? "UP" : b < 0 ? "DOWN" : "?";
         }
 
         private System.Collections.Generic.IEnumerable<Position> OwnPositions()
