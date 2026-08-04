@@ -1,13 +1,18 @@
-// GoldBot — confluence gold strategy for cTrader (C#). Single timeframe:
-// runs on whatever chart you attach it to (use m1), no multi-timeframe.
+// GoldBot — the 6-voter confluence strategy (UNCHANGED) plus the support
+// AIs that surround it in the original design. Runs on whatever chart you
+// attach it to (single timeframe). Fixed 0.6% / 1.2% (2:1) exits.
 //
-// Six voters, each bull or bear on every bar:
-//   1. EMA20 > EMA75            4. RSI > 50
-//   2. price > EMA75            5. EMA20 rising (vs 3 bars back)
-//   3. MACD histogram > 0       6. price > price 20 bars back
-// Enters when >= VotesNeeded agree AND ADX >= AdxMin (chop filter).
-// Exits: adaptive ATR stop, target scaled by conviction, plus an early
-// exit only on a strong reversal while losing. Levels go broker-side.
+// STRATEGY (same as before): 6 voters — EMA20>EMA75, price>EMA75, MACD>0,
+// RSI>50, EMA20 rising, price>20 bars ago — enter when >= VotesNeeded
+// agree AND ADX >= AdxMin.
+//
+// THE ADDED AIs (each a toggle, all from price/time — no network):
+//   * Session AI  — gold's liquidity clock; stands aside in thin hours.
+//   * Sentinel AI — vetoes entries during a news-grade price shock
+//                   (12-min cooldown) — the "rug check" equivalent.
+//   * Regime AI   — classifies trending/ranging/chaotic; can skip chaos.
+//   * Discipline  — Valentini's rule: stop after 3 losing trades in a day.
+//
 // Safety: demo-only lock, one position at a time, -15% daily loss stop,
 // max hold, small-account guard. OnBar wrapped in try/catch.
 using System;
@@ -30,41 +35,29 @@ namespace cAlgo.Robots
         [Parameter("Risk per trade (%)", DefaultValue = 13.5, MinValue = 0.1, MaxValue = 20.0, Group = "Risk")]
         public double RiskPercent { get; set; }
 
-        [Parameter("Adaptive exits (ATR-based)", DefaultValue = true, Group = "Exits")]
-        public bool UseAdaptiveExits { get; set; }
-
-        [Parameter("ATR period", DefaultValue = 14, MinValue = 5, Group = "Exits")]
-        public int AtrPeriod { get; set; }
-
-        [Parameter("Stop = ATR x", DefaultValue = 1.5, MinValue = 0.3, Group = "Exits")]
-        public double AtrStopMultiple { get; set; }
-
-        [Parameter("Target scales with conviction", DefaultValue = true, Group = "Exits")]
-        public bool ScaleTargetByConviction { get; set; }
-
-        [Parameter("Reward:risk MIN (weak setup)", DefaultValue = 1.5, MinValue = 0.5, Group = "Exits")]
-        public double RewardRiskMin { get; set; }
-
-        [Parameter("Reward:risk MAX (strong setup)", DefaultValue = 4.0, MinValue = 1.0, Group = "Exits")]
-        public double RewardRiskMax { get; set; }
-
-        [Parameter("Early exit on signal flip", DefaultValue = true, Group = "Exits")]
-        public bool EarlyExit { get; set; }
-
-        [Parameter("Exit when opposite votes >= (5-6 = only strong flips)", DefaultValue = 6, MinValue = 3, MaxValue = 6, Group = "Exits")]
-        public int ExitOppositeVotes { get; set; }
-
-        [Parameter("Early exit only if trade is losing", DefaultValue = true, Group = "Exits")]
-        public bool EarlyExitOnlyIfLosing { get; set; }
-
-        [Parameter("Min stop (%)", DefaultValue = 0.25, MinValue = 0.05, Group = "Exits")]
-        public double MinStopPercent { get; set; }
-
-        [Parameter("Max stop (%)", DefaultValue = 1.2, MinValue = 0.1, Group = "Exits")]
-        public double MaxStopPercent { get; set; }
-
-        [Parameter("Fixed stop (%) when adaptive off", DefaultValue = 0.6, MinValue = 0.05, Group = "Exits")]
+        [Parameter("Stop loss (%)", DefaultValue = 0.6, MinValue = 0.05, Group = "Exits")]
         public double StopPercent { get; set; }
+
+        [Parameter("Take profit (%)", DefaultValue = 1.2, MinValue = 0.1, Group = "Exits")]
+        public double TakeProfitPercent { get; set; }
+
+        [Parameter("Session AI (skip thin hours)", DefaultValue = true, Group = "Support AIs")]
+        public bool UseSession { get; set; }
+
+        [Parameter("Session min weight", DefaultValue = 0.6, MinValue = 0.0, MaxValue = 1.2, Group = "Support AIs")]
+        public double SessionMinWeight { get; set; }
+
+        [Parameter("Sentinel AI (veto news shocks)", DefaultValue = true, Group = "Support AIs")]
+        public bool UseSentinel { get; set; }
+
+        [Parameter("Regime AI (skip chaotic tape)", DefaultValue = true, Group = "Support AIs")]
+        public bool UseRegimeFilter { get; set; }
+
+        [Parameter("Discipline (stop after N daily losses)", DefaultValue = true, Group = "Support AIs")]
+        public bool UseDiscipline { get; set; }
+
+        [Parameter("Max losses per day", DefaultValue = 3, MinValue = 1, Group = "Support AIs")]
+        public int MaxLossesPerDay { get; set; }
 
         [Parameter("Daily loss stop (%)", DefaultValue = 15.0, MinValue = 1.0, Group = "Risk")]
         public double DailyLossStopPercent { get; set; }
@@ -84,7 +77,7 @@ namespace cAlgo.Robots
         private RelativeStrengthIndex _rsi;
         private MacdHistogram _macd;
         private DirectionalMovementSystem _dms;
-        private AverageTrueRange _atr;
+        private DateTime _sentinelBlockedUntil = DateTime.MinValue;
         private int _barCount;
         private bool _stopped;
 
@@ -103,15 +96,14 @@ namespace cAlgo.Robots
             _rsi = Indicators.RelativeStrengthIndex(Bars.ClosePrices, 14);
             _macd = Indicators.MacdHistogram(Bars.ClosePrices, 26, 12, 9);
             _dms = Indicators.DirectionalMovementSystem(14);
-            _atr = Indicators.AverageTrueRange(AtrPeriod, MovingAverageType.Simple);
 
             Print("GoldBot started | {0} | account {1} (DEMO) | balance {2:F2} | bars {3}",
                   SymbolName, Account.Number, Account.Balance, Bars.ClosePrices.Count);
-            Print("Config: {0}/6 votes | ADX>={1} | adaptive stop {2} | conviction target {3} | early exit {4} | risk {5}%",
-                  VotesNeeded, AdxMin,
-                  UseAdaptiveExits ? "ON" : "OFF",
-                  ScaleTargetByConviction ? "ON" : "OFF",
-                  EarlyExit ? "ON" : "OFF", RiskPercent);
+            Print("Config: {0}/6 votes | ADX>={1} | stop {2}% | target {3}% | risk {4}%",
+                  VotesNeeded, AdxMin, StopPercent, TakeProfitPercent, RiskPercent);
+            Print("Support AIs: session {0} | sentinel {1} | regime {2} | discipline {3}",
+                  UseSession ? "ON" : "OFF", UseSentinel ? "ON" : "OFF",
+                  UseRegimeFilter ? "ON" : "OFF", UseDiscipline ? "ON" : "OFF");
         }
 
         protected override void OnBar()
@@ -133,10 +125,13 @@ namespace cAlgo.Robots
         {
             _barCount++;
 
-            if (Bars.ClosePrices.Count < 120)
+            if (Bars.ClosePrices.Count < 260)
                 return;
 
+            var now = Server.TimeInUtc;
             var close = Bars.ClosePrices.Last(0);
+
+            // ---- the 6 voters (unchanged strategy) -----------------------
             var emaFast = _emaFast.Result.Last(0);
             var emaFastPrev = _emaFast.Result.Last(3);
             var emaSlow = _emaSlow.Result.Last(0);
@@ -154,31 +149,25 @@ namespace cAlgo.Robots
             if (close > past) bulls++;
             var bears = 6 - bulls;
 
-            if (StatusEveryBars > 0 && _barCount % StatusEveryBars == 0)
-                Print("status: price {0:F2} | {1} bull / {2} bear | ADX {3:F1} | ATR {4:F2}",
-                      close, bulls, bears, adx, _atr.Result.Last(0));
+            // ---- the support AIs -----------------------------------------
+            var sessionWeight = SessionWeight(now);
+            var regime = Regime();
 
+            if (StatusEveryBars > 0 && _barCount % StatusEveryBars == 0)
+                Print("status: price {0:F2} | {1}b/{2}b | ADX {3:F1} | session {4:F1} | regime {5}",
+                      close, bulls, bears, adx, sessionWeight, regime);
+
+            // ---- manage the open position (time stop only, strat unchanged)
             foreach (var pos in OwnPositions().ToList())
             {
                 if ((Server.TimeInUtc - pos.EntryTime).TotalMinutes >= MaxHoldMinutes)
                 {
                     Print("Closing {0} — max hold {1} min reached.", pos.Id, MaxHoldMinutes);
                     ClosePosition(pos);
-                    continue;
-                }
-                if (EarlyExit && !(EarlyExitOnlyIfLosing && pos.NetProfit >= 0))
-                {
-                    var flippedLong = pos.TradeType == TradeType.Buy && bears >= ExitOppositeVotes;
-                    var flippedShort = pos.TradeType == TradeType.Sell && bulls >= ExitOppositeVotes;
-                    if (flippedLong || flippedShort)
-                    {
-                        Print("EARLY EXIT {0} — strong reversal ({1} bull / {2} bear) | P&L {3:F2}",
-                              pos.Id, bulls, bears, pos.NetProfit);
-                        ClosePosition(pos);
-                    }
                 }
             }
 
+            // ---- daily loss stop -----------------------------------------
             var dayStart = DayStartEquity();
             if (dayStart > 0 &&
                 Account.Equity <= dayStart * (1.0 - DailyLossStopPercent / 100.0))
@@ -188,11 +177,28 @@ namespace cAlgo.Robots
                 return;
             }
 
+            // ---- entry gates ---------------------------------------------
             if (OwnPositions().Any())
+                return;                               // one position at a time
+
+            // Discipline AI: 3 losing trades today -> done for the day
+            if (UseDiscipline && LossesToday() >= MaxLossesPerDay)
+                return;
+
+            // Sentinel AI: a news-grade shock is in progress -> stand aside
+            if (UseSentinel && !SentinelSafe(now))
+                return;
+
+            // Session AI: skip thin-liquidity hours
+            if (UseSession && sessionWeight < SessionMinWeight)
+                return;
+
+            // Regime AI: don't fight a chaotic tape
+            if (UseRegimeFilter && regime == "chaotic")
                 return;
 
             if (adx < AdxMin)
-                return;
+                return;                               // chop filter
 
             if (bulls >= VotesNeeded)
                 OpenTrade(1, bulls, adx);
@@ -200,40 +206,74 @@ namespace cAlgo.Robots
                 OpenTrade(-1, bears, adx);
         }
 
-        private double ConvictionRewardRisk(int votes, double adx)
+        // ================= SUPPORT AIs =================
+        private double SessionWeight(DateTime utc)
         {
-            var voteScore = (votes - VotesNeeded) / (6.0 - VotesNeeded + 1.0);
-            var adxScore = Math.Max(0.0, Math.Min(1.0, (adx - AdxMin) / 25.0));
-            var conviction = Math.Max(0.0, Math.Min(1.0, 0.5 * voteScore + 0.5 * adxScore));
-            return RewardRiskMin + conviction * (RewardRiskMax - RewardRiskMin);
+            var h = utc.Hour + utc.Minute / 60.0;
+            if (h >= 12 && h < 16) return 1.2;        // London/NY overlap
+            if (h >= 7 && h < 12) return 1.0;         // London
+            if (h >= 16 && h < 21) return 0.9;        // NY afternoon
+            if (h >= 1 && h < 7) return 0.6;          // Asia
+            return 0.4;                               // around the daily close
         }
 
+        private bool SentinelSafe(DateTime now)
+        {
+            if (now < _sentinelBlockedUntil)
+                return false;
+
+            var p = LastCloses(46);
+            if (p.Length < 45)
+                return true;
+
+            var prev = p[p.Length - 2];
+            var lastMove = prev != 0 ? Math.Abs(p[p.Length - 1] / prev - 1.0) : 0.0;
+            var burst = RealizedVol(p, 6);
+            var baseline = RealizedVol(p, 45);
+
+            if (lastMove > 0.0022 || (baseline > 0 && burst / baseline > 3.5))
+            {
+                _sentinelBlockedUntil = now.AddMinutes(12);
+                Print("Sentinel AI: news-grade move — entries blocked 12 minutes.");
+                return false;
+            }
+            return true;
+        }
+
+        private string Regime()
+        {
+            var w = LastCloses(240);
+            if (w.Length < 120)
+                return "ranging";
+            var net = Math.Abs(w[w.Length - 1] - w[0]);
+            var path = 0.0;
+            for (var i = 1; i < w.Length; i++)
+                path += Math.Abs(w[i] - w[i - 1]);
+            var efficiency = path > 0 ? net / path : 0.0;
+            var rvShort = RealizedVol(w, 30);
+            var rvLong = RealizedVol(w, w.Length);
+            if (rvLong > 0 && rvShort / rvLong > 2.4)
+                return "chaotic";
+            return efficiency >= 0.30 ? "trending" : "ranging";
+        }
+
+        private int LossesToday()
+        {
+            var midnight = Server.TimeInUtc.Date;
+            return History.Count(t => t.Label == Label &&
+                                      t.ClosingTime >= midnight &&
+                                      t.NetProfit < 0);
+        }
+
+        // ================= EXECUTION (strategy unchanged) =================
         private void OpenTrade(int direction, int votes, double adx)
         {
             var price = direction > 0 ? Symbol.Ask : Symbol.Bid;
             if (price <= 0)
                 return;
 
-            var rr = ScaleTargetByConviction ? ConvictionRewardRisk(votes, adx) : RewardRiskMin;
-
-            double stopDist;
-            double tpDist;
-            if (UseAdaptiveExits)
-            {
-                var atr = _atr.Result.Last(0);
-                var minDist = price * (MinStopPercent / 100.0);
-                var maxDist = price * (MaxStopPercent / 100.0);
-                stopDist = atr * AtrStopMultiple;
-                if (double.IsNaN(stopDist) || stopDist <= 0)
-                    stopDist = price * (StopPercent / 100.0);
-                stopDist = Math.Max(minDist, Math.Min(maxDist, stopDist));
-                tpDist = stopDist * rr;
-            }
-            else
-            {
-                stopDist = price * (StopPercent / 100.0);
-                tpDist = stopDist * rr;
-            }
+            var stopDist = price * (StopPercent / 100.0);
+            var tpDist = price * (TakeProfitPercent / 100.0);
             if (stopDist <= 0)
                 return;
 
@@ -256,13 +296,36 @@ namespace cAlgo.Robots
 
             var result = ExecuteMarketOrder(side, SymbolName, units, Label, stopPips, tpPips);
             if (result.IsSuccessful)
-                Print("OPEN {0} {1} units @ {2:F2} | stop {3:F2} ({4:F2}%) | target {5:F2} ({6:F2}%) | RR {7:F1} | {8}/6 votes, ADX {9:F0}",
+                Print("OPEN {0} {1} units @ {2:F2} | stop {3:F2} | target {4:F2} | {5}/6 votes, ADX {6:F0}",
                       side, units, price, price - direction * stopDist,
-                      stopDist / price * 100.0,
-                      price + direction * tpDist,
-                      tpDist / price * 100.0, rr, votes, adx);
+                      price + direction * tpDist, votes, adx);
             else
                 Print("ORDER FAILED: {0}", result.Error);
+        }
+
+        // ================= HELPERS =================
+        private double[] LastCloses(int count)
+        {
+            var n = Math.Min(count, Bars.ClosePrices.Count);
+            var o = new double[n];
+            for (var i = 0; i < n; i++)
+                o[n - 1 - i] = Bars.ClosePrices.Last(i);
+            return o;
+        }
+
+        // mean absolute log-return over the last `window` values of p
+        private static double RealizedVol(double[] p, int window)
+        {
+            var start = Math.Max(1, p.Length - window);
+            var total = 0.0;
+            var n = 0;
+            for (var i = start; i < p.Length; i++)
+            {
+                if (p[i - 1] <= 0 || p[i] <= 0) continue;
+                total += Math.Abs(Math.Log(p[i] / p[i - 1]));
+                n++;
+            }
+            return n > 0 ? total / n : 0.0;
         }
 
         private System.Collections.Generic.IEnumerable<Position> OwnPositions()
