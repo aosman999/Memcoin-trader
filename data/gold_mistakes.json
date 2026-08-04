@@ -1298,5 +1298,15 @@
     "exit_reason": "stop_loss",
     "hold_minutes": 42.0,
     "pnl_usd": -2730.07
+  },
+  {
+    "day": "2023-11-15",
+    "strategy": "gold_trend",
+    "side": "short",
+    "regime": "ranging",
+    "session_weight": 1.0,
+    "exit_reason": "stop_loss",
+    "hold_minutes": 72.0,
+    "pnl_usd": -2841.66
   }
 ]
