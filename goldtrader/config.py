@@ -107,6 +107,9 @@ class GoldParams:
     use_orb: bool = False                # opening-range breakout strategy
     orb_minutes: int = 30                # opening range length
     orb_window: int = 120                # minutes after the range to trade
+    use_sixvoter: bool = False           # cTrader 6-voter confluence strategy
+    sixvoter_votes: int = 5              # of 6 voters needed to enter
+    sixvoter_adx_min: float = 0.18       # min close-only ADX proxy (0..1)
     use_pullback: bool = False           # trend-pullback entry strategy
     pullback_band: float = 0.0006        # how close to the EMA = a touch
     use_squeeze: bool = False            # Bollinger-squeeze breakout

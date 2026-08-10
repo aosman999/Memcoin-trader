@@ -269,5 +269,42 @@ def htf_signal(prices: list[float], p: GoldParams) -> GoldSignal | None:
     return None
 
 
+def six_voter_signal(prices: list[float], p: GoldParams) -> GoldSignal | None:
+    """The cTrader GoldBot's 6-voter confluence, ported verbatim so the
+    terminal system trades the SAME logic that runs live — but wrapped by
+    all the agents (session/regime/sentinel/news/discipline/analyst).
+
+    Six voters (EMA20/EMA75, RSI14, MACD 12/26/9), enter when >= votes
+    agree AND the close-only ADX proxy confirms a trending tape."""
+    from .indicators import ema_series, rsi, macd_histogram, adx_proxy
+    if len(prices) < 120:
+        return None
+    close = prices[-1]
+    fast = ema_series(prices[-200:], 20)
+    slow = ema_series(prices[-200:], 75)
+    ema_fast, ema_slow, ema_fast_prev = fast[-1], slow[-1], fast[-4]
+
+    bulls = 0
+    if ema_fast > ema_slow:                 bulls += 1
+    if close > ema_slow:                    bulls += 1
+    if macd_histogram(prices) > 0:          bulls += 1
+    if rsi(prices) > 50.0:                  bulls += 1
+    if ema_fast > ema_fast_prev:            bulls += 1
+    if close > prices[-20]:                 bulls += 1
+    bears = 6 - bulls
+
+    adx = adx_proxy(prices, 45)             # 0..1 (×100 ≈ classic ADX)
+    if adx < p.sixvoter_adx_min:
+        return None
+    votes = p.sixvoter_votes
+    if bulls >= votes:
+        return GoldSignal("gold_sixvoter", +1,
+                          f"{bulls}/6 bull votes, ADX {adx * 100:.0f}")
+    if bears >= votes and p.allow_short:
+        return GoldSignal("gold_sixvoter", -1,
+                          f"{bears}/6 bear votes, ADX {adx * 100:.0f}")
+    return None
+
+
 # certified core trio — candidates below join only via explicit flags
 ALL_STRATEGIES = (trend_signal, meanrev_signal, breakout_signal)

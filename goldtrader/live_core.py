@@ -31,7 +31,7 @@ from .mistake_analyst import MistakeAnalyst
 from .news_agent import NewsAgent
 from .strategies import (ALL_STRATEGIES, mentor_sweep_signal,
                          momentum_signal, orb_signal, pullback_signal,
-                         squeeze_signal)
+                         six_voter_signal, squeeze_signal)
 
 DAY_STATE_PATH = os.path.join(DATA_DIR, "live_day_state.json")
 
@@ -127,22 +127,27 @@ class EntryPipeline:
                     return None
             elif not self.discipline.entries_allowed(now):
                 return None
-        candidates = list(ALL_STRATEGIES)
-        if p.use_mentors:
-            candidates.insert(0, lambda h, pp: mentor_sweep_signal(h, pp, now))
-        # candidate strategies (A/B-gated; appended AFTER the certified
-        # trio so flags-off behavior is unchanged)
-        if getattr(p, "use_momentum", False):
-            candidates.append(momentum_signal)
-        if getattr(p, "use_orb", False):
-            candidates.append(lambda h, pp: orb_signal(h, pp, now))
-        if getattr(p, "use_pullback", False):
-            candidates.append(pullback_signal)
-        if getattr(p, "use_squeeze", False):
-            candidates.append(squeeze_signal)
-        if getattr(p, "use_htf", False):
-            from .strategies import htf_signal
-            candidates.append(htf_signal)
+        # 6-voter mode: run ONLY the confluence strategy (mirrors the
+        # cTrader cBot). Every agent gate in the loop below still wraps it.
+        if getattr(p, "use_sixvoter", False):
+            candidates = [six_voter_signal]
+        else:
+            candidates = list(ALL_STRATEGIES)
+            if p.use_mentors:
+                candidates.insert(0, lambda h, pp: mentor_sweep_signal(h, pp, now))
+            # candidate strategies (A/B-gated; appended AFTER the certified
+            # trio so flags-off behavior is unchanged)
+            if getattr(p, "use_momentum", False):
+                candidates.append(momentum_signal)
+            if getattr(p, "use_orb", False):
+                candidates.append(lambda h, pp: orb_signal(h, pp, now))
+            if getattr(p, "use_pullback", False):
+                candidates.append(pullback_signal)
+            if getattr(p, "use_squeeze", False):
+                candidates.append(squeeze_signal)
+            if getattr(p, "use_htf", False):
+                from .strategies import htf_signal
+                candidates.append(htf_signal)
         for strat in candidates:
             sig = strat(history, p)
             if sig is None:
