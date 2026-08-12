@@ -80,6 +80,12 @@ def run_campaign_day(bankroll: float = 3000.0, verbose: bool = False,
     sim = GoldSim(seed=20_000 + day * 13, start_price=float(anchor_price))
     pf = Portfolio(start_equity)
     orch = GoldOrchestrator(params, portfolio=pf, verbose=verbose)
+    # Carry the hostile-weather governor's red-day streak across campaign
+    # days. Each campaign day is a fresh process, so without this the
+    # certified "2 red days -> halve risk" governor resets to 0 every day
+    # and never engages — every red day bleeds the full guard. (bugfix)
+    red_streak = int(ledger.get("gov_red_streak", 0))
+    orch.pipeline.gov_red_streak = red_streak
     guard = DayGuard(params.risk, start_equity)
     guard_note = ""
     for _ in range(1440):
@@ -93,6 +99,9 @@ def run_campaign_day(bankroll: float = 3000.0, verbose: bool = False,
 
     end_equity = pf.cash
     stats = pf.stats()
+    # red day extends the streak (halves next day's risk once >=2); a green
+    # day breaks it. Persisted on the ledger so the next daily run picks up.
+    new_red_streak = red_streak + 1 if end_equity < start_equity else 0
     row = {
         "date": today, "day": day,
         "start_equity": round(start_equity, 4),
@@ -103,9 +112,11 @@ def run_campaign_day(bankroll: float = 3000.0, verbose: bool = False,
         "win_rate": round(stats["win_rate"] * 100),
         "guard": guard_note,
         "real_spot_anchor": round(float(anchor_price), 2),
+        "gov_red_streak": new_red_streak,
     }
     ledger["day"] = day
     ledger["equity"] = end_equity
+    ledger["gov_red_streak"] = new_red_streak
     ledger["history"].append(row)
     os.makedirs(DATA_DIR, exist_ok=True)
     with open(CAMPAIGN_PATH, "w") as f:
