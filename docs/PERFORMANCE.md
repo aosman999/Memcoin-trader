@@ -113,3 +113,43 @@ live-market evidence (Jul 22+).
 - Strategy Lab holdout save-guard — blocked two bad champions already
 - Live-only: news agent + economic calendar, mentor sweep strategy,
   Valentini 3-loss discipline, small-account guard
+
+## GoldEdge — custom strategy research (Aug 2026)
+
+Built after the live six-voter lost money. Method: fast lab harness that
+precomputes indicator series, **spread modelled at 0.08R/trade**, both
+market models, and — critically — every result quoted as **EDGE OVER A
+RANDOM-ENTRY BASELINE**, because a control test showed a coin-flip entry
+scores POSITIVE on these simulators (they trend more than real gold, and
+the bias grows with reward:risk). Raw returns from this sim are not
+trustworthy; edge-over-chance is.
+
+**Certified on 30 virgin seeds (9100-9129) never used in tuning:**
+
+| config | R/trade | edge over chance | win% |
+|---|---|---|---|
+| **GoldEdge (h1, eff>=0.55, ADX rising, RR4)** | **+0.844** | **+0.633** | 58.8% |
+| GoldEdge RR3 | +0.752 | +0.602 | 59.1% |
+| GoldEdge RR2 | +0.574 | +0.504 | 60.7% |
+| m15 six-voter + eff 0.40 (GoldBotTrend) | +0.461 | +0.420 | 56.6% |
+| plain six-voter h1 | +0.389 | +0.320 | 54.8% |
+
+**What actually generates the edge (ablation, virgin seeds):**
+- trend-quality (Kaufman efficiency) filter: edge +0.400 -> +0.633 — the
+  single biggest lever; chop is what was killing the strategy
+- ADX rising (trend accelerating): +0.603 -> +0.633
+- timeframe: m5 +0.26R, m15 +0.42R, m30 +0.47R, h1 +0.55R (h4 breaks down,
+  model-unstable +0.205/+0.482)
+- efficiency threshold is STABLE 0.45-0.65 (edge +0.62..+0.70), not a
+  knife-edge fit
+
+**Rejected by measurement** (tested as add-ons, none kept): EMA200 trend
+alignment (neutral), volatility-expansion gate (worse worst-model),
+dual-window efficiency (worse), RSI-room (much worse), MACD acceleration
+(neutral), pullback entry (starves to ~0 trades in high-efficiency trends),
+multi-timeframe EMA-slope filter 1h/4h (+0.30R vs +0.90R for the efficiency
+filter — the MTF idea sounds better than it measures).
+
+**Status: DEMO-ONLY.** `tools/GoldEdge.cs` refuses live accounts. The sim's
+trend bias means live edge will be smaller than +0.633; a demo run is the
+only honest proof.
