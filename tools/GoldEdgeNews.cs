@@ -4,8 +4,21 @@
 // dump it — so this agent never closes a trade because news is coming.
 //
 // STRATEGY (unchanged from GoldEdge — certified on 30 virgin seeds):
-//   6-voter confluence, gated by trend quality (Kaufman efficiency >= 0.55
-//   over 24 bars) and ADX >= 18 AND rising. 1-hour chart, 10-bar time stop.
+//   6-voter confluence, gated by trend quality (Kaufman efficiency >= 0.40
+//   over 24 bars) and ADX >= 18. 15-MINUTE chart, 40-bar (10h) time stop.
+//
+// TIMEFRAME / FREQUENCY (30 virgin seeds, stop-relative spread cost):
+//   m15 eff.55 + ADX-rising  edge +0.974, 4.4 trades/wk, +0.859 R/day
+//   m15 eff.40 no-rise THIS  edge +0.687, 9.0 trades/wk, +1.241 R/day
+//   m15 eff.25 loose         edge +0.508, 13.6 trades/wk, +1.381 R/day
+//   Loosening raises total growth but thins the per-trade cushion; below
+//   ~+0.5 the edge stops reliably covering real slippage, which is how the
+//   earlier +0.320-edge bot lost money live. eff.40 is the balance point.
+//
+//   CORRECTION to an earlier build: it said h1 beat m15. That held with a
+//   FIXED stop. With the ADAPTIVE (ATR) stop, m15 beats h1 on BOTH edge and
+//   frequency (+0.974 vs +0.826 at the same filter) because the stop sizes
+//   itself to m15 volatility instead of wearing an h1-sized 0.6%.
 //
 // ADAPTIVE EXITS (measured on 30 virgin seeds, stop-relative spread cost):
 //   * STOP adapts to volatility: 1.5x ATR, clamped 0.4%-1.2%. A quiet tape
@@ -69,7 +82,7 @@
 // simulator does not model — it is not, by itself, a source of edge.
 //
 // DEMO-ONLY. Install: cTrader -> Automate -> New cBot -> paste -> Build ->
-// approve network access -> add instance on XAUUSD **h1** -> Play.
+// approve network access -> add instance on XAUUSD **m15** -> Play.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -91,7 +104,7 @@ namespace cAlgo.Robots
         [Parameter("Minimum ADX", DefaultValue = 18.0, MinValue = 0, MaxValue = 50, Group = "Signal")]
         public double AdxMin { get; set; }
 
-        [Parameter("Require ADX rising", DefaultValue = true, Group = "Signal")]
+        [Parameter("Require ADX rising", DefaultValue = false, Group = "Signal")]
         public bool RequireAdxRising { get; set; }
 
         [Parameter("ADX rising lookback (bars)", DefaultValue = 3, MinValue = 1, MaxValue = 20, Group = "Signal")]
@@ -100,7 +113,7 @@ namespace cAlgo.Robots
         [Parameter("Trend quality window (bars)", DefaultValue = 24, MinValue = 4, MaxValue = 200, Group = "Trend filter")]
         public int EfficiencyWindow { get; set; }
 
-        [Parameter("Min trend quality (0-1)", DefaultValue = 0.55, MinValue = 0.0, MaxValue = 1.0, Group = "Trend filter")]
+        [Parameter("Min trend quality (0-1)", DefaultValue = 0.40, MinValue = 0.0, MaxValue = 1.0, Group = "Trend filter")]
         public double EfficiencyMin { get; set; }
 
         [Parameter("News: use economic calendar", DefaultValue = true, Group = "News agent")]
@@ -200,7 +213,7 @@ namespace cAlgo.Robots
         [Parameter("Reward:risk — used when adaptive target is OFF", DefaultValue = 4.0, MinValue = 0.5, MaxValue = 10.0, Group = "Exits")]
         public double RewardRisk { get; set; }
 
-        [Parameter("Max hold (bars)", DefaultValue = 10, MinValue = 1, MaxValue = 200, Group = "Exits")]
+        [Parameter("Max hold (bars)", DefaultValue = 40, MinValue = 1, MaxValue = 400, Group = "Exits")]
         public int MaxHoldBars { get; set; }
 
         [Parameter("Daily loss stop (%)", DefaultValue = 15.0, MinValue = 1.0, Group = "Risk")]
@@ -209,7 +222,7 @@ namespace cAlgo.Robots
         [Parameter("Allow shorts", DefaultValue = true, Group = "Risk")]
         public bool AllowShort { get; set; }
 
-        [Parameter("Log status every N bars", DefaultValue = 6, MinValue = 0, Group = "Diagnostics")]
+        [Parameter("Log status every N bars", DefaultValue = 4, MinValue = 0, Group = "Diagnostics")]
         public int StatusEveryBars { get; set; }
 
         private const string Label = "GoldEdgeNews";
@@ -305,8 +318,9 @@ namespace cAlgo.Robots
                   ProtectOnNews ? "ON" : "OFF", ProtectBeforeMinutes,
                   BlockEntriesOnNews ? "ON" : "OFF", UseShockVeto ? "ON" : "OFF");
             Print("News policy: never closes a trade on news (measured worse) — protects it instead.");
-            if (Bars.TimeFrame != TimeFrame.Hour)
-                Print("NOTE: certified on the 1-HOUR chart; you are on {0}.", Bars.TimeFrame);
+            if (Bars.TimeFrame != TimeFrame.Minute15)
+                Print("NOTE: certified on the 15-MINUTE chart; you are on {0}. Settings assume m15.",
+                      Bars.TimeFrame);
 
             if (UseCalendar)
                 BeginCalendarFetch();

@@ -222,3 +222,29 @@ move gold alone). All 14 cases now classify correctly.
 Note: genuinely gold-SPECIFIC news (central-bank gold buying, ETF flows,
 physical demand) is NOT on an economic calendar and is not covered here —
 that would need a headline feed, not this source.
+
+## Retuned for m15 and higher frequency (Aug 2026)
+
+Owner wanted m15 and more than ~2 trades/week. Measured on 30 virgin seeds,
+both models, stop-relative spread cost, with the adaptive stop + target:
+
+| config | edge/trade | win% | trades/wk | R/day | worst-model |
+|---|---|---|---|---|---|
+| h1 eff.55 + ADX-rising (previous) | +0.826 | 58.8 | 2.2 | +0.365 | +0.699 |
+| m15 eff.55 + ADX-rising | +0.974 | 53.6 | 4.4 | +0.859 | +0.826 |
+| m15 eff.45 + ADX-rising | +0.772 | 49.9 | 7.0 | +1.088 | +0.668 |
+| **m15 eff.40 no-rise (ADOPTED)** | **+0.687** | 48.3 | **9.0** | **+1.241** | +0.609 |
+| m15 eff.35 no-rise | +0.607 | 46.7 | 10.5 | +1.275 | +0.553 |
+| m15 eff.25 ADX15 loose | +0.508 | 44.9 | 13.6 | +1.381 | +0.467 |
+
+Total growth (edge x frequency) keeps rising as the filter loosens, but the
+per-trade cushion thins. Below roughly +0.5 edge the margin stops reliably
+covering real slippage — that is the zone the original +0.320-edge bot died
+in. eff.40 is the balance point: 4x the trade frequency of the h1 build at
+3.4x the R/day, with the cushion intact.
+
+**CORRECTION to the earlier finding that h1 beats m15.** That was true with a
+FIXED 0.6% stop. With the ADAPTIVE (ATR) stop, m15 beats h1 on both edge and
+frequency (+0.974 vs +0.826 at the same filter) — the stop can size itself to
+m15 volatility instead of wearing an h1-sized one. The earlier conclusion was
+correct only for the exit style it was tested with.
