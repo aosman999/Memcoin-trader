@@ -4,16 +4,26 @@
 // dump it — so this agent never closes a trade because news is coming.
 //
 // STRATEGY (unchanged from GoldEdge — certified on 30 virgin seeds):
-//   6-voter confluence, gated by trend quality (Kaufman efficiency >= 0.40
-//   over 24 bars) and ADX >= 18. 15-MINUTE chart, 40-bar (10h) time stop.
+//   6-voter confluence, gated by trend quality (Kaufman efficiency >= 0.25
+//   over 24 bars) and ADX >= 15. 15-MINUTE chart, 40-bar (10h) time stop.
+//   Tuned for HIGH FREQUENCY (~2.7 trades/day) at the owner's request.
 //
 // TIMEFRAME / FREQUENCY (30 virgin seeds, stop-relative spread cost):
 //   m15 eff.55 + ADX-rising  edge +0.974, 4.4 trades/wk, +0.859 R/day
-//   m15 eff.40 no-rise THIS  edge +0.687, 9.0 trades/wk, +1.241 R/day
-//   m15 eff.25 loose         edge +0.508, 13.6 trades/wk, +1.381 R/day
-//   Loosening raises total growth but thins the per-trade cushion; below
-//   ~+0.5 the edge stops reliably covering real slippage, which is how the
-//   earlier +0.320-edge bot lost money live. eff.40 is the balance point.
+//   m15 eff.40 no-rise       edge +0.687, 9.0 trades/wk, +1.241 R/day
+//   m15 eff.25 THIS          edge +0.508, 13.6 trades/wk, +1.381 R/day
+//   m5 is worse on both counts (+0.590 edge, deeper drawdowns) — m15 is the
+//   sweet spot; h1 trades too rarely.
+//
+// FREQUENCY x RISK — the constraint that actually binds. Nothing in this bot
+// caps trade count; the filter setting alone decides it. But compounding 30
+// virgin seeds over 60 days shows drawdown, not the daily stop, is the limit:
+//        max frequency @ 10% risk -> median DD 74%, WORST 97% (account dead)
+//        max frequency @  5% risk -> median DD 47%, worst 81%
+//        max frequency @  2% risk -> median DD 22%, worst 46%
+//   The -15% daily stop caps ONE day; it cannot stop bad days compounding.
+//   Trading often is fine. Trading often AND large is what kills the account.
+//   Hence risk defaults to 5% here, not 10%.
 //
 //   CORRECTION to an earlier build: it said h1 beat m15. That held with a
 //   FIXED stop. With the ADAPTIVE (ATR) stop, m15 beats h1 on BOTH edge and
@@ -101,7 +111,7 @@ namespace cAlgo.Robots
         [Parameter("Votes needed (of 6)", DefaultValue = 5, MinValue = 3, MaxValue = 6, Group = "Signal")]
         public int VotesNeeded { get; set; }
 
-        [Parameter("Minimum ADX", DefaultValue = 18.0, MinValue = 0, MaxValue = 50, Group = "Signal")]
+        [Parameter("Minimum ADX", DefaultValue = 15.0, MinValue = 0, MaxValue = 50, Group = "Signal")]
         public double AdxMin { get; set; }
 
         [Parameter("Require ADX rising", DefaultValue = false, Group = "Signal")]
@@ -113,7 +123,7 @@ namespace cAlgo.Robots
         [Parameter("Trend quality window (bars)", DefaultValue = 24, MinValue = 4, MaxValue = 200, Group = "Trend filter")]
         public int EfficiencyWindow { get; set; }
 
-        [Parameter("Min trend quality (0-1)", DefaultValue = 0.40, MinValue = 0.0, MaxValue = 1.0, Group = "Trend filter")]
+        [Parameter("Min trend quality (0-1)", DefaultValue = 0.25, MinValue = 0.0, MaxValue = 1.0, Group = "Trend filter")]
         public double EfficiencyMin { get; set; }
 
         [Parameter("News: use economic calendar", DefaultValue = true, Group = "News agent")]
@@ -173,7 +183,14 @@ namespace cAlgo.Robots
         [Parameter("News: shock cooldown (bars)", DefaultValue = 3, MinValue = 1, MaxValue = 20, Group = "News agent")]
         public int ShockCooldownBars { get; set; }
 
-        [Parameter("Risk per trade (%)", DefaultValue = 10.0, MinValue = 0.1, MaxValue = 20.0, Group = "Risk")]
+                // FREQUENCY AND RISK ARE LINKED. Measured on 30 virgin seeds, m15,
+        // 60 days, compounded — same trade count, only risk% changed:
+        //   max frequency @ 10% risk -> worst drawdown 97%  (account is dead)
+        //   max frequency @  5% risk -> worst drawdown 81%
+        //   max frequency @  2% risk -> worst drawdown 46%
+        // Trading often is fine; trading often AND large is what ruins the
+        // account. This bot is tuned for high frequency, so risk starts at 5%.
+        [Parameter("Risk per trade (%)", DefaultValue = 5.0, MinValue = 0.1, MaxValue = 20.0, Group = "Risk")]
         public double RiskPercent { get; set; }
 
         // ---- ADAPTIVE STOP -------------------------------------------------

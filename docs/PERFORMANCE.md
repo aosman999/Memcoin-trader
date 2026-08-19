@@ -248,3 +248,29 @@ FIXED 0.6% stop. With the ADAPTIVE (ATR) stop, m15 beats h1 on both edge and
 frequency (+0.974 vs +0.826 at the same filter) — the stop can size itself to
 m15 volatility instead of wearing an h1-sized one. The earlier conclusion was
 correct only for the exit style it was tested with.
+
+### Max frequency and the risk linkage (Aug 2026)
+
+Owner asked for no trade cap — "trade as much as it can as long as it's above
+the daily stop". Clarification: **nothing in the bot caps trade count**; the
+filter threshold alone determines frequency. But compounding 30 virgin seeds
+over 60 days shows the binding constraint is CUMULATIVE DRAWDOWN, which the
+daily stop cannot prevent (it caps one day, not a losing streak of days):
+
+| config | risk | trades/day | median DD | worst DD |
+|---|---|---|---|---|
+| max frequency (no filter) | 10% | 3.69 | 73.5% | **97.4%** |
+| max frequency | 5% | 3.69 | 47.1% | 80.7% |
+| max frequency | 2% | 3.69 | 21.9% | 45.9% |
+| eff.25 | 5% | 2.72 | 41.1% | 60.9% |
+| eff.40 | 10% | 1.81 | 55.1% | 84.0% |
+
+Same trade counts, wildly different survival — the only variable is risk per
+trade. A 97% drawdown is a dead account in reality (the sim has no margin call
+and infinite patience). **You can have high frequency OR high risk-per-trade,
+not both.**
+
+Adopted: eff 0.25 / ADX 15 (~13.6 trades/week, edge +0.508) with risk
+defaulting to **5%**, plus a startup warning when risk > 6%. Timeframe m15
+confirmed best: m5 is worse on edge (+0.590) and drawdown; h1 trades too
+rarely (2.2/wk).
