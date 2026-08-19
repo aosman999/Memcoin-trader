@@ -630,7 +630,24 @@ namespace cAlgo.Robots
                 }
                 // Print/API calls must come back to cTrader's main thread.
                 var msg = status;
-                BeginInvokeOnMainThread(() => Print("news: {0}", msg));
+                // List what was actually loaded, so coverage is visible rather
+                // than just counted — e.g. you can see "Crude Oil Inventories"
+                // and OPEC meetings really are being tracked.
+                var upcoming = new List<string>();
+                if (parsed != null)
+                {
+                    var nowUtc = DateTime.UtcNow;
+                    foreach (var e in parsed.Where(x => x.UtcTime >= nowUtc)
+                                            .OrderBy(x => x.UtcTime).Take(8))
+                        upcoming.Add(string.Format("T{0} {1:ddd HH:mm} {2} {3}",
+                                                   e.Tier, e.UtcTime, e.Currency, e.Title));
+                }
+                BeginInvokeOnMainThread(() =>
+                {
+                    Print("news: {0}", msg);
+                    foreach (var u in upcoming)
+                        Print("   next: {0}", u);
+                });
             });
         }
 
