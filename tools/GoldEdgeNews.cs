@@ -257,6 +257,17 @@ namespace cAlgo.Robots
             "CONFERENCE", "PANEL", "REMARKS", "STATEMENT"
         };
 
+        // Commodity events. Oil feeds gold through inflation expectations, and
+        // both trade as dollar-denominated commodities, so the complex moves
+        // together. These are promoted to TIER 2 even when the calendar marks
+        // them medium impact (EIA crude inventories are usually "Medium").
+        private static readonly string[] CommodityKeywords =
+        {
+            "CRUDE OIL", "OPEC", "NATURAL GAS", "GASOLINE", "INVENTORIES",
+            "GOLD", "SILVER", "COMMODITY", "OIL STOCKS", "DISTILLATE",
+            "BAKER HUGHES", "RIG COUNT"
+        };
+
         protected override void OnStart()
         {
             if (Account.IsLive)
@@ -640,7 +651,8 @@ namespace cAlgo.Robots
                 if (cur == null)
                     continue;
                 cur = cur.Trim().ToUpperInvariant();
-                if (watch.Count > 0 && !watch.Contains(cur))
+                // "ALL" is how OPEC meetings and other global events are tagged
+                if (watch.Count > 0 && cur != "ALL" && !watch.Contains(cur))
                     continue;
 
                 var dateStr = Field(obj, "date");
@@ -657,11 +669,20 @@ namespace cAlgo.Robots
                 var isHigh = impact.IndexOf("High", StringComparison.OrdinalIgnoreCase) >= 0;
                 var isMedium = impact.IndexOf("Medium", StringComparison.OrdinalIgnoreCase) >= 0;
                 var isSpeaker = SpeakerKeywords.Any(k => upper.Contains(k));
-                var isCritical = Tier1Keywords.Any(k => upper.Contains(k));
+                var isCommodity = CommodityKeywords.Any(k => upper.Contains(k));
+                // "FOMC Member Speaks" contains "FOMC" but is a routine speech,
+                // not a rate decision — do not let it rank as gold-critical.
+                // The CHAIR is different: Powell moves gold on his own.
+                var isChair = upper.Contains("POWELL") || upper.Contains("FED CHAIR");
+                var isMemberSpeech = !isChair &&
+                                     (upper.Contains("MEMBER") || upper.Contains("SPEAK"));
+                var isCritical = !isMemberSpeech && Tier1Keywords.Any(k => upper.Contains(k));
 
                 int tier;
                 if (isCritical && cur == "USD")
-                    tier = 1;                       // gold-critical US event
+                    tier = 1;
+                else if (isCommodity)
+                    tier = 2;                       // oil/commodity complex                       // gold-critical US event
                 else if (isCritical || isHigh)
                     tier = 2;                       // big print, or critical abroad
                 else if (isSpeaker && watchSpeakers)

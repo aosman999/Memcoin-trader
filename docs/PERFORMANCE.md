@@ -205,3 +205,20 @@ Measured — does protecting MORE OFTEN hurt? No, it mildly helps:
 New `ProtectMaxTier` parameter (default 2) controls which tiers trigger
 protection: 1 = gold-critical US events only, 2 = also every high-impact
 print, 3 = also speakers and medium data.
+
+**Commodity coverage + a classifier bug fixed (Aug 2026).** Added oil and
+commodity events (crude/gasoline/natural-gas inventories, OPEC meetings,
+Baker Hughes rig count) at TIER 2, promoted above their calendar impact
+rating — oil feeds gold through inflation expectations and both trade as
+dollar-denominated commodities. OPEC entries are tagged country "ALL" on the
+feed, which is now accepted.
+
+Port-testing the classifier against 14 realistic titles caught a real bug:
+**"FOMC Member Speaks" was ranking TIER 1** — the same as an actual rate
+decision — because the title contains "FOMC". Routine member speeches now
+demote to tier 3, while Powell/Fed-Chair remarks stay tier 1 (the chair does
+move gold alone). All 14 cases now classify correctly.
+
+Note: genuinely gold-SPECIFIC news (central-bank gold buying, ETF flows,
+physical demand) is NOT on an economic calendar and is not covered here —
+that would need a headline feed, not this source.
