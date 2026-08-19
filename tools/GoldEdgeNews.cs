@@ -588,7 +588,9 @@ namespace cAlgo.Robots
                     _newsStatus = status;
                     _fetchInFlight = false;
                 }
-                Print("news: {0}", status);
+                // Print/API calls must come back to cTrader's main thread.
+                var msg = status;
+                BeginInvokeOnMainThread(() => Print("news: {0}", msg));
             });
         }
 
