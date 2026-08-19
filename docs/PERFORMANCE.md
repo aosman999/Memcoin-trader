@@ -153,3 +153,22 @@ filter — the MTF idea sounds better than it measures).
 **Status: DEMO-ONLY.** `tools/GoldEdge.cs` refuses live accounts. The sim's
 trend bias means live edge will be smaller than +0.633; a demo run is the
 only honest proof.
+
+### News agent (Aug 2026) — `tools/GoldEdgeNews.cs`
+
+Two independent layers on top of GoldEdge:
+
+1. **Shock veto (no network) — MEASURED, adopted.** A bar moving >2.5x ATR
+   blocks new entries for 3 bars. On the 30 virgin seeds, h1/RR4:
+   edge over chance +0.633 -> **+0.657**, win 58.8% -> 59.7%, worst-model
+   +0.716 -> **+0.736**. Small, consistent, better on both models.
+2. **Economic calendar (needs network) — REASONED, NOT backtested.** Downloads
+   this week's calendar and refuses entries in a -60/+60 min window around
+   every HIGH-impact USD event. Could not be certified: the simulator has no
+   economic calendar and this build environment blocks network, so the feed
+   is unverified here. Parser logic WAS validated against a realistic feed
+   sample (correct impact/currency filtering and UTC conversion).
+
+Fail-safe: a failed/timed-out/garbage calendar fetch logs and leaves the bot
+trading on the shock veto alone — a dead feed can never freeze the bot or
+silently disable its safety. Requires AccessRights.FullAccess.
