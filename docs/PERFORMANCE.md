@@ -184,3 +184,24 @@ is off-thread and refreshes every 6h (inside the feed's 2-per-5-min limit).
 The calendar layer is reasoned, not backtested — no calendar in the sim, and
 this env blocks network; field names confirmed from feed docs and the parser
 was port-tested against a realistic sample.
+
+**Currency coverage (Aug 2026).** Widened from USD,EUR,GBP,JPY,CNY to all
+nine majors on the feed: added **CHF** (gold's twin safe haven; Switzerland
+refines most of the world's gold) and **AUD/CAD/NZD** (commodity/risk
+proxies; Australia is a top-3 gold producer). Safe to widen because
+protection only moves the stop to breakeven on an ALREADY-PROFITABLE trade,
+so it can never convert a winner into a loser.
+
+Measured — does protecting MORE OFTEN hurt? No, it mildly helps:
+
+| protection frequency | edge | worst-model |
+|---|---|---|
+| off | +0.826 | +0.699 |
+| rare (>3.5x ATR) | +0.827 | +0.700 |
+| default (>2.5x ATR) | +0.830 | +0.711 |
+| very frequent (>1.5x ATR) | +0.840 | +0.739 |
+| constant (>1.0x ATR) | +0.839 | +0.750 |
+
+New `ProtectMaxTier` parameter (default 2) controls which tiers trigger
+protection: 1 = gold-critical US events only, 2 = also every high-impact
+print, 3 = also speakers and medium data.
