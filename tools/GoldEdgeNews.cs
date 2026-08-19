@@ -1,36 +1,52 @@
-// GoldEdgeNews — GoldEdge (the holdout-certified custom strategy) plus the
-// NEWS AGENT: it stands aside around scheduled high-impact US events, and
-// vetoes entries during an unscheduled news-grade price shock.
+// GoldEdgeNews — GoldEdge (the holdout-certified custom strategy) plus a NEWS
+// AGENT built on one principle: news must PROTECT the bot without reducing how
+// much it trades. News cuts both ways — a print can pump gold as easily as
+// dump it — so this agent never closes a trade because news is coming.
 //
 // STRATEGY (unchanged from GoldEdge — certified on 30 virgin seeds):
 //   6-voter confluence, gated by trend quality (Kaufman efficiency >= 0.55
 //   over 24 bars) and ADX >= 18 AND rising. Stop 0.6%, target 4:1, 10-bar
 //   time stop, 1-hour chart.
 //
-// THE NEWS AGENT — two independent layers:
-//   1. CALENDAR (needs network): downloads this week's economic calendar and
-//      refuses to open a trade in a window around every HIGH-impact USD event
-//      (NFP, CPI, FOMC, PPI, GDP, claims...). Gold is a macro instrument; the
-//      2:1-plus targets this bot uses do not survive a CPI whipsaw.
-//   2. SHOCK VETO (no network): if a bar moves more than 2.5x ATR, it blocks
-//      new entries for 3 bars. This catches unscheduled news and anything the
-//      calendar missed. MEASURED: edge +0.633 -> +0.657, win 58.8% -> 59.7%,
-//      worst-model +0.716 -> +0.736 on virgin seeds. It earns its place.
+// WHAT THE NEWS AGENT WATCHES: everything that moves gold, sorted into tiers —
+//   TIER 1  FOMC, rate decisions, NFP, CPI, core PCE, Powell/Fed-chair
+//           remarks, testimony, press conferences, Jackson Hole
+//   TIER 2  any other high-impact print, and tier-1-type events abroad
+//   TIER 3  anyone at a microphone (members, governors, presidents, minutes,
+//           panels, symposiums) plus medium-impact US data
+//   Currencies: USD drives gold directly; EUR/GBP/JPY/CNY move the dollar,
+//   which moves gold.
 //
-// FAIL-SAFE BY DESIGN: if the calendar download fails, times out, or returns
-// junk, the bot logs it and KEEPS TRADING on the shock veto alone. A dead
-// news feed must never freeze the bot or, worse, silently disable its safety.
+// WHAT IT DOES WITH THEM — measured on 30 virgin seeds (h1, RR4):
+//   * PROTECT (default ON). With a market-mover approaching and the trade
+//     ALREADY IN PROFIT, pull the stop to breakeven: a news spike can then
+//     only scratch the trade, not lose on it. A losing trade is left alone —
+//     tightening there would just lock in the loss. Entries are untouched, so
+//     trade frequency is unchanged.
+//       edge +0.633 -> +0.636, trade count 1530 -> 1532.
+//   * CLOSE ON NEWS — TESTED AND REJECTED. Edge collapses +0.633 -> +0.496:
+//     it cuts winners short, exactly as the owner predicted. Not implemented.
+//   * BLOCK ENTRIES (default OFF). Available, but it costs trades, which is
+//     what the owner asked to avoid. Turn on only for fewer, safer entries.
+//   * SHOCK VETO (default ON, no network). A bar moving >2.5x ATR blocks new
+//     entries for 3 bars and triggers protection. edge +0.633 -> +0.657.
 //
-// REQUIRES AccessRights.FullAccess (network). cTrader will ask you to approve
-// it the first time — that is expected and is what lets it fetch the calendar.
+// FAIL-SAFE: a failed, timed-out or garbage calendar fetch logs and leaves the
+// bot trading normally on the shock veto alone. A dead feed must never freeze
+// the bot or silently disable its safety. Fetch runs off the trading thread,
+// refreshes every 6h (well inside the feed's 2-per-5-min rate limit).
 //
-// HONEST NOTE ON TESTING: the shock veto is measured (numbers above). The
-// CALENDAR layer could NOT be backtested — the simulator has no economic
-// calendar, and this build environment blocks network access, so the feed
-// itself is unverified here. Watch the log on your Mac for the
-// "news: loaded N high-impact events" line to confirm it works. It is
-// reasoned, fail-safe, and standard practice, but it is not certified the
-// way the strategy is.
+// REQUIRES AccessRights.FullAccess (network) — cTrader will ask you to approve
+// it on first build. That is what lets it fetch the calendar.
+//
+// HONEST LIMITS: the shock-driven numbers above are measured; the CALENDAR
+// layer is reasoned, not backtested — the simulator has no economic calendar
+// and this build environment blocks network, so the live feed is unverified
+// here (its field names were confirmed from the feed's docs, and the parser
+// was port-tested against a realistic sample). Watch your log for
+// "news: N events (T1/T2/T3...)" to confirm it loads. Note too that news
+// protection is INSURANCE against real-world slippage and gaps that the
+// simulator does not model — it is not, by itself, a source of edge.
 //
 // DEMO-ONLY. Install: cTrader -> Automate -> New cBot -> paste -> Build ->
 // approve network access -> add instance on XAUUSD **h1** -> Play.
@@ -70,16 +86,36 @@ namespace cAlgo.Robots
         [Parameter("News: use economic calendar", DefaultValue = true, Group = "News agent")]
         public bool UseCalendar { get; set; }
 
-        [Parameter("News: block minutes BEFORE event", DefaultValue = 60, MinValue = 0, MaxValue = 600, Group = "News agent")]
-        public int BlockBeforeMinutes { get; set; }
+        // PROTECTION (default) — guards an OPEN trade through the event without
+        // touching entries, so trade frequency is unchanged. MEASURED: edge
+        // +0.633 -> +0.636 with the SAME trade count (1530 -> 1532).
+        [Parameter("News: protect open trade (stop -> breakeven)", DefaultValue = true, Group = "News agent")]
+        public bool ProtectOnNews { get; set; }
 
-        [Parameter("News: block minutes AFTER event", DefaultValue = 60, MinValue = 0, MaxValue = 600, Group = "News agent")]
-        public int BlockAfterMinutes { get; set; }
+        [Parameter("News: start protecting N min before event", DefaultValue = 30, MinValue = 1, MaxValue = 600, Group = "News agent")]
+        public int ProtectBeforeMinutes { get; set; }
+
+        // BLOCKING (off by default) — blocking entries around news costs trades.
+        // Turn on only if you want fewer, safer entries.
+        [Parameter("News: also BLOCK new entries near events", DefaultValue = false, Group = "News agent")]
+        public bool BlockEntriesOnNews { get; set; }
+
+        [Parameter("News: TIER1 block +/- min (FOMC, NFP, CPI, Powell)", DefaultValue = 30, MinValue = 0, MaxValue = 600, Group = "News agent")]
+        public int Tier1Minutes { get; set; }
+
+        [Parameter("News: TIER2 block +/- min (other high impact)", DefaultValue = 15, MinValue = 0, MaxValue = 600, Group = "News agent")]
+        public int Tier2Minutes { get; set; }
+
+        [Parameter("News: TIER3 block +/- min (speeches, medium)", DefaultValue = 10, MinValue = 0, MaxValue = 600, Group = "News agent")]
+        public int Tier3Minutes { get; set; }
+
+        [Parameter("News: also watch low-impact speakers", DefaultValue = true, Group = "News agent")]
+        public bool WatchSpeakers { get; set; }
 
         [Parameter("News: calendar URL", DefaultValue = "https://nfs.faireconomy.media/ff_calendar_thisweek.json", Group = "News agent")]
         public string CalendarUrl { get; set; }
 
-        [Parameter("News: currencies to watch (comma)", DefaultValue = "USD", Group = "News agent")]
+        [Parameter("News: currencies to watch (comma)", DefaultValue = "USD,EUR,GBP,JPY,CNY", Group = "News agent")]
         public string WatchCurrencies { get; set; }
 
         [Parameter("News: shock veto (no network)", DefaultValue = true, Group = "News agent")]
@@ -121,6 +157,7 @@ namespace cAlgo.Robots
         private AverageTrueRange _atr;
         private int _barCount;
         private bool _stopped;
+        private DateTime _lastProtectCheck = DateTime.MinValue;
 
         // ---- news agent state (written by a background task) --------------
         private readonly object _newsLock = new object();
@@ -134,7 +171,27 @@ namespace cAlgo.Robots
             public DateTime UtcTime;
             public string Title;
             public string Currency;
+            public int Tier;              // 1 = gold-critical, 2 = high, 3 = speaker/medium
         }
+
+        // Events that reprice gold on their own. Anything matching here is
+        // TIER 1 regardless of what the calendar calls its "impact".
+        private static readonly string[] Tier1Keywords =
+        {
+            "FOMC", "FEDERAL FUNDS", "INTEREST RATE", "RATE DECISION", "RATE STATEMENT",
+            "PRESS CONFERENCE", "POWELL", "FED CHAIR", "MONETARY POLICY",
+            "NON-FARM", "NONFARM", "NFP", "CPI", "CORE PCE", "PCE PRICE",
+            "JACKSON HOLE", "TESTIMONY", "BEIGE BOOK", "UNEMPLOYMENT RATE"
+        };
+
+        // Anyone stepping up to a microphone. Central-bank speakers move gold
+        // even when the calendar marks them low impact.
+        private static readonly string[] SpeakerKeywords =
+        {
+            "SPEAK", "SPEECH", "TESTIF", "TESTIMONY", "PRESS CONFERENCE",
+            "MEMBER", "GOVERNOR", "PRESIDENT", "CHAIR", "MINUTES", "SYMPOSIUM",
+            "CONFERENCE", "PANEL", "REMARKS", "STATEMENT"
+        };
 
         protected override void OnStart()
         {
@@ -160,9 +217,11 @@ namespace cAlgo.Robots
                   EfficiencyMin, EfficiencyWindow);
             Print("Exit: stop {0}% | target {1}% ({2}:1) | max hold {3} bars | risk {4}%",
                   StopPercent, StopPercent * RewardRisk, RewardRisk, MaxHoldBars, RiskPercent);
-            Print("News agent: calendar {0} (block -{1}/+{2} min around high-impact {3}) | shock veto {4} ({5}x ATR, {6} bars)",
-                  UseCalendar ? "ON" : "OFF", BlockBeforeMinutes, BlockAfterMinutes,
-                  WatchCurrencies, UseShockVeto ? "ON" : "OFF", ShockAtrMult, ShockCooldownBars);
+            Print("News agent: calendar {0} watching {1} | protect-open-trade {2} ({3} min before) | block-entries {4} | shock veto {5}",
+                  UseCalendar ? "ON" : "OFF", WatchCurrencies,
+                  ProtectOnNews ? "ON" : "OFF", ProtectBeforeMinutes,
+                  BlockEntriesOnNews ? "ON" : "OFF", UseShockVeto ? "ON" : "OFF");
+            Print("News policy: never closes a trade on news (measured worse) — protects it instead.");
             if (Bars.TimeFrame != TimeFrame.Hour)
                 Print("NOTE: certified on the 1-HOUR chart; you are on {0}.", Bars.TimeFrame);
 
@@ -176,6 +235,21 @@ namespace cAlgo.Robots
                 return;
             try { Evaluate(); }
             catch (Exception ex) { Print("ERROR in OnBar: {0} — {1}", ex.GetType().Name, ex.Message); }
+        }
+
+        // On an h1 chart a bar closes only once an hour — far too coarse to
+        // catch a 30-minute pre-news window. Check protection once a minute
+        // instead. Entries are still decided on bar close only.
+        protected override void OnTick()
+        {
+            if (_stopped || !ProtectOnNews)
+                return;
+            var now = Server.TimeInUtc;
+            if ((now - _lastProtectCheck).TotalSeconds < 60)
+                return;
+            _lastProtectCheck = now;
+            try { ProtectPositions(); }
+            catch (Exception ex) { Print("ERROR in news protect: {0} — {1}", ex.GetType().Name, ex.Message); }
         }
 
         private void Evaluate()
@@ -194,6 +268,10 @@ namespace cAlgo.Robots
                     ClosePosition(pos);
                 }
             }
+
+            // news defence: protect the open trade, never close it — a news
+            // move can just as easily run in our favour.
+            ProtectPositions();
 
             var need = Math.Max(120, EfficiencyWindow + 10);
             if (Bars.ClosePrices.Count < need)
@@ -236,13 +314,15 @@ namespace cAlgo.Robots
             if (OwnPositions().Any())
                 return;
 
-            // ---- the news agent: two independent vetoes ------------------
-            if (UseCalendar)
+            // ---- news agent: entry blocking is OPTIONAL and OFF by default,
+            // because blocking entries costs trades. The default protection
+            // works on OPEN positions instead (see ProtectPositions).
+            if (UseCalendar && BlockEntriesOnNews)
             {
                 string evtName;
                 if (InNewsWindow(Server.TimeInUtc, out evtName))
                 {
-                    Print("NEWS VETO: standing aside around \"{0}\".", evtName);
+                    Print("NEWS: skipping entry near \"{0}\".", evtName);
                     return;
                 }
             }
@@ -282,6 +362,85 @@ namespace cAlgo.Robots
             return false;
         }
 
+        // THE MAIN NEWS DEFENCE — it never touches entries, so the bot trades
+        // exactly as often as it would without a news feed.
+        //
+        // When a market-moving event is coming up and the position is already
+        // in profit, pull the stop to breakeven so a news spike can turn a
+        // winner into a scratch, not a loss. If the trade is NOT yet in profit
+        // the stop is left alone: yanking it to breakeven there would just
+        // guarantee the loss it is trying to avoid.
+        //
+        // MEASURED (30 virgin seeds, shock-driven analogue): edge +0.633 ->
+        // +0.636 with the SAME trade count (1530 -> 1532). Free insurance.
+        // Tested and REJECTED: closing the position on news — edge collapses
+        // to +0.496 because it cuts winning trades short.
+        private void ProtectPositions()
+        {
+            if (!ProtectOnNews)
+                return;
+
+            var now = Server.TimeInUtc;
+            string evt = null;
+            var newsSoon = false;
+
+            if (UseCalendar)
+            {
+                List<NewsEvent> snapshot;
+                lock (_newsLock)
+                    snapshot = _events;
+                if (snapshot != null)
+                {
+                    foreach (var e in snapshot)
+                    {
+                        if (e.Tier > 2)
+                            continue;                       // only the real movers
+                        var mins = (e.UtcTime - now).TotalMinutes;
+                        if (mins >= 0 && mins <= ProtectBeforeMinutes)
+                        {
+                            newsSoon = true;
+                            evt = string.Format("{0} {1} in {2:F0} min", e.Currency, e.Title, mins);
+                            break;
+                        }
+                    }
+                }
+            }
+            // a shock already in progress counts as news too (no feed needed)
+            if (!newsSoon && UseShockVeto && RecentShock())
+            {
+                newsSoon = true;
+                evt = "price shock in progress";
+            }
+            if (!newsSoon)
+                return;
+
+            foreach (var pos in OwnPositions())
+            {
+                var inProfit = pos.NetProfit > 0;
+                if (!inProfit)
+                    continue;                                // never tighten a losing trade
+                var be = pos.EntryPrice;
+                var already = pos.StopLoss.HasValue &&
+                              ((pos.TradeType == TradeType.Buy && pos.StopLoss.Value >= be) ||
+                               (pos.TradeType == TradeType.Sell && pos.StopLoss.Value <= be));
+                if (already)
+                    continue;                                // already protected
+                var r = ModifyPosition(pos, be, pos.TakeProfit);
+                if (r.IsSuccessful)
+                    Print("NEWS PROTECT: {0} — stop moved to breakeven {1:F2} ({2}).",
+                          pos.Id, be, evt);
+                else
+                    Print("NEWS PROTECT failed on {0}: {1}", pos.Id, r.Error);
+            }
+        }
+
+        private int TierMinutes(int tier)
+        {
+            if (tier == 1) return Tier1Minutes;
+            if (tier == 2) return Tier2Minutes;
+            return Tier3Minutes;
+        }
+
         private bool InNewsWindow(DateTime nowUtc, out string eventName)
         {
             eventName = null;
@@ -293,14 +452,31 @@ namespace cAlgo.Robots
 
             foreach (var e in snapshot)
             {
+                var w = TierMinutes(e.Tier);
+                if (w <= 0)
+                    continue;
                 var mins = (nowUtc - e.UtcTime).TotalMinutes;
-                if (mins >= -BlockBeforeMinutes && mins <= BlockAfterMinutes)
+                if (mins >= -w && mins <= w)
                 {
-                    eventName = string.Format("{0} {1} at {2:HH:mm} UTC", e.Currency, e.Title, e.UtcTime);
+                    eventName = string.Format("T{0} {1} {2} at {3:HH:mm} UTC",
+                                              e.Tier, e.Currency, e.Title, e.UtcTime);
                     return true;
                 }
             }
             return false;
+        }
+
+        // How much of the week this configuration actually blocks. Printed so
+        // the cost of "watch everything" is visible instead of hidden.
+        private string CoverageReport(List<NewsEvent> evs)
+        {
+            var t1 = evs.Count(e => e.Tier == 1);
+            var t2 = evs.Count(e => e.Tier == 2);
+            var t3 = evs.Count(e => e.Tier == 3);
+            var minutes = t1 * 2.0 * Tier1Minutes + t2 * 2.0 * Tier2Minutes + t3 * 2.0 * Tier3Minutes;
+            var pct = minutes / (7.0 * 24.0 * 60.0) * 100.0;   // upper bound; windows can overlap
+            return string.Format("{0} events (T1 {1}, T2 {2}, T3 {3}) — blocks at most {4:F0}h/week (~{5:F0}% of the week)",
+                                 evs.Count, t1, t2, t3, minutes / 60.0, pct);
         }
 
         private string NewsStatusLine()
@@ -322,6 +498,7 @@ namespace cAlgo.Robots
             _lastFetchUtc = Server.TimeInUtc;
 
             var url = CalendarUrl;
+            var speakers = WatchSpeakers;
             var watch = (WatchCurrencies ?? "USD")
                 .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(s => s.Trim().ToUpperInvariant())
@@ -339,8 +516,8 @@ namespace cAlgo.Robots
                     {
                         wc.Headers.Add("User-Agent", "Mozilla/5.0 (compatible; cTraderBot/1.0)");
                         var json = wc.DownloadString(url);
-                        parsed = ParseCalendar(json, watch);
-                        status = string.Format("loaded {0} high-impact events", parsed.Count);
+                        parsed = ParseCalendar(json, watch, speakers);
+                        status = CoverageReport(parsed);
                     }
                 }
                 catch (Exception ex)
@@ -360,8 +537,12 @@ namespace cAlgo.Robots
         }
 
         // Minimal, dependency-free JSON reader for the flat calendar array.
-        // Keeps only HIGH-impact events in the watched currencies.
-        private static List<NewsEvent> ParseCalendar(string json, List<string> watch)
+        // Keeps EVERY event that can move gold and sorts it into a tier:
+        //   tier 1 — reprices gold by itself (FOMC/NFP/CPI/Powell/rate decisions)
+        //   tier 2 — any other high-impact print in a watched currency
+        //   tier 3 — anyone speaking, plus medium-impact prints
+        private static List<NewsEvent> ParseCalendar(string json, List<string> watch,
+                                                     bool watchSpeakers)
         {
             var list = new List<NewsEvent>();
             if (string.IsNullOrEmpty(json))
@@ -377,16 +558,11 @@ namespace cAlgo.Robots
                 var obj = json.Substring(start, end - start + 1);
                 idx = end + 1;
 
-                var impact = Field(obj, "impact");
-                if (impact == null || impact.IndexOf("High", StringComparison.OrdinalIgnoreCase) < 0)
-                    continue;
-
-                var cur = Field(obj, "country");
-                if (cur == null)
-                    cur = Field(obj, "currency");
+                var cur = Field(obj, "country") ?? Field(obj, "currency");
                 if (cur == null)
                     continue;
-                if (watch.Count > 0 && !watch.Contains(cur.Trim().ToUpperInvariant()))
+                cur = cur.Trim().ToUpperInvariant();
+                if (watch.Count > 0 && !watch.Contains(cur))
                     continue;
 
                 var dateStr = Field(obj, "date");
@@ -397,11 +573,32 @@ namespace cAlgo.Robots
                         System.Globalization.DateTimeStyles.AssumeUniversal, out dto))
                     continue;
 
+                var title = Field(obj, "title") ?? "event";
+                var impact = Field(obj, "impact") ?? "";
+                var upper = title.ToUpperInvariant();
+                var isHigh = impact.IndexOf("High", StringComparison.OrdinalIgnoreCase) >= 0;
+                var isMedium = impact.IndexOf("Medium", StringComparison.OrdinalIgnoreCase) >= 0;
+                var isSpeaker = SpeakerKeywords.Any(k => upper.Contains(k));
+                var isCritical = Tier1Keywords.Any(k => upper.Contains(k));
+
+                int tier;
+                if (isCritical && cur == "USD")
+                    tier = 1;                       // gold-critical US event
+                else if (isCritical || isHigh)
+                    tier = 2;                       // big print, or critical abroad
+                else if (isSpeaker && watchSpeakers)
+                    tier = 3;                       // someone at a microphone
+                else if (isMedium && cur == "USD")
+                    tier = 3;                       // medium US data
+                else
+                    continue;                       // genuinely irrelevant to gold
+
                 list.Add(new NewsEvent
                 {
                     UtcTime = dto.UtcDateTime,
-                    Title = Field(obj, "title") ?? "event",
-                    Currency = cur
+                    Title = title,
+                    Currency = cur,
+                    Tier = tier
                 });
             }
             return list;

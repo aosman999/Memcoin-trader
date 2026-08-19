@@ -156,19 +156,31 @@ only honest proof.
 
 ### News agent (Aug 2026) — `tools/GoldEdgeNews.cs`
 
-Two independent layers on top of GoldEdge:
+Design constraint from the owner: news must **protect** the bot **without
+reducing how much it trades**, and must never close a trade — a print can
+pump gold as easily as dump it.
 
-1. **Shock veto (no network) — MEASURED, adopted.** A bar moving >2.5x ATR
-   blocks new entries for 3 bars. On the 30 virgin seeds, h1/RR4:
-   edge over chance +0.633 -> **+0.657**, win 58.8% -> 59.7%, worst-model
-   +0.716 -> **+0.736**. Small, consistent, better on both models.
-2. **Economic calendar (needs network) — REASONED, NOT backtested.** Downloads
-   this week's calendar and refuses entries in a -60/+60 min window around
-   every HIGH-impact USD event. Could not be certified: the simulator has no
-   economic calendar and this build environment blocks network, so the feed
-   is unverified here. Parser logic WAS validated against a realistic feed
-   sample (correct impact/currency filtering and UTC conversion).
+Measured on the 30 virgin seeds (h1, RR4), shock-driven analogue:
 
-Fail-safe: a failed/timed-out/garbage calendar fetch logs and leaves the bot
-trading on the shock veto alone — a dead feed can never freeze the bot or
-silently disable its safety. Requires AccessRights.FullAccess.
+| news policy | edge over chance | trades | verdict |
+|---|---|---|---|
+| none (GoldEdge) | +0.633 | 1530 | baseline |
+| **stop -> breakeven on news** | **+0.636** | **1532** | ADOPTED — free, no trades lost |
+| close position on news | +0.496 | 1658 | **REJECTED** — cuts winners short |
+| shock veto (blocks entries 3 bars) | +0.657 | 1304 | adopted, but costs ~15% of trades |
+
+So protection is **insurance, not edge**: it is ~neutral in the simulator,
+which does not model the slippage, spread blow-outs and gaps that make real
+news dangerous. Closing on news is the one clearly harmful option.
+
+**Coverage** — everything that moves gold, tiered: T1 FOMC/rate decisions/
+NFP/CPI/core PCE/Powell/testimony/Jackson Hole; T2 any other high-impact
+print; T3 anyone speaking (members, governors, minutes, panels) plus medium
+US data. Currencies USD (direct) + EUR/GBP/JPY/CNY (via the dollar).
+
+Entry blocking exists but defaults **OFF** (it costs trades). Fail-safe: a
+failed fetch logs and leaves the bot trading on the shock veto alone; fetch
+is off-thread and refreshes every 6h (inside the feed's 2-per-5-min limit).
+The calendar layer is reasoned, not backtested — no calendar in the sim, and
+this env blocks network; field names confirmed from feed docs and the parser
+was port-tested against a realistic sample.
