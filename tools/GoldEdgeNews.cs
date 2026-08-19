@@ -228,6 +228,7 @@ namespace cAlgo.Robots
         private List<NewsEvent> _events = new List<NewsEvent>();
         private DateTime _lastFetchUtc = DateTime.MinValue;
         private bool _fetchInFlight;
+        private bool _lastFetchOk;
         private string _newsStatus = "not fetched yet";
 
         private class NewsEvent
@@ -339,7 +340,12 @@ namespace cAlgo.Robots
             _barCount++;
 
             // refresh the calendar every 6 hours (fail-safe, off-thread)
-            if (UseCalendar && (Server.TimeInUtc - _lastFetchUtc).TotalHours >= 6.0)
+            // Normal refresh is 6-hourly. After a FAILED fetch (usually the
+            // feed's 2-downloads-per-5-minutes rate limit, which is easy to
+            // trip by restarting the bot) retry in 10 minutes instead of
+            // sitting blind for six hours.
+            var refreshHours = _lastFetchOk ? 6.0 : 0.17;
+            if (UseCalendar && (Server.TimeInUtc - _lastFetchUtc).TotalHours >= refreshHours)
                 BeginCalendarFetch();
 
             foreach (var pos in OwnPositions().ToList())
@@ -609,13 +615,16 @@ namespace cAlgo.Robots
                 }
                 catch (Exception ex)
                 {
-                    status = "FETCH FAILED (" + ex.GetType().Name + ") — trading on shock veto only";
+                    status = "FETCH FAILED (" + ex.GetType().Name + ") — retrying in 10 min; "
+                           + "trading on shock veto meanwhile. If this repeats, you are likely "
+                           + "hitting the feed's 2-downloads-per-5-minutes limit by restarting.";
                 }
 
                 lock (_newsLock)
                 {
                     if (parsed != null && parsed.Count > 0)
                         _events = parsed;            // keep the old list if the new one is empty
+                    _lastFetchOk = parsed != null && parsed.Count > 0;
                     _newsStatus = status;
                     _fetchInFlight = false;
                 }
