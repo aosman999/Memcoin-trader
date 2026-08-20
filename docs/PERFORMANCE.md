@@ -304,3 +304,32 @@ Full sweep (on the 9100-9129 tuning set) showing the lever:
 | eff.40 | 1.0-2.0 | 56.4 | +0.325 |
 | eff.50 | 1.0-2.5 | 57.0 | +0.485 |
 | eff.55 +rise | 1.5-4.0 | 55.7 | +0.875 (only 4.9 tr/wk) |
+
+## Tuned for win rate > 60% (Aug 2026)
+
+Certified on 45 FRESH seeds (8200-8244), 5,476 trades:
+
+| config | win% | edge | worst-model | trades/wk | worst DD @5% | losing runs |
+|---|---|---|---|---|---|---|
+| eff.25 RR2.0-6.0 | 42.3 | +0.559 | +0.547 | 13.8 | 78% | 1/80 |
+| eff.50 RR1.0-2.5 | 56.6 | +0.522 | +0.492 | 8.2 | 57% | 0/90 |
+| **eff.60 RR1.0-2.0 (ADOPTED)** | **61.8** | +0.506 | +0.473 | 5.1 | **48%** | **0/90** |
+| eff.55+rise RR1.0-2.0 | 60.4 | +0.483 | +0.466 | 6.2 | 43% | 0/90 |
+
+Each win-rate step was certified on a seed set never previously used — 7000-7039
+for the 56% config, 8200-8244 for this one — because the earlier 9100-9129
+holdout had become training data once it was used for tuning.
+
+**Where to stop.** Break-even win rate for a target of RR is `1/(1+RR)`, so a
+nearer target needs a higher win rate merely to break even. Measured:
+
+| RR range | win% | break-even% | margin | edge |
+|---|---|---|---|---|
+| 1.0-2.0 | 61.0 | 38.5 | +22.5 | +0.503 |
+| 0.8-1.6 | 64.0 | 43.8 | +20.1 | +0.388 |
+| 0.7-1.4 | 65.5 | 47.1 | +18.4 | +0.323 |
+| 0.5-1.0 | 69.0 | 55.3 | **+13.7** | **+0.182** |
+
+A 69%-winning system that barely clears break-even is worse than a 62% one with
+real cushion — it only feels better. Do not chase the win rate past ~62% by
+shortening the target.

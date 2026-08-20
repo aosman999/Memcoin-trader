@@ -4,29 +4,31 @@
 // dump it — so this agent never closes a trade because news is coming.
 //
 // STRATEGY (unchanged from GoldEdge — certified on 30 virgin seeds):
-//   6-voter confluence, gated by trend quality (Kaufman efficiency >= 0.50
+//   6-voter confluence, gated by trend quality (Kaufman efficiency >= 0.60
 //   over 24 bars) and ADX >= 18. 15-MINUTE chart, 40-bar (10h) time stop.
-//   Target range 1:1-2.5:1 — TUNED FOR WIN RATE at the owner's request.
+//   Target range 1:1-2:1 — TUNED FOR WIN RATE at the owner's request.
 //
-// CERTIFIED on 40 FRESH seeds (7000-7039, used for nothing else), 7,621 trades:
-//   win rate  56.1%      edge +0.477 (worst-model +0.449)
-//   frequency 7.9 trades/week
-//   @5% risk: median x10.2, median drawdown 26%, worst 49%, 1/80 runs losing
+// CERTIFIED on 45 FRESH seeds (8200-8244, used for nothing else), 5,476 trades:
+//   win rate  61.8%      edge +0.506 (worst-model +0.473)
+//   frequency 5.1 trades/week
+//   @5% risk: median x4.9, median drawdown 19%, worst 48%, 0/90 runs losing
 //
-// WIN RATE IS SET BY THE TARGET, not by entry quality. A nearer target is hit
-// more often, so shrinking the adaptive range 2:1-6:1 -> 1:1-2.5:1 lifted the
-// win rate 42% -> 56%. The trade-off is real and worth knowing:
+// WIN RATE IS SET BY THE TARGET, not by entry quality — a nearer target is hit
+// more often. Shrinking the adaptive range and tightening the trend filter is
+// what moved it. The progression, each step certified on fresh seeds:
 //   eff.25 RR2.0-6.0   win 42.3%, edge +0.559, 13.8 tr/wk, worst DD 78%
-//   eff.50 RR1.0-2.5   win 56.1%, edge +0.477,  7.9 tr/wk, worst DD 49%  <-THIS
-// Some expectancy and frequency were given up; in exchange the drawdown nearly
-// halved and most trades now win, which is far easier to actually sit through.
+//   eff.50 RR1.0-2.5   win 56.6%, edge +0.522,  8.2 tr/wk, worst DD 57%
+//   eff.60 RR1.0-2.0   win 61.8%, edge +0.506,  5.1 tr/wk, worst DD 48%  <-THIS
 //
-// TIMEFRAME / FREQUENCY (30 virgin seeds, stop-relative spread cost):
-//   m15 eff.55 + ADX-rising  edge +0.974, 4.4 trades/wk, +0.859 R/day
-//   m15 eff.40 no-rise       edge +0.687, 9.0 trades/wk, +1.241 R/day
-//   m15 eff.25 THIS          edge +0.508, 13.6 trades/wk, +1.381 R/day
-//   m5 is worse on both counts (+0.590 edge, deeper drawdowns) — m15 is the
-//   sweet spot; h1 trades too rarely.
+// WHERE THIS STOPS WORKING — do not chase the win rate further. Break-even win
+// rate for a target of RR is 1/(1+RR), so a nearer target needs a higher win
+// rate just to break even. Measured: RR 0.5-1.0 buys a 69% win rate but edge
+// COLLAPSES to +0.182 and the margin over break-even shrinks from ~24 points
+// to ~14. A 69%-winning system that barely clears break-even is worse than a
+// 62% one with real cushion — it just feels better.
+//
+// TIMEFRAME: m15 is the sweet spot. m5 is worse on edge (+0.590) and has
+//   deeper drawdowns; h1 trades too rarely (2.2/wk); h4 is model-unstable.
 //
 // FREQUENCY x RISK — the constraint that actually binds. Nothing in this bot
 // caps trade count; the filter setting alone decides it. But compounding 30
@@ -47,9 +49,9 @@
 //   * STOP adapts to volatility: 1.5x ATR, clamped 0.4%-1.2%. A quiet tape
 //     gets a tight stop, a wild one gets room, instead of a flat 0.6%.
 //   * TARGET adapts to conviction: ADX strength + trend quality scale the
-//     reward:risk from 2:1 (marginal setup) to 6:1 (powerful one).
-//   Together:  fixed 0.6%/4:1  edge +0.633, worst-model +0.505
-//              ADAPTIVE both   edge +0.826, worst-model +0.699  (+30%)
+//     reward:risk across the configured range (now 1:1-2:1).
+//   Adaptive stop + adaptive target measured +30% edge over fixed 0.6%/4:1
+//   (edge +0.633 -> +0.826, worst-model +0.505 -> +0.699).
 //
 // NO EARLY EXIT — deliberately. Every "close when the market changes" rule
 // was tested and none helped: a 5/6 trend flip fired 1 time in 1530 trades,
@@ -136,7 +138,7 @@ namespace cAlgo.Robots
         [Parameter("Trend quality window (bars)", DefaultValue = 24, MinValue = 4, MaxValue = 200, Group = "Trend filter")]
         public int EfficiencyWindow { get; set; }
 
-        [Parameter("Min trend quality (0-1)", DefaultValue = 0.50, MinValue = 0.0, MaxValue = 1.0, Group = "Trend filter")]
+        [Parameter("Min trend quality (0-1)", DefaultValue = 0.60, MinValue = 0.0, MaxValue = 1.0, Group = "Trend filter")]
         public double EfficiencyMin { get; set; }
 
         [Parameter("News: use economic calendar", DefaultValue = true, Group = "News agent")]
@@ -237,7 +239,7 @@ namespace cAlgo.Robots
         [Parameter("Adaptive target: MIN reward:risk", DefaultValue = 1.0, MinValue = 0.5, MaxValue = 10.0, Group = "Exits")]
         public double MinRewardRisk { get; set; }
 
-        [Parameter("Adaptive target: MAX reward:risk", DefaultValue = 2.5, MinValue = 0.5, MaxValue = 20.0, Group = "Exits")]
+        [Parameter("Adaptive target: MAX reward:risk", DefaultValue = 2.0, MinValue = 0.5, MaxValue = 20.0, Group = "Exits")]
         public double MaxRewardRisk { get; set; }
 
         [Parameter("Reward:risk — used when adaptive target is OFF", DefaultValue = 4.0, MinValue = 0.5, MaxValue = 10.0, Group = "Exits")]
