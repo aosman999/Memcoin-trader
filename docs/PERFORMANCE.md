@@ -274,3 +274,33 @@ Adopted: eff 0.25 / ADX 15 (~13.6 trades/week, edge +0.508) with risk
 defaulting to **5%**, plus a startup warning when risk > 6%. Timeframe m15
 confirmed best: m5 is worse on edge (+0.590) and drawdown; h1 trades too
 rarely (2.2/wk).
+
+## Tuned for win rate > 55% (Aug 2026)
+
+Owner wanted a win rate above 55%. Win rate is governed by the TARGET, not by
+entry quality — a nearer target gets hit more often. Shrinking the adaptive
+reward:risk range and tightening the trend filter does it.
+
+Certified on 40 FRESH seeds (7000-7039, never used in any prior tuning; the
+earlier 9100-9129 holdout had become training data by this point), 7,621 trades:
+
+| config | win% | edge | trades/wk | worst DD @5% | losing runs |
+|---|---|---|---|---|---|
+| eff.25 RR2.0-6.0 (previous) | 42.3 | +0.559 | 13.8 | 78% | 1/80 |
+| **eff.50 RR1.0-2.5 (ADOPTED)** | **56.1** | +0.477 | 7.9 | **49%** | 1/80 |
+| eff.45 RR1.0-2.5 | 54.4 | +0.433 | 10.0 | 59% | 0/80 |
+
+The trade is honest: ~0.08R of expectancy and ~6 trades/week given up. In
+return the win rate rises 14 points and worst-case drawdown nearly halves
+(78% -> 49%), which matters more for whether a human keeps running the system.
+Edge remains well clear of the ~+0.3 fragile zone.
+
+Full sweep (on the 9100-9129 tuning set) showing the lever:
+
+| filter | RR range | win% | edge |
+|---|---|---|---|
+| eff.25 | 2.0-6.0 | 44.9 | +0.508 |
+| eff.25 | 1.0-2.0 | 53.3 | +0.315 |
+| eff.40 | 1.0-2.0 | 56.4 | +0.325 |
+| eff.50 | 1.0-2.5 | 57.0 | +0.485 |
+| eff.55 +rise | 1.5-4.0 | 55.7 | +0.875 (only 4.9 tr/wk) |
