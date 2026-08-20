@@ -8,24 +8,34 @@
 //   over 24 bars) and ADX >= 18. 15-MINUTE chart, 40-bar (10h) time stop.
 //   Target range 1:1-2:1 — TUNED FOR WIN RATE at the owner's request.
 //
-// CERTIFIED on 45 FRESH seeds (8200-8244, used for nothing else), 5,476 trades:
-//   win rate  61.8%      edge +0.506 (worst-model +0.473)
-//   frequency 5.1 trades/week
-//   @5% risk: median x4.9, median drawdown 19%, worst 48%, 0/90 runs losing
+// CERTIFIED on 50 FRESH seeds (6500-6549, used for nothing else), 4,135 trades:
+//   win rate  66.4%      edge +0.367 (worst-model +0.312)
+//   frequency 3.4 trades/week
+//   @5% risk: median drawdown 12%, worst 33%, 0 of 100 runs lost money
 //
-// WIN RATE IS SET BY THE TARGET, not by entry quality — a nearer target is hit
-// more often. Shrinking the adaptive range and tightening the trend filter is
-// what moved it. The progression, each step certified on fresh seeds:
-//   eff.25 RR2.0-6.0   win 42.3%, edge +0.559, 13.8 tr/wk, worst DD 78%
-//   eff.50 RR1.0-2.5   win 56.6%, edge +0.522,  8.2 tr/wk, worst DD 57%
-//   eff.60 RR1.0-2.0   win 61.8%, edge +0.506,  5.1 tr/wk, worst DD 48%  <-THIS
+// TWO DIFFERENT WAYS TO RAISE WIN RATE — only one of them is honest.
 //
-// WHERE THIS STOPS WORKING — do not chase the win rate further. Break-even win
-// rate for a target of RR is 1/(1+RR), so a nearer target needs a higher win
-// rate just to break even. Measured: RR 0.5-1.0 buys a 69% win rate but edge
-// COLLAPSES to +0.182 and the margin over break-even shrinks from ~24 points
-// to ~14. A 69%-winning system that barely clears break-even is worse than a
-// 62% one with real cushion — it just feels better.
+//   (a) Shorten the target. Works, but it is partly an illusion: break-even
+//       win rate is 1/(1+RR), so a nearer target NEEDS a higher win rate just
+//       to break even. Measured: RR 0.5-1.0 buys a 69% win rate while edge
+//       COLLAPSES to +0.182 and margin over break-even falls from ~24 points
+//       to ~14. Do not chase win rate this way.
+//
+//   (b) Stop getting stopped out by noise. This is real. Placing the stop
+//       beyond the recent swing low/high instead of an arbitrary ATR distance
+//       means price must break actual STRUCTURE to end the trade. The target
+//       ratio is untouched at 1:1-2:1, so nothing is given away:
+//         ATR stop    win 61.7%, edge +0.501, worst DD 47%, 3/100 runs losing
+//         SWING stop  win 66.4%, edge +0.367, worst DD 33%, 0/100 runs losing
+//       +4.7 points of win rate, drawdown down a third, and no run lost money.
+//       Some expectancy is traded for that consistency — a swing stop is often
+//       wider, so each unit of risk buys a smaller multiple.
+//
+// Progression, each step certified on a seed set never previously used:
+//   eff.25 RR2.0-6.0 ATR    win 42.3%, edge +0.559, 13.8 tr/wk, DD 78%
+//   eff.50 RR1.0-2.5 ATR    win 56.6%, edge +0.522,  8.2 tr/wk, DD 57%
+//   eff.60 RR1.0-2.0 ATR    win 61.8%, edge +0.506,  5.1 tr/wk, DD 48%
+//   eff.60 RR1.0-2.0 SWING  win 66.4%, edge +0.367,  3.4 tr/wk, DD 33%  <-THIS
 //
 // TIMEFRAME: m15 is the sweet spot. m5 is worse on edge (+0.590) and has
 //   deeper drawdowns; h1 trades too rarely (2.2/wk); h4 is model-unstable.
@@ -213,7 +223,22 @@ namespace cAlgo.Robots
         // clamped so it can never get absurdly tight or wide. MEASURED on 30
         // virgin seeds with stop-relative spread cost: edge +0.633 -> +0.773,
         // worst-model +0.505 -> +0.646.
-        [Parameter("Adaptive stop (volatility-based)", DefaultValue = true, Group = "Exits")]
+        // STRUCTURE STOP — the biggest win-rate gain found that does NOT
+        // shorten the target. The stop sits just beyond the recent swing
+        // low/high instead of an arbitrary ATR distance, so ordinary noise no
+        // longer reaches it. Certified on 50 fresh seeds, target ratio
+        // unchanged at 1:1-2:1: win rate 61.7% -> 66.4%, worst drawdown
+        // 47% -> 33%, and 0 of 100 runs lost money (was 3).
+        [Parameter("Stop: use swing structure (else ATR)", DefaultValue = true, Group = "Exits")]
+        public bool UseSwingStop { get; set; }
+
+        [Parameter("Swing stop: lookback bars", DefaultValue = 20, MinValue = 4, MaxValue = 100, Group = "Exits")]
+        public int SwingLookback { get; set; }
+
+        [Parameter("Swing stop: buffer beyond the swing (%)", DefaultValue = 5.0, MinValue = 0, MaxValue = 50, Group = "Exits")]
+        public double SwingBufferPercent { get; set; }
+
+        [Parameter("Adaptive stop (volatility-based) — used when swing stop is OFF", DefaultValue = true, Group = "Exits")]
         public bool AdaptiveStop { get; set; }
 
         [Parameter("Adaptive stop: ATR multiple", DefaultValue = 1.5, MinValue = 0.2, MaxValue = 6.0, Group = "Exits")]
@@ -222,7 +247,7 @@ namespace cAlgo.Robots
         [Parameter("Adaptive stop: MIN stop (%)", DefaultValue = 0.4, MinValue = 0.05, Group = "Exits")]
         public double MinStopPercent { get; set; }
 
-        [Parameter("Adaptive stop: MAX stop (%)", DefaultValue = 1.2, MinValue = 0.1, Group = "Exits")]
+        [Parameter("Adaptive stop: MAX stop (%)", DefaultValue = 1.4, MinValue = 0.1, Group = "Exits")]
         public double MaxStopPercent { get; set; }
 
         [Parameter("Stop loss (%) — used when adaptive stop is OFF", DefaultValue = 0.6, MinValue = 0.05, Group = "Exits")]
@@ -337,9 +362,12 @@ namespace cAlgo.Robots
                   VotesNeeded, AdxMin, RequireAdxRising ? " and rising" : "",
                   EfficiencyMin, EfficiencyWindow);
             Print("Exit: stop {0} | target {1} | max hold {2} bars | risk {3}%",
-                  AdaptiveStop
-                    ? string.Format("ADAPTIVE {0}x ATR clamped {1}-{2}%", StopAtrMult, MinStopPercent, MaxStopPercent)
-                    : string.Format("fixed {0}%", StopPercent),
+                  UseSwingStop
+                    ? string.Format("SWING structure ({0}-bar, +{1}% buffer, clamped {2}-{3}%)",
+                                    SwingLookback, SwingBufferPercent, MinStopPercent, MaxStopPercent)
+                    : AdaptiveStop
+                      ? string.Format("ADAPTIVE {0}x ATR clamped {1}-{2}%", StopAtrMult, MinStopPercent, MaxStopPercent)
+                      : string.Format("fixed {0}%", StopPercent),
                   AdaptiveTarget
                     ? string.Format("ADAPTIVE {0}:1-{1}:1 by conviction", MinRewardRisk, MaxRewardRisk)
                     : string.Format("fixed {0}:1", RewardRisk),
@@ -817,6 +845,28 @@ namespace cAlgo.Robots
             return 60;
         }
 
+        // Distance from entry to just beyond the recent swing low (for longs)
+        // or high (for shorts). Uses real bar highs/lows rather than closes,
+        // which is where the structure actually sits.
+        private double SwingStopDistance(int direction, double price)
+        {
+            var n = Math.Min(SwingLookback, Bars.ClosePrices.Count - 1);
+            if (n < 2)
+                return price * (MinStopPercent / 100.0);
+            double extreme = direction > 0 ? double.MaxValue : double.MinValue;
+            for (var k = 0; k <= n; k++)
+            {
+                var lo = Bars.LowPrices.Last(k);
+                var hi = Bars.HighPrices.Last(k);
+                if (direction > 0) extreme = Math.Min(extreme, lo);
+                else extreme = Math.Max(extreme, hi);
+            }
+            var raw = direction > 0 ? price - extreme : extreme - price;
+            if (raw <= 0)
+                return price * (MinStopPercent / 100.0);
+            return raw * (1.0 + SwingBufferPercent / 100.0);
+        }
+
         private double TrendQuality(int window)
         {
             var c = Bars.ClosePrices;
@@ -834,14 +884,21 @@ namespace cAlgo.Robots
             var price = direction > 0 ? Symbol.Ask : Symbol.Bid;
             if (price <= 0) return;
 
-            // ---- adaptive stop: track live volatility, clamped -------------
+            // ---- stop selection --------------------------------------------
+            var loClamp = price * (MinStopPercent / 100.0);
+            var hiClamp = price * (MaxStopPercent / 100.0);
             double stopDist;
-            if (AdaptiveStop)
+            if (UseSwingStop)
+            {
+                // Place the stop just past the recent swing extreme. Price has
+                // to break actual structure to stop us out, not merely wobble.
+                stopDist = SwingStopDistance(direction, price);
+                stopDist = Math.Max(loClamp, Math.Min(hiClamp, stopDist));
+            }
+            else if (AdaptiveStop)
             {
                 var atr = _atr.Result.Last(0);
-                var lo = price * (MinStopPercent / 100.0);
-                var hi = price * (MaxStopPercent / 100.0);
-                stopDist = atr > 0 ? Math.Max(lo, Math.Min(hi, StopAtrMult * atr)) : lo;
+                stopDist = atr > 0 ? Math.Max(loClamp, Math.Min(hiClamp, StopAtrMult * atr)) : loClamp;
             }
             else
             {
@@ -878,7 +935,7 @@ namespace cAlgo.Robots
             if (result.IsSuccessful)
                 Print("OPEN {0} {1} units @ {2:F2} | stop {3:F2} ({4:F2}%{5}) | target {6:F2} ({7:F2}:1{8}) | {9}/6 votes, ADX {10:F0}, quality {11:F2}",
                       side, units, price, price - direction * stopDist,
-                      stopDist / price * 100.0, AdaptiveStop ? " adaptive" : "",
+                      stopDist / price * 100.0, UseSwingStop ? " swing" : (AdaptiveStop ? " adaptive" : ""),
                       price + direction * tpDist, rrUsed, AdaptiveTarget ? " adaptive" : "",
                       votes, adx, quality);
             else

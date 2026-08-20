@@ -333,3 +333,41 @@ nearer target needs a higher win rate merely to break even. Measured:
 A 69%-winning system that barely clears break-even is worse than a 62% one with
 real cushion — it only feels better. Do not chase the win rate past ~62% by
 shortening the target.
+
+## Higher win rate WITHOUT shortening the target (Aug 2026)
+
+Owner asked for a higher win rate but explicitly not by lowering the TP — i.e.
+improve the entry/exit mechanics, not the arithmetic. Correct instinct: a
+nearer target raises win rate partly as an illusion, since break-even win rate
+is `1/(1+RR)`.
+
+Held the target ratio fixed at 1.0-2.0 and tested entry filters and stop
+placement (30-seed tuning set, then certified on 50 FRESH seeds 6500-6549):
+
+| change (target ratio unchanged) | win% | delta | edge | tr/wk |
+|---|---|---|---|---|
+| baseline (ATR stop, eff.60) | 62.7 | — | +0.543 | 5.0 |
+| **swing-structure stop (20-bar)** | **68.1** | **+5.4** | +0.439 | 3.5 |
+| eff 0.70 | 64.8 | +2.1 | +0.594 | 2.4 |
+| wider ATR stop 2.5x | 63.6 | +0.9 | +0.557 | 4.9 |
+| EMA200 alignment | 63.1 | +0.3 | +0.554 | 4.7 |
+| MACD still growing | 62.8 | +0.1 | +0.560 | 3.9 |
+| 6/6 votes | 62.2 | −0.6 | +0.538 | 4.4 |
+| volatility not collapsed | 61.5 | −1.2 | +0.522 | 3.4 |
+| "not overextended" | — | starved to 1 trade | | |
+
+**Certified (50 fresh seeds, 4,135 trades):**
+
+| | ATR stop | **SWING stop (adopted)** |
+|---|---|---|
+| win rate | 61.7% | **66.4%** |
+| edge | +0.501 | +0.367 |
+| worst drawdown @5% | 47% | **33%** |
+| runs that lost money | 3/100 | **0/100** |
+
+The swing stop wins because price must break real structure to stop the trade
+out, rather than merely wobbling an arbitrary ATR distance. It is usually wider
+than the ATR stop, so each unit of risk buys a smaller multiple — that is the
+honest cost of the extra consistency.
+
+Higher-win variants exist (swing + eff.70 = 69.1%) but fall to 1.7 trades/week.
