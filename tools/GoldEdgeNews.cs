@@ -1,158 +1,111 @@
-// GoldEdgeNews — GoldEdge (the holdout-certified custom strategy) plus a NEWS
-// AGENT built on one principle: news must PROTECT the bot without reducing how
-// much it trades. News cuts both ways — a print can pump gold as easily as
-// dump it — so this agent never closes a trade because news is coming.
+// GoldEdgeNews — gold (XAU/USD) strategy + news agent. DEMO-ONLY, XAUUSD m15.
 //
-// STRATEGY (unchanged from GoldEdge — certified on 30 virgin seeds):
-//   6-voter confluence, gated by trend quality (Kaufman efficiency >= 0.60
-//   over 24 bars) and ADX >= 18. 15-MINUTE chart, 40-bar (10h) time stop.
-//   Target range 1:1-2:1 — TUNED FOR WIN RATE at the owner's request.
+// ============================ HOW IT TRADES ============================
+// ENTRY  3 voters (ema20>ema75, rsi14>50, close>close[-20]) must ALL agree,
+//        only when trend quality >= 0.45 and ADX >= 18, during 01-22 UTC.
+//        Trend quality = Kaufman efficiency (net move / path travelled),
+//        AVERAGED over 24/36/48/60/72 bars rather than read from one window.
+// STOP   just beyond the recent 12-bar swing low/high (+5% buffer), clamped
+//        0.4-1.4% of price. Binary — no trailing, no early exit.
+// TARGET adaptive 1.0-2.0 reward:risk, scaled by conviction.
+// SIZE   1.0% risk per trade, up to 14 at once = 14% maximum exposure.
+//        -15% daily loss stop. 40-bar (10h) time stop.
+// NEWS   Forex Factory calendar, 9 currencies + oil. Moves the stop to
+//        breakeven before an event when ALREADY in profit, and vetoes entries
+//        during price shocks. It NEVER closes a trade: news pumps gold as
+//        often as it dumps it, and closing on news measured clearly worse.
 //
-// CERTIFIED on 50 FRESH seeds (2200-2249, used for nothing else), 11,897 trades:
-//   win rate  71.3%      edge +0.584 (worst-model +0.498)
-//   frequency 9.9 trades/week  (48-bar trend window, 10 concurrent positions)
-//   @1.5% risk: median drawdown 12%, worst 37%, 0 of 100 runs lost money
+// ========================= CERTIFIED PERFORMANCE ========================
+// 50 virgin seeds (3500-3549), two market models, 7,292 trades. SIMULATED.
+//   win rate   70.3%
+//   frequency  28.7 trades/week
+//   edge       +0.572 over a random-entry baseline (worst model +0.481)
+//   drawdown   median 8%, worst 30%, at 1.0% risk
 //
-// TWO DIFFERENT WAYS TO RAISE WIN RATE — only one of them is honest.
+// Scored as EDGE OVER RANDOM because a coin flip earns +0.11 to +0.28R on
+// these simulators — raw returns from any trend strategy are inflated here.
+// Spread is charged relative to the stop (spread/stop_distance), never as a
+// flat per-trade fee, which would secretly reward tight stops.
 //
-//   (a) Shorten the target. Works, but it is partly an illusion: break-even
-//       win rate is 1/(1+RR), so a nearer target NEEDS a higher win rate just
-//       to break even. Measured: RR 0.5-1.0 buys a 69% win rate while edge
-//       COLLAPSES to +0.182 and margin over break-even falls from ~24 points
-//       to ~14. Do not chase win rate this way.
+// ===================== CORRECTIONS TO EARLIER BUILDS ====================
+// Earlier versions of this file quoted win rates around 71-76%. Those were
+// overstated, for two reasons, both now fixed:
 //
-//   (b) Stop getting stopped out by noise. This is real. Placing the stop
-//       beyond the recent swing low/high instead of an arbitrary ATR distance
-//       means price must break actual STRUCTURE to end the trade. The target
-//       ratio is untouched at 1:1-2:1, so nothing is given away:
-//         ATR stop    win 61.7%, edge +0.501, worst DD 47%, 3/100 runs losing
-//         SWING stop  win 66.4%, edge +0.367, worst DD 33%, 0/100 runs losing
-//       +4.7 points of win rate, drawdown down a third, and no run lost money.
-//       Some expectancy is traded for that consistency — a swing stop is often
-//       wider, so each unit of risk buys a smaller multiple.
+//   1. THE BACKTESTER RESOLVED EXITS ON BAR CLOSES ONLY. A stop touched
+//      mid-bar that recovered before the close was scored as never hit. A real
+//      resting stop fills on touch. Worth -1.8 points of win rate, and the
+//      error ran in the direction that flattered the strategy. Exits are now
+//      resolved every minute.
+//   2. SEED LUCK. A headline figure came from one 50-path sample; another
+//      sample gives ~3 points less under identical rules. Win rate carries
+//      +/-2-3 points of sampling noise and should never be quoted as exact.
 //
-//   (c) Stop skipping signals. Holding ONE trade for up to 10h made the bot
-//       sleep through valid setups. Allowing several at once uses the same
-//       entries — so win rate is unaffected — and roughly doubles trade count:
-//         1 position  win 64.8%, 3.7 tr/wk, edge +0.422, worst DD 29%
-//         3 positions win 66.7%, 7.5 tr/wk, edge +0.484, worst DD 35% (@3%)
-//       Win rate and edge both went UP. The only thing given away is exposure
-//       (3 x 3% = 9% at risk vs 5% for one), which is why risk drops to 3%.
+// All A/B comparisons survived the correction (the bias was uniform across
+// configurations) — but the absolute numbers were wrong and are restated here.
 //
-// Progression, each step certified on a seed set never previously used:
-//   eff.25 RR2.0-6.0 ATR      win 42.3%, edge +0.559, 13.8 tr/wk, DD 78%
-//   eff.50 RR1.0-2.5 ATR      win 56.6%, edge +0.522,  8.2 tr/wk, DD 57%
-//   eff.60 RR1.0-2.0 ATR      win 61.8%, edge +0.506,  5.1 tr/wk, DD 48%
-//   eff.60 RR1.0-2.0 SWING    win 66.4%, edge +0.367,  3.4 tr/wk, DD 33%
-//   + 3 CONCURRENT @3% risk   win 66.7%, edge +0.484,  7.5 tr/wk, DD 35%
-//   + eff.55, 4 pos, session  win 67.4%, edge +0.498, 10.8 tr/wk, DD 49% <-THIS
+// ========================== WHY THESE SETTINGS =========================
+// Measured on the corrected harness, virgin seeds, all else held equal.
 //
-// RESEARCH PASS into professional gold trading (Aug 2026) — what survived
-// measurement and what did not. Every claim was tested on both market models
-// against a random-entry baseline; the failures matter as much as the wins.
+// TREND QUALITY IS THE WHOLE FILTER. ADX, the vote count and the session
+// window barely change anything — loosening ADX from 18 to 0 moved trade count
+// 28.2 -> 28.9/wk and edge +0.534 -> +0.525. The efficiency ratio subsumes
+// them. It is also what keeps the bot out of chop: ADX read 29-47 ("strong")
+// through a whole flat afternoon where efficiency correctly read 0.22-0.27.
 //
-//   ADOPTED  Skip the dead hours around the daily close (trade 01-22 UTC).
-//            edge +0.463 -> +0.480, win 65.5% -> 66.0%.
+// THE THRESHOLD IS THE FREQUENCY DIAL, and looser is not automatically worse:
+//        eff >= 0.50   11.4 tr/wk   edge +0.648
+//        eff >= 0.45   18.6 tr/wk   edge +0.589
+//        eff >= 0.40   28.2 tr/wk   edge +0.534
+//        eff >= 0.30   56.2 tr/wk   edge +0.429
+//   Edge decays gracefully while trade count multiplies. Below about +0.3R the
+//   cushion stops reliably covering real-world slippage — that is the floor,
+//   not the win rate.
 //
-//   REJECTED "Only trade the 12-16 UTC London/NY overlap, where gold sets its
-//            daily high/low ~70% of the time." Cut trades SIX-FOLD (15.8 ->
-//            2.6/wk) and LOWERED edge to +0.385. The session is real; making
-//            it an exclusive filter is not.
+// MORE TRADES AT A SMALLER SIZE BEATS FEWER AT A LARGER ONE. Holding drawdown
+// fixed and buying frequency with the threshold while paying for it with risk:
+//        eff.50 gap2 @1.50%   11.2 tr/wk   worst DD 31%   growth x1.24
+//        eff.45 gap1 @1.00%   28.7 tr/wk   worst DD 30%   growth x1.46
+//   Same drawdown, 2.6x the trades, more growth, and lower total exposure
+//   (14 x 1.0% = 14%, versus 10 x 1.5% = 15%).
 //
-//   REJECTED Avoiding the 4pm London fix. Exactly neutral (+0.464 vs +0.463).
+// ENSEMBLE TREND QUALITY, not a single window. A sweep picked 48 bars, but 48
+//   turned out to be a PEAK rather than a plateau — its neighbours all scored
+//   clearly worse, the signature of a partly-lucky parameter. Averaging the
+//   whole family is better on win rate, edge AND drawdown:
+//        single window 48    win 70.0%, edge +0.620, worst DD 30%
+//        mean of 5 windows   win 73.0%, edge +0.656, worst DD 21%
+//   The window set is deliberately fixed, not five new tunable knobs.
 //
-//   REJECTED LIQUIDITY SWEEPS / stop-hunt reversals — the most popular idea in
-//            retail gold content, claimed at 60-70% win. Measured:
-//              raw sweep            win 41.8%, edge -0.178  (loses money)
-//              + structure shift    win 43.6%, edge -0.159
-//              + trend agreement    win 49.9%, edge -0.025
-//              added to this bot    win 61.2%, edge +0.323  (DILUTES it)
-//            Not only unprofitable alone — bolting it on made the working
-//            strategy measurably worse. Caveat: this simulator does not model
-//            order-flow/stop-hunt dynamics, so treat as strong evidence
-//            against, not proof.
+// ENTRIES DECIDE ON BAR CLOSE, and this is deliberate. Evaluating mid-bar
+//   costs 0.09-0.14R per trade to signal flicker — a setup with all three
+//   votes at minute 7 need not still have them at minute 15. It does trade
+//   more and grow faster, but risk-matched it is identical to simply turning
+//   the risk dial up, so it buys nothing and pays in per-trade edge.
 //
-// TIMEFRAME: m15 is the sweet spot. m5 is worse on edge (+0.590) and has
-//   deeper drawdowns; h1 trades too rarely (2.2/wk); h4 is model-unstable.
+// NO EARLY EXIT. Every "close when the market changes" rule was tested and
+//   none helped. An ADX-fall exit was the worst idea measured: it fired 1,144
+//   times and dumped winners. The time stop already ends trades before a real
+//   reversal arrives.
 //
-// FREQUENCY x RISK — the constraint that actually binds. Nothing in this bot
-// caps trade count; the filter setting alone decides it. But compounding 30
-// virgin seeds over 60 days shows drawdown, not the daily stop, is the limit:
-//        max frequency @ 10% risk -> median DD 74%, WORST 97% (account dead)
-//        max frequency @  5% risk -> median DD 47%, worst 81%
-//        max frequency @  2% risk -> median DD 22%, worst 46%
-//   The -15% daily stop caps ONE day; it cannot stop bad days compounding.
-//   Trading often is fine. Trading often AND large is what kills the account.
-//   Hence risk defaults to 3% here (x3 concurrent = 9% maximum exposure).
+// ALSO REJECTED after measurement: liquidity-sweep/stop-hunt reversals (lose
+//   money alone AND dilute this strategy), the 12-16 UTC overlap as an
+//   exclusive filter (cut trades six-fold), partial take-profit ladders (raise
+//   win rate, cut money), trailing stops, EMA200 alignment, mean reversion,
+//   and closing positions on news. See docs/PERFORMANCE.md for the full list —
+//   checking it first saves re-discovering the same losers.
 //
-//   CORRECTION to an earlier build: it said h1 beat m15. That held with a
-//   FIXED stop. With the ADAPTIVE (ATR) stop, m15 beats h1 on BOTH edge and
-//   frequency (+0.974 vs +0.826 at the same filter) because the stop sizes
-//   itself to m15 volatility instead of wearing an h1-sized 0.6%.
+// ============================== CAVEATS ================================
+// Every number above is SIMULATED on two synthetic gold models. They contain
+// no gaps, no spread widening and no spikes, so they cannot show the tail risk
+// that matters most: several correlated positions gapping through their stops
+// together. Live demo fills are the only evidence that settles this.
 //
-// ADAPTIVE EXITS (measured on 30 virgin seeds, stop-relative spread cost):
-//   * STOP adapts to volatility: 1.5x ATR, clamped 0.4%-1.2%. A quiet tape
-//     gets a tight stop, a wild one gets room, instead of a flat 0.6%.
-//   * TARGET adapts to conviction: ADX strength + trend quality scale the
-//     reward:risk across the configured range (now 1:1-2:1).
-//   Adaptive stop + adaptive target measured +30% edge over fixed 0.6%/4:1
-//   (edge +0.633 -> +0.826, worst-model +0.505 -> +0.699).
+// ACCOUNT SIZE: gold's minimum trade is 1 oz, which risks roughly $18-64 per
+// trade at a 0.4-1.4% stop. On a $3,000 account, 1.0% risk is a $30 budget, so
+// the widest-stop setups will be skipped by the too-small guard. Below about
+// $2,500 this configuration cannot size properly at all.
 //
-// NO EARLY EXIT — deliberately. Every "close when the market changes" rule
-// was tested and none helped: a 5/6 trend flip fired 1 time in 1530 trades,
-// trend-quality collapse was slightly negative, and an ADX-fall exit cut the
-// edge from +0.633 to +0.369 by dumping winners early. The 10-bar time stop
-// already ends trades before a real reversal arrives.
-//
-// WHAT THE NEWS AGENT WATCHES: everything that moves gold, sorted into tiers —
-//   TIER 1  FOMC, rate decisions, NFP, CPI, core PCE, Powell/Fed-chair
-//           remarks, testimony, press conferences, Jackson Hole
-//   TIER 2  any other high-impact print, and tier-1-type events abroad
-//   TIER 3  anyone at a microphone (members, governors, presidents, minutes,
-//           panels, symposiums) plus medium-impact US data
-//   Currencies (all 9 on the feed, each with a real channel into gold):
-//   USD gold is priced in it · EUR/GBP/JPY/CHF their central banks move the
-//   dollar, and CHF is gold's twin safe haven (Switzerland refines most of
-//   the world's gold) · AUD/CAD/NZD commodity and risk proxies, Australia is
-//   a top-3 gold producer · CNY largest consumer nation and central-bank buyer.
-//   Watching more currencies is FREE here: protection only ever moves the stop
-//   to breakeven on an ALREADY-PROFITABLE trade, so it cannot turn a winner
-//   into a loser. Measured: protecting more often is mildly BETTER, not worse
-//   (edge +0.826 -> +0.840, worst-model +0.699 -> +0.739 at high frequency).
-//
-// WHAT IT DOES WITH THEM — measured on 30 virgin seeds (h1, RR4):
-//   * PROTECT (default ON). With a market-mover approaching and the trade
-//     ALREADY IN PROFIT, pull the stop to breakeven: a news spike can then
-//     only scratch the trade, not lose on it. A losing trade is left alone —
-//     tightening there would just lock in the loss. Entries are untouched, so
-//     trade frequency is unchanged.
-//       edge +0.633 -> +0.636, trade count 1530 -> 1532.
-//   * CLOSE ON NEWS — TESTED AND REJECTED. Edge collapses +0.633 -> +0.496:
-//     it cuts winners short, exactly as the owner predicted. Not implemented.
-//   * BLOCK ENTRIES (default OFF). Available, but it costs trades, which is
-//     what the owner asked to avoid. Turn on only for fewer, safer entries.
-//   * SHOCK VETO (default ON, no network). A bar moving >2.5x ATR blocks new
-//     entries for 3 bars and triggers protection. edge +0.633 -> +0.657.
-//
-// FAIL-SAFE: a failed, timed-out or garbage calendar fetch logs and leaves the
-// bot trading normally on the shock veto alone. A dead feed must never freeze
-// the bot or silently disable its safety. Fetch runs off the trading thread,
-// refreshes every 6h (well inside the feed's 2-per-5-min rate limit).
-//
-// REQUIRES AccessRights.FullAccess (network) — cTrader will ask you to approve
-// it on first build. That is what lets it fetch the calendar.
-//
-// HONEST LIMITS: the shock-driven numbers above are measured; the CALENDAR
-// layer is reasoned, not backtested — the simulator has no economic calendar
-// and this build environment blocks network, so the live feed is unverified
-// here (its field names were confirmed from the feed's docs, and the parser
-// was port-tested against a realistic sample). Watch your log for
-// "news: N events (T1/T2/T3...)" to confirm it loads. Note too that news
-// protection is INSURANCE against real-world slippage and gaps that the
-// simulator does not model — it is not, by itself, a source of edge.
-//
-// DEMO-ONLY. Install: cTrader -> Automate -> New cBot -> paste -> Build ->
-// approve network access -> add instance on XAUUSD **m15** -> Play.
+// Needs AccessRights.FullAccess (network) for the news calendar.
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -193,17 +146,14 @@ namespace cAlgo.Robots
         [Parameter("ADX rising lookback (bars)", DefaultValue = 3, MinValue = 1, MaxValue = 20, Group = "Signal")]
         public int AdxRisingLookback { get; set; }
 
-                // 48 bars = 12 hours of context. A LONGER window judges trend quality
-        // over a fuller stretch and was the single biggest win-rate lever found:
-        //   24-bar window  win 65.7%, edge +0.463
-        //   36-bar window  win 71.0%, edge +0.590
-        //   48-bar window  win 71.3%, edge +0.584   <- with 10 positions
-        // A 12-bar window is much worse (62.9%, +0.393): too short to tell a
-        // real trend from a wiggle.
+        // Only used when the ensemble below is switched OFF. A longer window
+        // judges trend quality over a fuller stretch; 12 bars is too short to
+        // tell a real trend from a wiggle. Prefer the ensemble — picking one
+        // window is exactly the mistake it exists to avoid.
         [Parameter("Trend quality window (bars)", DefaultValue = 48, MinValue = 4, MaxValue = 200, Group = "Trend filter")]
         public int EfficiencyWindow { get; set; }
 
-        [Parameter("Min trend quality (0-1)", DefaultValue = 0.50, MinValue = 0.0, MaxValue = 1.0, Group = "Trend filter")]
+        [Parameter("Min trend quality (0-1)", DefaultValue = 0.45, MinValue = 0.0, MaxValue = 1.0, Group = "Trend filter")]
         public double EfficiencyMin { get; set; }
 
         // Carver's overfitting rule, applied to our own tuning. A sweep picked
@@ -215,21 +165,12 @@ namespace cAlgo.Robots
         // The fix is not a better single window, it is to stop picking one:
         // average trend quality across the whole family. Certified on 50 virgin
         // seeds (3100-3149):
-        //   single window 48   win 73.7%, edge +0.640, worst-model +0.561, worstDD 19%
-        //   mean of 5 windows  win 75.8%, edge +0.699, worst-model +0.652, worstDD 15%
-        //
-        // CORRECTION: those win rates are OVERSTATED by about 5 points. Two
-        // causes, measured separately (see PERFORMANCE.md "Win rate correction"):
-        //   -1.8 pts  the harness checked stops only at 15m bar CLOSES. A stop
-        //             touched mid-bar that recovered by the close was scored as
-        //             not hit; a real resting stop fills on touch.
-        //   -3.1 pts  seed luck. A different virgin seed set gives 70.6%.
-        // Honest expectation for the single-window build is ~70-71%, with
-        // +/-2-3 points of sampling noise. The A/B comparisons above still
-        // stand — the bias is uniform across configurations — but the absolute
-        // number should not be quoted as 73.7%.
-        // Better on both models, and the gain is LARGEST on the worse model —
-        // which is what robustness looks like. Costs ~2.8 trades/week.
+        // Re-certified on the corrected harness (exits resolved every minute,
+        // virgin seeds 3300-3349):
+        //   single window 48   win 70.0%, edge +0.620, worst-model +0.489, worstDD 30%
+        //   mean of 5 windows  win 73.0%, edge +0.656, worst-model +0.494, worstDD 21%
+        // Better on win rate, edge AND drawdown. The decision survived the
+        // harness correction unchanged.
         [Parameter("Ensemble trend quality (avg of 5 windows)", DefaultValue = true, Group = "Trend filter")]
         public bool UseEnsembleQuality { get; set; }
 
@@ -297,18 +238,21 @@ namespace cAlgo.Robots
         [Parameter("News: shock cooldown (bars)", DefaultValue = 3, MinValue = 1, MaxValue = 20, Group = "News agent")]
         public int ShockCooldownBars { get; set; }
 
-        // FREQUENCY AND RISK ARE LINKED. Measured on 30 virgin seeds, m15,
-        // 60 days, compounded — same trade count, only risk% changed:
-        //   max frequency @ 10% risk -> worst drawdown 97%  (account is dead)
-        //   max frequency @  5% risk -> worst drawdown 81%
-        //   max frequency @  2% risk -> worst drawdown 46%
+        // FREQUENCY AND RISK ARE LINKED. Compounded over virgin seeds with the
+        // same trades and only risk% varying:
+        //   @10% risk -> worst drawdown 97% (the account is dead)
+        //   @ 5% risk -> worst drawdown 81%
+        //   @ 2% risk -> worst drawdown 46%
         // Trading often is fine; trading often AND large ruins the account.
-        // With 3 concurrent positions this is 3 x 3% = 9% maximum exposure.
-                // 1.5% x 10 concurrent = 15% maximum exposure. Sizing matters more
-        // than frequency: the SAME config at 3% risk has a 60% worst drawdown,
-        // at 1.5% it is 37%. Win rate is unaffected by sizing (71.3% either way)
-        // — only survivability changes.
-        [Parameter("Risk per trade (%)", DefaultValue = 1.5, MinValue = 0.1, MaxValue = 20.0, Group = "Risk")]
+        // 1.0% x 14 concurrent = 14% maximum exposure — slightly LESS than the
+        // previous 1.5% x 10, while trading 2.6x more often. Win rate does not
+        // change with sizing; only survivability does.
+        //
+        // FLOOR: gold's 1-oz minimum risks ~$18-64 per trade at a 0.4-1.4%
+        // stop. On $3,000 that makes 1.0% ($30) about the lowest workable
+        // setting — go under it and the configured percentage stops being what
+        // is actually risked.
+        [Parameter("Risk per trade (%)", DefaultValue = 1.0, MinValue = 0.1, MaxValue = 20.0, Group = "Risk")]
         public double RiskPercent { get; set; }
 
         // ---- STOP PLACEMENT -------------------------------------------------
@@ -365,19 +309,28 @@ namespace cAlgo.Robots
         [Parameter("Daily loss stop (%)", DefaultValue = 15.0, MinValue = 1.0, Group = "Risk")]
         public double DailyLossStopPercent { get; set; }
 
-        // CONCURRENT POSITIONS — the frequency lever that costs nothing in
-        // entry quality. Holding one trade for up to 10h made the bot sleep
-        // through valid signals; letting it hold several DOUBLES trade count
-        // with the same entries. Certified on 50 fresh seeds:
-        //   1 position  win 64.8%, 3.7 trades/wk, edge +0.422
-        //   3 positions win 66.7%, 7.5 trades/wk, edge +0.484
-        // Win rate and edge both improved — nothing was given up but exposure,
-        // which is why risk-per-trade drops to 3% (3 x 3% = 9% max at risk,
-        // vs 5% for a single position).
-        [Parameter("Max concurrent positions", DefaultValue = 10, MinValue = 1, MaxValue = 20, Group = "Risk")]
+        // CONCURRENT POSITIONS — the frequency lever that costs almost nothing
+        // in entry quality, because the extra trades are signals the bot would
+        // otherwise have slept through while busy. Corrected harness, virgin
+        // seeds, everything else fixed:
+        //   3 positions   8.1 tr/wk, edge +0.610, worst DD 15%
+        //   7 positions  13.6 tr/wk, edge +0.627, worst DD 23%
+        //  10 positions  15.8 tr/wk, edge +0.620, worst DD 30%
+        //  14 positions  16.6 tr/wk, edge +0.615, worst DD 31%
+        // Edge is flat across the range; only exposure changes, which is why
+        // risk-per-trade is set against it rather than independently.
+        //
+        // KNOWN CONCENTRATION RISK: when 5+ positions are open they are the
+        // same direction 100% of the time — this is one directional bet in
+        // several pieces. Staggered entries and per-trade swing stops keep them
+        // from dying at one price (worst simulated day -13.9%, daily stop never
+        // fired), but the simulators contain no GAPS, and a gap through several
+        // correlated stops is exactly what they cannot show. Lower this to 5-7
+        // if that risk matters more than frequency.
+        [Parameter("Max concurrent positions", DefaultValue = 14, MinValue = 1, MaxValue = 20, Group = "Risk")]
         public int MaxConcurrentPositions { get; set; }
 
-        [Parameter("Min bars between same-direction entries", DefaultValue = 2, MinValue = 0, MaxValue = 50, Group = "Risk")]
+        [Parameter("Min bars between same-direction entries", DefaultValue = 1, MinValue = 0, MaxValue = 50, Group = "Risk")]
         public int MinBarsBetweenSameSide { get; set; }
 
         // SESSION FILTER — from research into professional gold trading, then

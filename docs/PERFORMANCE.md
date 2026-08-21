@@ -800,3 +800,98 @@ flatters the strategy. Resolve exits at the finest granularity available, or
 state the bias out loud. Added to the traps list.
 
 Corrected in `tools/GoldEdgeNews.cs`.
+
+## Harness rebuild + frequency pass (Aug 2026) — new shipped config
+
+Goal from the owner: fix the measurement mistakes, and make it trade more —
+it sat flat all day while the very first cTrader bot traded constantly.
+
+### 1. The harness was rebuilt, then every adopted decision re-tested
+
+`honest.py` resolves exits at MINUTE granularity (entries still on bar close,
+as the cBot does). The old harness resolved exits at 15m bar closes, forgiving
+every stop that was touched mid-bar and recovered — worth +1.8 points of win
+rate in the strategy's favour.
+
+Re-certified on virgin seeds 3300-3349:
+
+| decision | verdict under the corrected harness |
+|---|---|
+| Ensemble trend quality vs single 48-bar window | **HOLDS.** 73.0% / +0.656 / worstDD 21% vs 70.0% / +0.620 / worstDD 30%. Better on all three. |
+| Concurrency | **HOLDS, flat.** edge +0.610 / +0.627 / +0.620 / +0.615 at 3 / 7 / 10 / 14 positions. Only exposure and drawdown change. |
+| Entry on bar close | **HOLDS.** (measured separately, see entry-timing section) |
+
+No adopted decision reversed. The bias was uniform, as expected.
+
+### 2. Which gate was actually blocking the trades
+
+Everything except the trend-quality threshold turned out to be nearly inert:
+
+| loosening (from ensemble @0.40) | trades/wk | edge |
+|---|---|---|
+| baseline | 28.2 | +0.534 |
+| votes 2/3 instead of 3/3 | 28.2 | +0.533 |
+| ADX >= 12 instead of 18 | 28.6 | +0.534 |
+| no ADX gate at all | 28.9 | +0.525 |
+| no session filter | 30.0 | +0.503 |
+| gap 1 bar instead of 2 | 35.1 | +0.529 |
+
+**The vote count and ADX do essentially nothing** — when efficiency is high the
+three voters almost always agree anyway, and the efficiency ratio subsumes ADX.
+Only the threshold, and to a lesser degree the entry spacing, move frequency.
+
+The threshold is a clean dial, and edge decays gracefully rather than falling
+off a cliff:
+
+| eff >= | trades/wk | edge | worst DD @1.5% |
+|---|---|---|---|
+| 0.50 | 11.4 | +0.648 | 19% |
+| 0.45 | 18.6 | +0.589 | 22% |
+| 0.40 | 28.2 | +0.534 | 33% |
+| 0.35 | 40.4 | +0.493 | 39% |
+| 0.30 | 56.2 | +0.429 | 42% |
+| 0.25 | 74.8 | +0.378 | 43% |
+
+### 3. The finding: buy frequency with the threshold, pay for it with size
+
+Loosening alone raises drawdown. Loosening *and* cutting risk per trade does
+not — and lands strictly ahead. Certified on virgin seeds 3500-3549:
+
+| config | win% | trades/wk | edge | worst DD | growth |
+|---|---|---|---|---|---|
+| previous — eff.50, gap2, 10 pos @1.50% | 74.4 | 11.2 | +0.681 | 31% | x1.24 |
+| **new — eff.45, gap1, 14 pos @1.00%** | **70.3** | **28.7** | +0.572 | **30%** | **x1.46** |
+| eff.45, gap1, 20 pos @1.00% | 70.1 | 33.7 | +0.575 | 38% | x1.61 |
+| eff.40, gap1, 14 pos @1.00% | 67.8 | 43.7 | +0.557 | 36% | x1.65 |
+
+**2.6x the trades, the same drawdown, and more growth.** Win rate falls 4
+points and per-trade edge falls 0.11 — both expected from a looser gate — but
+many small diversified bets beat few large ones at matched risk.
+
+Total exposure also *falls*: 14 x 1.0% = 14%, against 10 x 1.5% = 15%. That
+partly answers the concentration problem noted below.
+
+**ADOPTED as the shipped default:** ensemble trend quality >= 0.45, 1-bar entry
+spacing, 14 concurrent positions, 1.0% risk per trade.
+
+### Concentration risk — measured, not resolved
+
+When 5 or more positions are open they are the **same direction 100% of the
+time**. This is one directional bet in several pieces. Mitigations that are
+real: entries are staggered, each carries its own swing-based stop at its own
+price, and each has its own conviction-scaled target. Measured over 227
+simulated days, worst single day was **-13.9%** and the -15% daily stop never
+fired.
+
+What the measurement cannot cover: **the simulators contain no gaps.** Several
+correlated positions gapping through their stops together is precisely the tail
+this evidence is blind to. Anyone who weights that risk above frequency should
+set concurrency to 5-7; edge is flat across the range, so it costs only trades.
+
+### Account-size floor
+
+Gold's minimum trade is 1 oz, risking ~$18-64 depending on stop width
+(0.4-1.4% of ~$4,580). At 1.0% risk a $3,000 account has a $30 budget, so the
+widest-stop setups get skipped by the too-small guard. Below roughly $2,500
+this configuration cannot size properly at all. Sub-1% risk settings are not
+deployable at this account size however well they score in simulation.
