@@ -1134,3 +1134,39 @@ drawdown without adding any edge at all.
 gold's median 48-bar efficiency actually sit relative to 0.124?** Nothing in
 this repository can answer it — every model here was built by this project.
 A few live sessions can.
+
+## Process fix — the C# is now compiled, not eyeballed
+
+Every cBot in this repo was previously verified by counting braces. That
+catches almost nothing: not undefined names, not wrong types, not bad
+overloads, not duplicate locals. This project had already shipped a `CS0128`
+duplicate-variable error once and only caught it by luck.
+
+`tools/verify/build-check.sh` now compiles a bot offline against
+`tools/verify/calgo_stubs.cs` — a minimal cAlgo.API surface carrying the
+signatures the bots actually use. Requires `apt-get install -y mono-mcs`.
+
+```
+./tools/verify/build-check.sh tools/GoldEdgeNews.cs
+```
+
+Warnings are escalated to errors. **The script also runs a negative control on
+every invocation**: it injects a deliberate type error and requires the
+compiler to reject it. A check that cannot fail proves nothing, and stubs can
+silently drift loose enough to accept broken code.
+
+Verified when introduced — all four negative controls caught:
+
+| injected fault | compiler response |
+|---|---|
+| duplicate local `need` (the real past bug) | `CS0128` |
+| typo'd field name | `CS0103` |
+| `string` assigned to `double` | `CS0029` |
+| negative control in the script | rejected |
+
+All five bots in `tools/` compile clean: GoldEdgeNews, GoldEdge, GoldBotTrend,
+GoldBotPro, GoldBot.
+
+**Run this before sending any bot file.** Shipping code that does not build
+wastes a cTrader build cycle and, worse, teaches the owner to distrust files
+that are otherwise fine.
