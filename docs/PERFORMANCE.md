@@ -401,3 +401,61 @@ in disguise, sized larger.
 
 Shorter max-hold was tested as an alternative frequency lever and is worse:
 hold 16 lifts trades only 3.7 -> 4.4/wk while edge falls +0.498 -> +0.309.
+
+## Research pass: what professional gold traders actually use (Aug 2026)
+
+Researched written sources on institutional/professional gold method, extracted
+the testable claims, and measured each on both models against a random-entry
+baseline. (No video sources — that capability does not exist here.)
+
+### ADOPTED
+
+| change | effect |
+|---|---|
+| **Skip dead hours (trade 01-22 UTC)** | edge +0.463 -> +0.480, win 65.5% -> 66.0% |
+| **eff 0.55 + 4 concurrent positions** | 7.6 -> 10.8 trades/wk at the same win rate and edge |
+
+Certified on 50 FRESH seeds (4400-4449), 12,983 trades:
+
+| config | win% | trades/wk | edge | worst-model | worst DD@3% |
+|---|---|---|---|---|---|
+| previous (eff.60, 3 pos) | 68.1 | 7.6 | +0.501 | +0.443 | 36% |
+| **eff.55, 4 pos, session (ADOPTED)** | **67.4** | **10.8** | +0.498 | +0.428 | 49% |
+| eff.50, 5 pos, session | 65.3 | 15.6 | +0.457 | +0.388 | 53% |
+| eff.50, 4 pos, session | 65.1 | 14.6 | +0.449 | +0.380 | 49% |
+
+42% more trades for 0.7 points of win rate and 0.003 of edge.
+
+### REJECTED
+
+| claim (as stated by practitioners) | measured |
+|---|---|
+| "Trade only the 12-16 UTC London/NY overlap — gold sets its daily high/low there ~70% of the time" | Cut trades SIX-FOLD (15.8 -> 2.6/wk) and lowered edge +0.463 -> +0.385. The session is real; making it an exclusive filter is not. |
+| "Avoid the 4pm London fix (no-trade window either side)" | Exactly neutral: +0.464 vs +0.463 |
+| **"Liquidity sweeps / stop hunts: 60-70% win rate with structure confirmation"** | **raw sweep win 41.8%, edge −0.178; +structure 43.6%, −0.159; +trend 49.9%, −0.025. Adding it to the working bot DROPPED it from 65.5%/+0.463 to 61.2%/+0.323.** |
+
+The liquidity-sweep result is the notable one: it is probably the most widely
+promoted gold day-trading concept in retail content, and it not only failed to
+reach the claimed 60-70% win rate, it had NEGATIVE edge in every variant and
+actively degraded a working strategy when combined.
+
+**Caveat:** this simulator does not model order-flow or stop-hunt dynamics, so
+treat the sweep result as strong evidence against rather than proof. Session
+effects are also only as good as the simulator's synthetic session structure.
+
+### ADX ablation
+
+Prompted by the owner asking why ADX is used. It turns out to be the junior
+partner by a wide margin:
+
+| filter | win% | edge | trades/wk |
+|---|---|---|---|
+| efficiency + ADX (shipped) | 66.7 | +0.484 | 7.5 |
+| efficiency only | 67.4 | +0.428 | 7.7 |
+| **ADX only** | **54.3** | **+0.203** | 45 |
+| neither | 54.1 | +0.181 | 49 |
+
+**ADX alone is barely distinguishable from no filter at all.** The trend-quality
+(efficiency) filter does nearly all the work. ADX 18/25/30 give near-identical
+results, meaning it is close to inert once efficiency >= 0.55 — it is kept only
+for the small edge/robustness contribution (+0.056 edge, +0.046 worst-model).

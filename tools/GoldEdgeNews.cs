@@ -8,10 +8,10 @@
 //   over 24 bars) and ADX >= 18. 15-MINUTE chart, 40-bar (10h) time stop.
 //   Target range 1:1-2:1 — TUNED FOR WIN RATE at the owner's request.
 //
-// CERTIFIED on 50 FRESH seeds (5500-5549, used for nothing else):
-//   win rate  66.7%      edge +0.484
-//   frequency 7.5 trades/week   (3 concurrent positions)
-//   @3% risk: median drawdown 15%, worst 35%, 0 of 100 runs lost money
+// CERTIFIED on 50 FRESH seeds (4400-4449, used for nothing else), 12,983 trades:
+//   win rate  67.4%      edge +0.498 (worst-model +0.428)
+//   frequency 10.8 trades/week  (4 concurrent positions, eff 0.55)
+//   @3% risk: median drawdown 19%, worst 49%, 0 of 100 runs lost money
 //
 // TWO DIFFERENT WAYS TO RAISE WIN RATE — only one of them is honest.
 //
@@ -44,7 +44,33 @@
 //   eff.50 RR1.0-2.5 ATR      win 56.6%, edge +0.522,  8.2 tr/wk, DD 57%
 //   eff.60 RR1.0-2.0 ATR      win 61.8%, edge +0.506,  5.1 tr/wk, DD 48%
 //   eff.60 RR1.0-2.0 SWING    win 66.4%, edge +0.367,  3.4 tr/wk, DD 33%
-//   + 3 CONCURRENT @3% risk   win 66.7%, edge +0.484,  7.5 tr/wk, DD 35% <-THIS
+//   + 3 CONCURRENT @3% risk   win 66.7%, edge +0.484,  7.5 tr/wk, DD 35%
+//   + eff.55, 4 pos, session  win 67.4%, edge +0.498, 10.8 tr/wk, DD 49% <-THIS
+//
+// RESEARCH PASS into professional gold trading (Aug 2026) — what survived
+// measurement and what did not. Every claim was tested on both market models
+// against a random-entry baseline; the failures matter as much as the wins.
+//
+//   ADOPTED  Skip the dead hours around the daily close (trade 01-22 UTC).
+//            edge +0.463 -> +0.480, win 65.5% -> 66.0%.
+//
+//   REJECTED "Only trade the 12-16 UTC London/NY overlap, where gold sets its
+//            daily high/low ~70% of the time." Cut trades SIX-FOLD (15.8 ->
+//            2.6/wk) and LOWERED edge to +0.385. The session is real; making
+//            it an exclusive filter is not.
+//
+//   REJECTED Avoiding the 4pm London fix. Exactly neutral (+0.464 vs +0.463).
+//
+//   REJECTED LIQUIDITY SWEEPS / stop-hunt reversals — the most popular idea in
+//            retail gold content, claimed at 60-70% win. Measured:
+//              raw sweep            win 41.8%, edge -0.178  (loses money)
+//              + structure shift    win 43.6%, edge -0.159
+//              + trend agreement    win 49.9%, edge -0.025
+//              added to this bot    win 61.2%, edge +0.323  (DILUTES it)
+//            Not only unprofitable alone — bolting it on made the working
+//            strategy measurably worse. Caveat: this simulator does not model
+//            order-flow/stop-hunt dynamics, so treat as strong evidence
+//            against, not proof.
 //
 // TIMEFRAME: m15 is the sweet spot. m5 is worse on edge (+0.590) and has
 //   deeper drawdowns; h1 trades too rarely (2.2/wk); h4 is model-unstable.
@@ -157,7 +183,7 @@ namespace cAlgo.Robots
         [Parameter("Trend quality window (bars)", DefaultValue = 24, MinValue = 4, MaxValue = 200, Group = "Trend filter")]
         public int EfficiencyWindow { get; set; }
 
-        [Parameter("Min trend quality (0-1)", DefaultValue = 0.60, MinValue = 0.0, MaxValue = 1.0, Group = "Trend filter")]
+        [Parameter("Min trend quality (0-1)", DefaultValue = 0.55, MinValue = 0.0, MaxValue = 1.0, Group = "Trend filter")]
         public double EfficiencyMin { get; set; }
 
         [Parameter("News: use economic calendar", DefaultValue = true, Group = "News agent")]
@@ -292,11 +318,25 @@ namespace cAlgo.Robots
         // Win rate and edge both improved — nothing was given up but exposure,
         // which is why risk-per-trade drops to 3% (3 x 3% = 9% max at risk,
         // vs 5% for a single position).
-        [Parameter("Max concurrent positions", DefaultValue = 3, MinValue = 1, MaxValue = 10, Group = "Risk")]
+        [Parameter("Max concurrent positions", DefaultValue = 4, MinValue = 1, MaxValue = 10, Group = "Risk")]
         public int MaxConcurrentPositions { get; set; }
 
         [Parameter("Min bars between same-direction entries", DefaultValue = 4, MinValue = 0, MaxValue = 50, Group = "Risk")]
         public int MinBarsBetweenSameSide { get; set; }
+
+        // SESSION FILTER — from research into professional gold trading, then
+        // measured. The strong claim ("only trade the 12-16 UTC London/NY
+        // overlap") FAILED: it cut trades 6x and lowered edge +0.463 -> +0.385.
+        // What did help was simply skipping the dead hours around the daily
+        // close: edge +0.463 -> +0.480, win 65.5% -> 66.0%, on both models.
+        [Parameter("Skip dead hours (UTC)", DefaultValue = true, Group = "Session")]
+        public bool UseSessionFilter { get; set; }
+
+        [Parameter("Trade from UTC hour", DefaultValue = 1, MinValue = 0, MaxValue = 23, Group = "Session")]
+        public int SessionStartHour { get; set; }
+
+        [Parameter("Trade until UTC hour", DefaultValue = 22, MinValue = 1, MaxValue = 24, Group = "Session")]
+        public int SessionEndHour { get; set; }
 
         [Parameter("Allow shorts", DefaultValue = true, Group = "Risk")]
         public bool AllowShort { get; set; }
@@ -499,6 +539,15 @@ namespace cAlgo.Robots
             // lifts trade count without touching entry quality.
             if (OwnPositions().Count() >= MaxConcurrentPositions)
                 return;
+
+            // Dead hours around the daily close are thin and choppy — the one
+            // session restriction that measured better (see the param comment).
+            if (UseSessionFilter)
+            {
+                var h = Server.TimeInUtc.Hour;
+                if (h < SessionStartHour || h >= SessionEndHour)
+                    return;
+            }
 
             // ---- news agent: entry blocking is OPTIONAL and OFF by default,
             // because blocking entries costs trades. The default protection
