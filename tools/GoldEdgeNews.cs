@@ -2,13 +2,13 @@
 //
 // ============================ HOW IT TRADES ============================
 // ENTRY  3 voters (ema20>ema75, rsi14>50, close>close[-20]) must ALL agree,
-//        only when trend quality >= 0.45 and ADX >= 18, during 01-22 UTC.
+//        only when trend quality >= 0.35 and ADX >= 18, during 01-22 UTC.
 //        Trend quality = Kaufman efficiency (net move / path travelled),
 //        AVERAGED over 24/36/48/60/72 bars rather than read from one window.
 // STOP   just beyond the recent 12-bar swing low/high (+5% buffer), clamped
 //        0.4-1.4% of price. Binary — no trailing, no early exit.
 // TARGET adaptive 1.0-2.0 reward:risk, scaled by conviction.
-// SIZE   1.0% risk per trade, up to 14 at once = 14% maximum exposure.
+// SIZE   1.0% risk per trade, up to 10 at once = 10% maximum exposure.
 //        -15% daily loss stop. 40-bar (10h) time stop.
 // NEWS   Forex Factory calendar, 9 currencies + oil. Moves the stop to
 //        breakeven before an event when ALREADY in profit, and vetoes entries
