@@ -20,7 +20,8 @@
 //   win rate   64.7 - 66.5%
 //   frequency  50 - 54 trades/week
 //   idle days  34% (was 76% at the old 0.50 threshold)
-//   edge       +0.474 to +0.527 over a random-entry baseline
+//   edge       +0.463 to +0.498 over a random-entry baseline (as measured)
+//              ~+0.40 to +0.44 after subtracting the bias below
 //   drawdown   median ~13%, worst 30-41%, at 1.0% risk
 //   losing runs 6-8 of 100
 // Quoted as a RANGE across seed sets, not a single number. A headline figure
@@ -41,6 +42,18 @@
 //      resting stop fills on touch. Worth -1.8 points of win rate, and the
 //      error ran in the direction that flattered the strategy. Exits are now
 //      resolved every minute.
+//   1b. A BASELINE BUG in the rebuilt harness: the coin-flip trade rate was
+//      computed per MINUTE but the coin is evaluated per BAR, so the baseline
+//      took ~1/15th the intended trades. Not biased in mean, but noisy enough
+//      to move measured edge by up to ~0.13. Fixed; edges above are post-fix.
+//   1c. A RESIDUAL BIAS THAT DOES NOT GO AWAY, worth about +0.06. On a PURE
+//      RANDOM WALK -- where no entry rule can predict anything -- this
+//      strategy still measures +0.057 edge. Cause, measured directly: it only
+//      fires when the recent swing range is wide, so its stops run ~2x wider
+//      than a coin flip's (1.006% vs 0.547% of price), the 40-bar time stop
+//      then ends 51% of its trades versus 10%, and a time-stop exit marks out
+//      near 0R instead of a full -1R. That is favourable trade GEOMETRY, not
+//      prediction. SUBTRACT ~0.06 FROM EVERY EDGE FIGURE IN THIS FILE.
 //   2. SEED LUCK. A headline figure came from one 50-path sample; another
 //      sample gives ~3 points less under identical rules. Win rate carries
 //      +/-2-3 points of sampling noise and should never be quoted as exact.
