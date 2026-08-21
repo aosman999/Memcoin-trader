@@ -217,6 +217,17 @@ namespace cAlgo.Robots
         // seeds (3100-3149):
         //   single window 48   win 73.7%, edge +0.640, worst-model +0.561, worstDD 19%
         //   mean of 5 windows  win 75.8%, edge +0.699, worst-model +0.652, worstDD 15%
+        //
+        // CORRECTION: those win rates are OVERSTATED by about 5 points. Two
+        // causes, measured separately (see PERFORMANCE.md "Win rate correction"):
+        //   -1.8 pts  the harness checked stops only at 15m bar CLOSES. A stop
+        //             touched mid-bar that recovered by the close was scored as
+        //             not hit; a real resting stop fills on touch.
+        //   -3.1 pts  seed luck. A different virgin seed set gives 70.6%.
+        // Honest expectation for the single-window build is ~70-71%, with
+        // +/-2-3 points of sampling noise. The A/B comparisons above still
+        // stand — the bias is uniform across configurations — but the absolute
+        // number should not be quoted as 73.7%.
         // Better on both models, and the gain is LARGEST on the worse model —
         // which is what robustness looks like. Costs ~2.8 trades/week.
         [Parameter("Ensemble trend quality (avg of 5 windows)", DefaultValue = true, Group = "Trend filter")]

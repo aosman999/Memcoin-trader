@@ -764,3 +764,39 @@ reversible.
 quality 0.22-0.27 against a 0.50 gate for four straight hours. Intra-bar
 entry would have changed nothing: the bot was not waiting for a bar to close,
 it was waiting for a trend to exist.
+
+## Win rate correction (Aug 2026) — the headline numbers were ~5 points high
+
+Owner asked why recent tests kept showing ~70% when the shipped file claimed
+73.7%. They were right to ask. Two causes, isolated by running the same
+configuration four ways:
+
+|  | exits on 15m closes | exits every minute |
+|---|---|---|
+| cert seeds 3100-3149 | **73.7%** (n=3,548) | 71.8% (n=3,579) |
+| seeds 3200-3219 | 70.6% (n=1,212) | 69.0% (n=1,221) |
+
+**1. The exit check was optimistic (-1.8 points).** The harness tested stops
+only at 15-minute bar closes, so a stop touched mid-bar that recovered before
+the close was scored as never hit. A real resting stop order fills on touch.
+The effect is a consistent -1.8 points on both seed sets. Every win rate in
+this document measured with closes-only exits carries that bias.
+
+**2. Seed luck (-3.1 points).** 73.7% was one sample of 50 price paths;
+another sample of 20 gives 70.6% under identical rules. That is ordinary
+sampling variation, but it was quoted as though exact.
+
+**Honest expectation: ~70-71% for the single-window build, +/-2-3 points.**
+
+**What this does and does not invalidate.** The bias is uniform across
+configurations (-1.8 on both seed sets), so the A/B comparisons — ensemble vs
+single window, concurrency levels, entry timing, the head-to-head against the
+previous build — are unaffected in direction or size. What was wrong is the
+absolute figure quoted to the owner and written into the shipped file header.
+
+**Process lesson.** A backtest that resolves exits on bar closes is not
+conservative, it is optimistic, and the error runs in the direction that
+flatters the strategy. Resolve exits at the finest granularity available, or
+state the bias out loud. Added to the traps list.
+
+Corrected in `tools/GoldEdgeNews.cs`.
