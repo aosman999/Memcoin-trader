@@ -164,8 +164,10 @@ namespace cAlgo.Robots
         public bool UseCalendar { get; set; }
 
         // PROTECTION (default) — guards an OPEN trade through the event without
-        // touching entries, so trade frequency is unchanged. MEASURED: edge
-        // +0.633 -> +0.636 with the SAME trade count (1530 -> 1532).
+        // touching entries, so trade frequency is unchanged. Measured neutral
+        // in sim; kept as insurance against slippage and gaps the sim cannot
+        // model. It never closes a trade — news moves in your favour just as
+        // often (closing on news measured edge +0.633 -> +0.496).
         [Parameter("News: protect open trade (stop -> breakeven)", DefaultValue = true, Group = "News agent")]
         public bool ProtectOnNews { get; set; }
 
@@ -217,21 +219,17 @@ namespace cAlgo.Robots
         [Parameter("News: shock cooldown (bars)", DefaultValue = 3, MinValue = 1, MaxValue = 20, Group = "News agent")]
         public int ShockCooldownBars { get; set; }
 
-                // FREQUENCY AND RISK ARE LINKED. Measured on 30 virgin seeds, m15,
+        // FREQUENCY AND RISK ARE LINKED. Measured on 30 virgin seeds, m15,
         // 60 days, compounded — same trade count, only risk% changed:
         //   max frequency @ 10% risk -> worst drawdown 97%  (account is dead)
         //   max frequency @  5% risk -> worst drawdown 81%
         //   max frequency @  2% risk -> worst drawdown 46%
-        // Trading often is fine; trading often AND large is what ruins the
-        // account. This bot is tuned for high frequency, so risk starts at 5%.
+        // Trading often is fine; trading often AND large ruins the account.
+        // With 3 concurrent positions this is 3 x 3% = 9% maximum exposure.
         [Parameter("Risk per trade (%)", DefaultValue = 3.0, MinValue = 0.1, MaxValue = 20.0, Group = "Risk")]
         public double RiskPercent { get; set; }
 
-        // ---- ADAPTIVE STOP -------------------------------------------------
-        // The stop tracks live volatility (1.5x ATR) instead of a flat 0.6%,
-        // clamped so it can never get absurdly tight or wide. MEASURED on 30
-        // virgin seeds with stop-relative spread cost: edge +0.633 -> +0.773,
-        // worst-model +0.505 -> +0.646.
+        // ---- STOP PLACEMENT -------------------------------------------------
         // STRUCTURE STOP — the biggest win-rate gain found that does NOT
         // shorten the target. The stop sits just beyond the recent swing
         // low/high instead of an arbitrary ATR distance, so ordinary noise no
@@ -264,9 +262,9 @@ namespace cAlgo.Robots
 
         // ---- ADAPTIVE TARGET -----------------------------------------------
         // The target scales with conviction (ADX strength + trend quality):
-        // a marginal setup aims 2:1, a powerful one aims 6:1. MEASURED with
-        // the adaptive stop: edge +0.773 -> +0.826, worst-model +0.646 ->
-        // +0.699. Together they are the best exit pair tested.
+        // a marginal setup aims 1:1, a powerful one 2:1. Do NOT shrink this
+        // range to chase win rate — break-even win rate is 1/(1+RR), so a
+        // nearer target needs a higher win rate merely to stand still.
         [Parameter("Adaptive target (conviction-scaled)", DefaultValue = true, Group = "Exits")]
         public bool AdaptiveTarget { get; set; }
 
