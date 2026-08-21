@@ -1296,17 +1296,23 @@ namespace cAlgo.Robots
                       ImpliedHurst(med));
                 if (excess >= 0.030)
                     Print("      GOOD: gold is genuinely trending, as much as the markets this " +
-                          "was certified on (+0.041 and +0.061). The tested edge should carry over.");
+                          "was certified on (+0.041 and +0.061). The tested edge should carry " +
+                          "over, and the trend side is the right one. Leave mean reversion OFF.");
                 else if (excess >= 0.012)
-                    Print("      THIN: gold is trending, but less than either certified market. " +
-                          "Expect a smaller edge than the backtest showed. Collect more days " +
-                          "before changing anything.");
+                    Print("      THIN: trending, but less than either certified market. Expect a " +
+                          "smaller edge than the backtest showed. Collect more days before " +
+                          "changing anything — this is the band where both sides are near zero.");
+                else if (excess >= -0.005)
+                    Print("      FLAT: at {0:F3} above chance this tape is a random walk. Nothing " +
+                          "works on one — not trend-following, not mean reversion. Do NOT loosen " +
+                          "the filter to force trades; in testing that raised drawdown without " +
+                          "adding any edge.", excess);
                 else
-                    Print("      STOP: at {0:F3} above chance there is no exploitable trend in " +
-                          "this tape. A model at this level scored ZERO edge for trend-following " +
-                          "AND for mean reversion — nothing works on a random walk. Do NOT loosen " +
-                          "the filter to force trades; that raised drawdown without adding edge. " +
-                          "Report this number.", excess);
+                    Print("      WRONG SIDE: at {0:F3} this tape is MEAN-REVERTING, and trend " +
+                          "following does not merely go quiet here — it LOSES money (-0.265 at " +
+                          "H=0.40 in testing). Fading is the profitable side there (+0.298). If " +
+                          "several sessions read like this, set 'Also fade RSI extremes when the " +
+                          "tape is CHOPPY' to true. Do not just lower the trend threshold.", excess);
             }
 
             if (_tradesToday == 0)
