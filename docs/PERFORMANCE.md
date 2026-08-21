@@ -712,3 +712,55 @@ the same file; it is a parameter, not a code change.
 in this document is SIMULATED, on models where a coin flip scores +0.11 to
 +0.28R. The tuning has reached the point where further gains measured here are
 worth less than one week of real fills.
+
+## Entry timing: bar close vs intra-bar (Aug 2026) — keep bar close
+
+Owner asked why entries wait for the 15m bar to close, wanting the bot to
+trade without waiting. Measured rather than argued.
+
+**Method.** Evaluating mid-bar, treating the current price as the bar's close,
+is exactly equivalent to reading a 15m series with a phase offset — minute t
+sits at phase t%15. So the test builds all 15 phase-shifted views and varies
+only how often an entry is ALLOWED to fire. Both arms use identical exits,
+sizing, concurrency and costs, and both check stops/targets every minute
+(broker-side SL/TP works that way regardless). 20 virgin seeds (3200-3219).
+
+| decide every | win% | trades/wk | edge | med DD | worst DD | growth |
+|---|---|---|---|---|---|---|
+| **15 min (bar close)** | **69.0** | 12.0 | **+0.602** | 6% | 24% | x1.24 |
+| 5 min (3x a bar) | 66.6 | 16.9 | +0.466 | 9% | 25% | x1.35 |
+| 1 min (intra-bar) | 66.3 | 20.9 | +0.513 | 11% | 35% | x1.45 |
+
+Deciding intra-bar costs **0.09-0.14R of per-trade edge** (bar-close vs 1-min
+is 2.4 sigma). The ordering between the 5-min and 1-min rows is within noise;
+the gap from bar close to either is not. This is signal flicker: a setup that
+has all three votes at minute 7 need not still have them at minute 15, and a
+trade taken on the transient one was never actually signalled by the strategy.
+
+### It is leverage, not edge
+
+Intra-bar trades more and grows more, which looks like an improvement until
+bar-close is dialled up to the same drawdown:
+
+| config | med DD | worst DD | median growth | losing runs |
+|---|---|---|---|---|
+| intra-bar @ 1.50% | 11% | 35% | **x1.45** | 5/40 |
+| bar close @ 2.50% | 10% | 37% | **x1.43** | 8/40 |
+
+**Identical growth at identical drawdown.** Intra-bar entry buys nothing the
+risk slider does not already give, and it pays for it in per-trade edge — the
+cushion that absorbs real-world slippage. (Intra-bar does show fewer losing
+runs, 5/40 vs 8/40, but at n=40 that is about one standard error.)
+
+**The sim almost certainly understates the real cost.** These minute paths have
+no spread widening, no spikes and no wicks. Live, a mid-bar signal is exactly
+where a wick fires and reverses. Treat -0.09R as a floor on the damage.
+
+**Verdict: keep bar-close decisions.** If more growth is wanted, raise risk to
+2.0-2.5% — same effect, measured, no signal degradation, one parameter, and
+reversible.
+
+**Practical note.** On the day this was asked, the live log showed trend
+quality 0.22-0.27 against a 0.50 gate for four straight hours. Intra-bar
+entry would have changed nothing: the bot was not waiting for a bar to close,
+it was waiting for a trend to exist.
