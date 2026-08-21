@@ -1246,3 +1246,68 @@ A few live sessions produce a number comparable with published research.
 real gold reads near 0.50, no threshold, no ensemble and no exit tweak will
 help, and the correct decision is to stop trading this strategy rather than to
 tune it further.
+
+## Two more of my own measurement errors, found by a control that had to fail
+
+Running the strategy across markets of known Hurst exponent produced an
+impossible result: **+0.186 edge on a pure random walk**, where by construction
+no entry rule can predict anything. Chasing it found two problems.
+
+### 1. A baseline bug in the rebuilt harness
+
+`score()` computed the coin-flip trade rate **per minute** but the coin is
+evaluated **per bar**, so the baseline took roughly 1/15th of the intended
+trades. That does not bias its mean, but it made it noisy enough to move
+measured edge by up to ~0.13. Fixed by converting the rate to per-bar.
+
+Effect on the shipped configuration (same seeds, before -> after):
+
+| seeds | edge before | edge after |
+|---|---|---|
+| 3500-3549 | +0.474 | **+0.463** |
+| 3600-3649 | +0.484 | **+0.467** |
+| 3700-3749 | +0.527 | **+0.498** |
+
+Small, and no conclusion changes — but the numbers stated earlier in this
+document were wrong by that much.
+
+### 2. A residual bias that does NOT go away: trade-geometry selection
+
+With the baseline fixed, the random-walk control still reads **+0.057** instead
+of zero. That residual is real and worth naming, because it inflates every
+edge figure here by roughly that amount.
+
+Measured directly on the random-walk control:
+
+| | mean stop (% of price) | mean reward:risk | exits by stop | by target | by time |
+|---|---|---|---|---|---|
+| strategy | 1.006 | 1.52 | 31.5% | 15.6% | **51.4%** |
+| coin flip | 0.547 | 1.19 | 48.3% | 41.4% | 10.1% |
+
+The strategy only fires when the recent swing range is wide — that is what a
+high efficiency reading *is* — so it gets stops nearly twice as wide. Wide
+stops mean the 40-bar time stop fires on half its trades, and a time-stop exit
+marks out near 0R instead of a full -1R. **That is favourable trade geometry,
+not prediction**, and the rate-matched coin flip does not receive it.
+
+**Treat ~+0.06 as a floor to subtract from every edge number in this document.**
+The honest reading of the shipped configuration is roughly **+0.40 to +0.44**,
+not +0.46 to +0.50.
+
+### The corrected map of where this strategy works
+
+| Hurst H | market | edge (measured) | edge (less the +0.06 floor) |
+|---|---|---|---|
+| 0.45 | mean-reverting | -0.101 | **-0.16** |
+| 0.50 | random walk | +0.057 | **~0.00** |
+| 0.55 | trending | +0.197 | **+0.14** |
+| 0.60 | trending | +0.417 | **+0.36** |
+
+**The strategy needs roughly H > 0.52 to have any real edge, and materially
+more than that to be worth trading.** This project's simulators sit at
+H ~0.59-0.62. Published intraday estimates cluster near 0.50 and below.
+
+Mean reversion, re-tested on genuinely mean-reverting markets this time
+(H=0.40 and 0.45) rather than on trending or random-walk ones, still never
+turns positive (-0.064 at H=0.40, its best result). So there is no
+"trade the other side when gold is choppy" fallback available.
