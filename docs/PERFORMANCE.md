@@ -371,3 +371,33 @@ than the ATR stop, so each unit of risk buys a smaller multiple — that is the
 honest cost of the extra consistency.
 
 Higher-win variants exist (swing + eff.70 = 69.1%) but fall to 1.7 trades/week.
+
+## More trades at the SAME entry quality — concurrent positions (Aug 2026)
+
+Owner wanted the ~65% win-rate config to trade more than 3.7/week. The
+limiter was not the filter: holding ONE position for up to 10 hours made the
+bot sleep through valid setups. Allowing several at once reuses the identical
+entries, so entry quality — and therefore win rate — is untouched.
+
+Certified on 50 FRESH seeds (5500-5549):
+
+| config | win% | trades/wk | edge | median DD | worst DD | losing runs |
+|---|---|---|---|---|---|---|
+| 1 position @5% | 64.8 | 3.7 | +0.422 | 15% | 29% | 0/100 |
+| 2 positions @5% | 65.9 | 6.0 | +0.460 | 20% | 40% | 0/100 |
+| 3 positions @5% | 66.7 | 7.5 | +0.484 | 25% | 52% | 0/100 |
+| **3 positions @3% (ADOPTED)** | **66.7** | **7.5** | **+0.484** | 15% | **35%** | 0/100 |
+| 4 positions @3% | 67.0 | 8.4 | +0.495 | 17% | 44% | 0/100 |
+
+Win rate and edge both went UP while trade count doubled — the extra trades are
+signals that were previously skipped, not lower-quality ones. The only thing
+given away is simultaneous exposure (3 x 3% = 9% at risk vs 5% for a single
+position), which is why risk-per-trade drops from 5% to 3%: that keeps worst
+drawdown at 35%, close to the single-position 29%.
+
+Also added `MinBarsBetweenSameSide` (default 4). Several positions at once is
+diversification; several near-identical ones on consecutive bars is one trade
+in disguise, sized larger.
+
+Shorter max-hold was tested as an alternative frequency lever and is worse:
+hold 16 lifts trades only 3.7 -> 4.4/wk while edge falls +0.498 -> +0.309.
