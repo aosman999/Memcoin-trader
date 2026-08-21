@@ -235,19 +235,27 @@ namespace cAlgo.Robots
         // SUMMARY has shown, over several sessions, that gold's implied Hurst
         // is running at or below 0.50 — at which point trend-following is the
         // wrong strategy and this is the right one.
+        // Fade parameters were tuned on MEAN-REVERTING markets (H=0.40/0.45),
+        // not on M1/M2 — tuning a counter-trend rule on trending data would
+        // just pick whichever settings fire least. Certified on virgin seeds:
+        //        settings              H=.40 edge   H=.45   trades/wk
+        //   old  chop.20 RSI30/70 rr1.0   +0.272    +0.114      3.2
+        //   new  chop.30 RSI35/65 rr1.5   +0.263    +0.110     52.7
+        // Same edge, 16x the trades — the old thresholds were so strict they
+        // almost never fired, which is the same mistake the trend side made.
         [Parameter("Also fade RSI extremes when the tape is CHOPPY", DefaultValue = false, Group = "Mean reversion")]
         public bool UseMeanReversion { get; set; }
 
-        [Parameter("Fade only when trend quality is BELOW", DefaultValue = 0.20, MinValue = 0.0, MaxValue = 1.0, Group = "Mean reversion")]
+        [Parameter("Fade only when trend quality is BELOW", DefaultValue = 0.30, MinValue = 0.0, MaxValue = 1.0, Group = "Mean reversion")]
         public double ChopMax { get; set; }
 
-        [Parameter("Fade: RSI oversold (buy below)", DefaultValue = 30.0, MinValue = 5, MaxValue = 50, Group = "Mean reversion")]
+        [Parameter("Fade: RSI oversold (buy below)", DefaultValue = 35.0, MinValue = 5, MaxValue = 50, Group = "Mean reversion")]
         public double FadeRsiLow { get; set; }
 
-        [Parameter("Fade: RSI overbought (sell above)", DefaultValue = 70.0, MinValue = 50, MaxValue = 95, Group = "Mean reversion")]
+        [Parameter("Fade: RSI overbought (sell above)", DefaultValue = 65.0, MinValue = 50, MaxValue = 95, Group = "Mean reversion")]
         public double FadeRsiHigh { get; set; }
 
-        [Parameter("Fade: reward:risk", DefaultValue = 1.0, MinValue = 0.5, MaxValue = 5.0, Group = "Mean reversion")]
+        [Parameter("Fade: reward:risk", DefaultValue = 1.5, MinValue = 0.5, MaxValue = 5.0, Group = "Mean reversion")]
         public double FadeRewardRisk { get; set; }
 
         [Parameter("News: use economic calendar", DefaultValue = true, Group = "News agent")]

@@ -1393,3 +1393,19 @@ worth +0.30 rather than -0.21, and leaving it off is the expensive mistake.
 
 The default stays OFF because these two models say trending, and they are all
 the evidence there is until live sessions report otherwise.
+
+### Fade parameters tuned — they had been shipped at test defaults
+
+`ChopMax=0.20, RSI 30/70, rr 1.0` were carried over from a test script, never
+swept. Tuned on MEAN-REVERTING markets (H=0.40/0.45), scored by the WORSE of
+the two, then certified on virgin seeds 750-789:
+
+| settings | H=0.40 edge | H=0.45 edge | trades/wk |
+|---|---|---|---|
+| old (chop 0.20, RSI 30/70, rr 1.0) | +0.272 | +0.114 | 3.2 |
+| **new (chop 0.30, RSI 35/65, rr 1.5)** | +0.263 | +0.110 | **52.7** |
+
+**Same edge, 16x the trades.** The old thresholds were so strict they almost
+never fired — the identical mistake the trend side was making at eff>=0.50.
+Deliberately tuned where the rule is meant to operate: tuning a counter-trend
+rule on trending data would just select whichever settings fire least.
