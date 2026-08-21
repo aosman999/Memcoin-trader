@@ -398,6 +398,14 @@ namespace cAlgo.Robots
         private int _tradesToday;
         private double _bestQualityToday;
         private readonly int[] _wouldSignal = new int[6];
+        // The MEDIAN matters more than the best. The strategy was certified on
+        // two simulated markets whose median 48-bar trend quality is 0.17-0.19.
+        // A third model, identical in volatility but trending less (median
+        // 0.12), destroys the edge completely — +0.08 instead of +0.43/+0.57,
+        // a 51% win rate, and no growth at any threshold. So this one number
+        // decides whether the strategy has an edge on real gold at all, and no
+        // amount of re-tuning against those simulators could reveal it.
+        private readonly List<double> _qualitiesToday = new List<double>();
         private DateTime _lastProtectCheck = DateTime.MinValue;
 
         // ---- news agent state (written by a background task) --------------
@@ -1135,6 +1143,7 @@ namespace cAlgo.Robots
             _barsToday = 0;
             _tradesToday = 0;
             _bestQualityToday = 0.0;
+            _qualitiesToday.Clear();
             for (var k = 0; k < _wouldSignal.Length; k++) _wouldSignal[k] = 0;
         }
 
@@ -1143,6 +1152,7 @@ namespace cAlgo.Robots
         {
             _barsToday++;
             if (quality > _bestQualityToday) _bestQualityToday = quality;
+            _qualitiesToday.Add(quality);
             // A "signal" here means everything EXCEPT the quality threshold
             // agreed — so the counts isolate what the threshold alone costs.
             var directional = bulls >= votesNeeded || bears >= votesNeeded;
@@ -1161,6 +1171,30 @@ namespace cAlgo.Robots
                   _statsDay, _barsToday, _bestQualityToday, EfficiencyMin, _tradesToday);
             Print("   signals available at each threshold -> {0}",
                   string.Join("  ", parts));
+
+            if (_qualitiesToday.Count >= 8)
+            {
+                var sorted = _qualitiesToday.ToList();
+                sorted.Sort();
+                var med = sorted[sorted.Count / 2];
+                var p75 = sorted[sorted.Count * 3 / 4];
+                Print("   trend quality distribution today: median {0:F2}, 75th {1:F2}, best {2:F2}",
+                      med, p75, _bestQualityToday);
+                // The single number that says whether this strategy can work
+                // on real gold at all. See the note on _qualitiesToday.
+                if (med >= 0.16)
+                    Print("   -> median {0:F2} is IN LINE with the markets this was certified on " +
+                          "(0.17-0.19). The edge measured in testing should carry over.", med);
+                else if (med >= 0.13)
+                    Print("   -> median {0:F2} is BELOW the certified range (0.17-0.19). Edge is " +
+                          "likely thinner live than in testing. Collect more days before tuning.", med);
+                else
+                    Print("   -> WARNING: median {0:F2} is far below the certified range " +
+                          "(0.17-0.19). On a market this choppy the tested edge collapses to " +
+                          "roughly zero AT EVERY THRESHOLD. Do not loosen the filter to force " +
+                          "trades — that made things worse, not better, in testing. Report this.", med);
+            }
+
             if (_tradesToday == 0)
                 Print("   NO TRADES: the market never reached the threshold. The line " +
                       "above shows which setting would have traded, and how often.");

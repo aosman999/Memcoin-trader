@@ -997,3 +997,79 @@ re-certification here would have caught.
 
 Printed at UTC day rollover and again on stop, so a bot shut down before
 midnight still reports its session.
+
+## THE CRITICAL FINDING — the edge is contingent on how much gold trends
+
+Everything certified in this document rests on two simulated markets built for
+this project. Whether real gold trends as much as they do was never tested. It
+is the assumption the entire strategy sits on, and it turns out to be the
+assumption that matters most.
+
+Built a **third market model** with trend persistence dialled down, then
+matched its volatility to the other two so the comparison isolates trending
+alone (15m vol 0.172% vs M1 0.179%, M2 0.170%).
+
+| model | median 48-bar efficiency | edge | win% | growth | losing runs |
+|---|---|---|---|---|---|
+| M1 (existing) | 0.17 | **+0.565** | 68.1 | x1.64 | 2/40 |
+| M2 (existing) | 0.19 | **+0.432** | 63.9 | x1.80 | 4/40 |
+| **M3 (choppier)** | **0.12** | **+0.083** | 51.3 | x1.02 | 19/40 |
+
+**A drop in median trend quality from 0.17-0.19 to 0.12 destroys the edge
+entirely.** Win rate falls to a coin flip, growth goes flat, and half the runs
+lose money. Both models were built by this project and both trend more than the
+third; nothing in dozens of prior certifications could have surfaced this,
+because every one of them used the same two markets.
+
+### Controls run before believing it
+
+1. **Plumbing.** The identical code path reproduces the known M1/M2 numbers
+   (edge +0.565 / +0.432 at threshold 0.35). Not a harness bug.
+2. **Volatility confound.** The first version of M3 ran at 0.103% per 15m
+   against ~0.175%. With the stop clamped at a 0.4% floor, a quiet tape cannot
+   reach its targets, which would sink any strategy. Re-matched to 0.172% and
+   the collapse persisted — so it is trending, not volatility.
+3. **Random baseline.** Edge is measured against a matched-rate coin flip on
+   each model separately, so a model that trends more cannot flatter the
+   strategy through the baseline.
+
+### What this changes
+
+**Loosening the filter to trade more is the WRONG response to a choppy market.**
+On M3 the edge is worst and drawdown highest at low thresholds:
+
+| threshold | edge on M3 | worst DD |
+|---|---|---|
+| 0.45 | +0.135 | 16% |
+| 0.35 | +0.083 | 29% |
+| 0.30 | +0.080 | 42% |
+| 0.25 | +0.042 | 53% |
+
+If real gold looks like M3, the answer is not a lower threshold — it is not
+trading this strategy at all. Ranked by the WORSE model, as this project's own
+rule requires, 0.45 is the robust setting and 0.35 is a bet that gold trends
+like the simulators.
+
+**0.35 ships anyway**, because the owner's priority is frequency and on the
+choppy model the difference between 0.35 and 0.45 is small in absolute terms
+(both near zero) while on the trending models 0.35 is clearly better. But it is
+a bet, and it is now labelled as one.
+
+### The diagnostic settles it from one live session
+
+The cBot now reports the discriminating statistic directly:
+
+```
+   trend quality distribution today: median 0.14, 75th 0.22, best 0.31
+   -> median 0.14 is BELOW the certified range (0.17-0.19). Edge is likely
+      thinner live than in testing. Collect more days before tuning.
+```
+
+Thresholds in that message: **>=0.16** in line with certification; **0.13-0.16**
+below it, edge likely thinner; **<0.13** the collapse zone, where the tested
+edge is roughly zero at every threshold and loosening the filter makes things
+worse rather than better.
+
+**This is now the highest-value measurement in the project.** A few live
+sessions reporting real gold's median trend quality is worth more than any
+further certification against the two models that produced these numbers.
