@@ -661,3 +661,54 @@ This pass used a rebuilt harness. It reproduces the champion's win rate closely
 trades/week), so it is not bit-identical to the one behind the earlier numbers.
 Every comparison above is internally consistent — both arms, same harness —
 but do not compare these absolute frequencies against pre-August figures.
+
+## Head-to-head vs the previously deployed config (Aug 2026)
+
+The owner was still running the pre-research build and asked whether the new
+one really beats it. The two numbers on record came from DIFFERENT harnesses
+(+0.484 from the old one, +0.640 from the rebuilt one), so the comparison was
+not valid as stated. Re-ran the old configuration through the current harness
+so both arms are measured the same way.
+
+Virgin seeds 3100-3149, both market models:
+
+| config | win% | trades/wk | edge | n |
+|---|---|---|---|---|
+| **previous** — eff24@0.60, 3 positions, gap 4, 6 voters, no session filter | 68.3 | 8.7 | +0.536 | 2,205 |
+| **current** — eff48@0.50, 10 positions, gap 2, 3 voters, session filter | **73.7** | **13.9** | **+0.640** | 3,548 |
+
+Edge difference +0.104 at a combined SE of 0.027 — about **3.9 sigma**. Real,
+not noise. Better on all three of win rate, frequency and per-trade edge.
+
+### The part that is easy to get wrong
+
+Per-trade edge and per-week growth are not the same question, and here they
+give different answers:
+
+| config | R/week | risk/trade | account growth/week |
+|---|---|---|---|
+| previous | 4.65 R | 3.0% | 13.9% |
+| current | 8.92 R | 1.5% | 13.4% |
+
+**Nearly double the R per week, and essentially identical expected account
+growth**, because risk per trade was halved when concurrency went from 3 to 10.
+The improvement is not more money — it is the *same* money earned from more
+trades at lower risk each, which is why worst drawdown falls (35% -> 19%).
+
+Stated plainly here because "higher edge" reads as "grows faster" and in this
+case it does not. Anyone raising risk to capture the difference should read the
+sizing table above first: 10 concurrent positions at 3% is 30% exposure, well
+past the ~15.6% Kelly estimate, where added size increases drawdown without
+increasing return.
+
+### Deployment note
+
+The owner deployed the **single-window** build (`UseEnsembleQuality = false`)
+in preference to the ensemble, trading ~2.8 trades/week more for a slightly
+lower per-trade edge and a worst drawdown of 19% rather than 15%. Both ship in
+the same file; it is a parameter, not a code change.
+
+**Next evidence should be live demo fills, not more simulation.** Every number
+in this document is SIMULATED, on models where a coin flip scores +0.11 to
++0.28R. The tuning has reached the point where further gains measured here are
+worth less than one week of real fills.
