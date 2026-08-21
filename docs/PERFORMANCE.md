@@ -586,3 +586,78 @@ The shipped configuration is unchanged: 48-bar trend window, 3 voters, swing
 stop, adaptive RR 1.0-2.0, 10 concurrent positions, 1.5% risk —
 **71.3% win, 9.9 trades/week, edge +0.584, 37% worst drawdown, 0/100 runs
 losing money.** All figures SIMULATED.
+
+## Podcast pass (Aug 2026) — the ensemble fix, ADOPTED
+
+Source: Robert Carver on *Better System Trader* ep.26 and his book *Systematic
+Trading*. The site itself is blocked by this environment's egress proxy, so the
+claim came through search summaries — but unlike most podcast advice it is
+directly testable, and it is aimed at **our own process**, not at the market.
+
+**The claim:** the standard approach — sweep a parameter, keep whichever value
+performed best — is beaten by simply *averaging across all the variations*. The
+winner of a sweep was probably partly lucky, and that luck does not persist.
+
+**Why it applies here:** we picked `EfficiencyWindow = 48` because it beat
+12/24/36 in a sweep. That is exactly the pattern Carver describes.
+
+### Is 48 a peak or a plateau?
+
+Tuning seeds 3000-3029, gate varied, everything else identical:
+
+| gate | win% | trades/wk | edge | worst-model |
+|---|---|---|---|---|
+| eff 36 alone | 70.4 | 23.3 | +0.600 | +0.523 |
+| **eff 48 alone (champion)** | 71.6 | 15.0 | **+0.631** | +0.550 |
+| eff 60 alone | 71.9 | 9.2 | +0.567 | +0.454 |
+| eff 72 alone | 70.2 | 6.0 | +0.528 | +0.425 |
+| mean of 5 windows | 73.6 | 12.1 | +0.642 | +0.539 |
+| vote 3 of 5 | 73.8 | 12.3 | +0.650 | +0.571 |
+
+**48 is a peak, not a plateau** — every neighbour is worse. That is the
+signature of a partly-lucky parameter.
+
+### Certification, 50 virgin seeds (3100-3149)
+
+| gate | win% | trades/wk | edge | worst-model | med DD | worst DD | losing runs |
+|---|---|---|---|---|---|---|---|
+| single window 48 | 73.7 | 13.9 | +0.640 | +0.561 | 6% | 19% | 13/100 |
+| **mean of 5 windows** | **75.8** | 11.1 | **+0.699** | **+0.652** | 5% | **15%** | 12/99 |
+| vote 3 of 5 | 74.5 | 11.6 | +0.664 | +0.605 | 5% | 15% | 12/100 |
+
+**ADOPTED: the mean of five windows** (`UseEnsembleQuality`, default on).
+
+Honest reading of the significance: mean-vs-champion is +0.059 edge at a
+combined SE of ~0.025 — about 2.4 sigma, and +2.1 points of win rate at ~1.9
+sigma. Not overwhelming on edge alone. What makes it convincing is the shape:
+it wins on *both* tuning and virgin seeds, and **the gain is largest on the
+worse of the two market models** (+0.091 there vs +0.059 on the mean). An
+improvement that grows when conditions get worse is robustness; one that
+shrinks is a fit. It also removes a fitted parameter instead of adding one.
+
+The choice *between* mean-of-5 and vote-3-of-5 is noise — they swapped ranks
+between the tuning and certification sets. Took the mean because it is
+Carver's actual prescription and better on the metric we rank by.
+
+**Cost: ~2.8 trades/week.** Recorded plainly since "trade more" is a standing
+requirement.
+
+### Two measurement bugs caught while running this
+
+1. **Trades/week was double-counted.** The rate was computed across both market
+   models' bars, then multiplied by two again. Every frequency figure in this
+   pass was ~2x too high until fixed.
+2. **The gate was contaminating the target.** The variant's trend-quality value
+   fed the conviction scaler that sets reward:risk, so a gate returning a high
+   value automatically got a wider target and won on *exit geometry* rather
+   than on entry selection. With the confound removed, vote-3/5's apparent
+   +0.783 edge fell to +0.650. **The first run of this test produced a fake
+   winner.** Conviction is now sourced identically for every variant.
+
+### Harness note
+
+This pass used a rebuilt harness. It reproduces the champion's win rate closely
+(73.7% here vs 71.3% recorded) but reports higher frequency (13.9 vs 9.9
+trades/week), so it is not bit-identical to the one behind the earlier numbers.
+Every comparison above is internally consistent — both arms, same harness —
+but do not compare these absolute frequencies against pre-August figures.

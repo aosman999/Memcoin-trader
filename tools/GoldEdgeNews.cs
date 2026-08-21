@@ -206,6 +206,27 @@ namespace cAlgo.Robots
         [Parameter("Min trend quality (0-1)", DefaultValue = 0.50, MinValue = 0.0, MaxValue = 1.0, Group = "Trend filter")]
         public double EfficiencyMin { get; set; }
 
+        // Carver's overfitting rule, applied to our own tuning. A sweep picked
+        // 48 because it beat 12/24/36 — but 48 turned out to be a PEAK, not a
+        // plateau: its neighbours all score clearly worse (edge +0.600 at 36,
+        // +0.567 at 60, +0.528 at 72, vs +0.631 at 48). A parameter whose
+        // neighbours are worse is a parameter that was partly lucky.
+        //
+        // The fix is not a better single window, it is to stop picking one:
+        // average trend quality across the whole family. Certified on 50 virgin
+        // seeds (3100-3149):
+        //   single window 48   win 73.7%, edge +0.640, worst-model +0.561, worstDD 19%
+        //   mean of 5 windows  win 75.8%, edge +0.699, worst-model +0.652, worstDD 15%
+        // Better on both models, and the gain is LARGEST on the worse model —
+        // which is what robustness looks like. Costs ~2.8 trades/week.
+        [Parameter("Ensemble trend quality (avg of 5 windows)", DefaultValue = true, Group = "Trend filter")]
+        public bool UseEnsembleQuality { get; set; }
+
+        // Deliberately a fixed spread around the old value rather than five more
+        // tunable knobs — replacing one fitted number with five would defeat the
+        // point of the exercise.
+        private static readonly int[] EnsembleWindows = { 24, 36, 48, 60, 72 };
+
         [Parameter("News: use economic calendar", DefaultValue = true, Group = "News agent")]
         public bool UseCalendar { get; set; }
 
@@ -447,7 +468,10 @@ namespace cAlgo.Robots
             Print("Entry: {0} | ADX>={1}{2} | trend quality>={3} over {4} bars | up to {5} positions",
                   UseSimpleVoters ? "3/3 votes (simplified)" : VotesNeeded + "/6 votes",
                   AdxMin, RequireAdxRising ? " and rising" : "",
-                  EfficiencyMin, EfficiencyWindow, MaxConcurrentPositions);
+                  EfficiencyMin,
+                  UseEnsembleQuality ? "24/36/48/60/72 (ensemble avg)"
+                                     : EfficiencyWindow.ToString(),
+                  MaxConcurrentPositions);
             Print("Exit: stop {0} | target {1} | max hold {2} bars | risk {3}%",
                   UseSwingStop
                     ? string.Format("SWING structure ({0}-bar, +{1}% buffer, clamped {2}-{3}%)",
@@ -522,7 +546,13 @@ namespace cAlgo.Robots
             // move can just as easily run in our favour.
             ProtectPositions();
 
-            var need = Math.Max(120, EfficiencyWindow + 10);
+            // The ensemble reaches back to the longest window, not to the
+            // configured one — warm up for whichever is greater.
+            var longest = EfficiencyWindow;
+            if (UseEnsembleQuality)
+                foreach (var w in EnsembleWindows)
+                    if (w > longest) longest = w;
+            var need = Math.Max(120, longest + 10);
             if (Bars.ClosePrices.Count < need)
                 return;
 
@@ -569,7 +599,7 @@ namespace cAlgo.Robots
             var votesNeeded = UseSimpleVoters ? 3 : VotesNeeded;
             var bears = total - bulls;
 
-            var quality = TrendQuality(EfficiencyWindow);
+            var quality = CurrentTrendQuality();
 
             if (StatusEveryBars > 0 && _barCount % StatusEveryBars == 0)
                 Print("status: {0:F2} | {1}/{2} votes | ADX {3:F1}{4} | quality {5:F2} {6} | news: {7}",
@@ -979,6 +1009,23 @@ namespace cAlgo.Robots
             if (raw <= 0)
                 return price * (MinStopPercent / 100.0);
             return raw * (1.0 + SwingBufferPercent / 100.0);
+        }
+
+        // Trend quality actually used for gating and for target conviction.
+        private double CurrentTrendQuality()
+        {
+            if (!UseEnsembleQuality) return TrendQuality(EfficiencyWindow);
+            double sum = 0.0;
+            var count = 0;
+            foreach (var w in EnsembleWindows)
+            {
+                if (Bars.ClosePrices.Count <= w + 1) continue;
+                sum += TrendQuality(w);
+                count++;
+            }
+            // Fall back to the single window rather than reporting 0.0 (which
+            // would silently gate every trade off) if history is still short.
+            return count > 0 ? sum / count : TrendQuality(EfficiencyWindow);
         }
 
         private double TrendQuality(int window)
