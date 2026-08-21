@@ -16,11 +16,16 @@
 //        often as it dumps it, and closing on news measured clearly worse.
 //
 // ========================= CERTIFIED PERFORMANCE ========================
-// 50 virgin seeds (3500-3549), two market models, 7,292 trades. SIMULATED.
-//   win rate   70.3%
-//   frequency  28.7 trades/week
-//   edge       +0.572 over a random-entry baseline (worst model +0.481)
-//   drawdown   median 8%, worst 30%, at 1.0% risk
+// Four INDEPENDENT virgin seed sets of 50 (3300/3500/3600/3700). SIMULATED.
+//   win rate   64.7 - 66.5%
+//   frequency  50 - 54 trades/week
+//   idle days  34% (was 76% at the old 0.50 threshold)
+//   edge       +0.474 to +0.527 over a random-entry baseline
+//   drawdown   median ~13%, worst 30-41%, at 1.0% risk
+//   losing runs 6-8 of 100
+// Quoted as a RANGE across seed sets, not a single number. A headline figure
+// from one sample carries +/-3 points of noise and reads as precision it does
+// not have — that mistake was made in earlier versions of this file.
 //
 // Scored as EDGE OVER RANDOM because a coin flip earns +0.11 to +0.28R on
 // these simulators — raw returns from any trend strategy are inflated here.
@@ -52,6 +57,18 @@
 // them. It is also what keeps the bot out of chop: ADX read 29-47 ("strong")
 // through a whole flat afternoon where efficiency correctly read 0.22-0.27.
 //
+// IDLE DAYS ARE THE REAL COMPLAINT, and trades-per-week hides them. A config
+// averaging 28/week can still stand aside three days running and then fire 20
+// times in one trend. Share of days with ZERO trades:
+//        eff >= 0.50   76% idle      eff >= 0.35   36% idle
+//        eff >= 0.45   66% idle      eff >= 0.30   23% idle
+//        eff >= 0.40   51% idle      eff >= 0.25   11% idle
+//   Context: trend quality has a MEDIAN of 0.17 and a 95th percentile of 0.47,
+//   so a 0.50 gate fires in roughly the top 3% of bars. A live session logging
+//   0.22-0.27 is an ORDINARY tape near the 70th percentile, not unusual chop.
+//   0.35 was chosen as the point where the bot trades about two days in three
+//   while edge stays well clear of the ~+0.3R slippage floor.
+//
 // THE THRESHOLD IS THE FREQUENCY DIAL, and looser is not automatically worse:
 //        eff >= 0.50   11.4 tr/wk   edge +0.648
 //        eff >= 0.45   18.6 tr/wk   edge +0.589
@@ -61,12 +78,18 @@
 //   cushion stops reliably covering real-world slippage — that is the floor,
 //   not the win rate.
 //
-// MORE TRADES AT A SMALLER SIZE BEATS FEWER AT A LARGER ONE. Holding drawdown
-// fixed and buying frequency with the threshold while paying for it with risk:
-//        eff.50 gap2 @1.50%   11.2 tr/wk   worst DD 31%   growth x1.24
-//        eff.45 gap1 @1.00%   28.7 tr/wk   worst DD 30%   growth x1.46
-//   Same drawdown, 2.6x the trades, more growth, and lower total exposure
-//   (14 x 1.0% = 14%, versus 10 x 1.5% = 15%).
+// MORE TRADES AT A SMALLER SIZE BEATS FEWER AT A LARGER ONE. Buying frequency
+// with the threshold and paying for it with position size, virgin seeds:
+//        eff.50 gap2 10pos @1.50%   11 tr/wk  76% idle  DD 31%  growth x1.24
+//        eff.45 gap1 14pos @1.00%   29 tr/wk  66% idle  DD 31%  growth x1.50
+//        eff.35 gap1 10pos @1.00%   52 tr/wk  34% idle  DD 35%  growth x1.81
+//   Roughly 5x the trades and half the idle days for ~4 points of drawdown.
+//   Total exposure also FALLS to 10 x 1.0% = 10%, from 10 x 1.5% = 15%.
+//   Win rate drops to ~65% — that is the honest price of a looser gate, and it
+//   is paid back in frequency and in fewer losing runs (6-8/100 vs 14-18/100).
+//   TO TRADE LESS AND MORE SELECTIVELY: raise the threshold back toward 0.45.
+//   TO CUT DRAWDOWN: lower max concurrent positions to 6-7; edge is flat
+//   across that range, so it costs only trades.
 //
 // ENSEMBLE TREND QUALITY, not a single window. A sweep picked 48 bars, but 48
 //   turned out to be a PEAK rather than a plateau — its neighbours all scored
@@ -153,7 +176,7 @@ namespace cAlgo.Robots
         [Parameter("Trend quality window (bars)", DefaultValue = 48, MinValue = 4, MaxValue = 200, Group = "Trend filter")]
         public int EfficiencyWindow { get; set; }
 
-        [Parameter("Min trend quality (0-1)", DefaultValue = 0.45, MinValue = 0.0, MaxValue = 1.0, Group = "Trend filter")]
+        [Parameter("Min trend quality (0-1)", DefaultValue = 0.35, MinValue = 0.0, MaxValue = 1.0, Group = "Trend filter")]
         public double EfficiencyMin { get; set; }
 
         // Carver's overfitting rule, applied to our own tuning. A sweep picked
@@ -327,7 +350,7 @@ namespace cAlgo.Robots
         // fired), but the simulators contain no GAPS, and a gap through several
         // correlated stops is exactly what they cannot show. Lower this to 5-7
         // if that risk matters more than frequency.
-        [Parameter("Max concurrent positions", DefaultValue = 14, MinValue = 1, MaxValue = 20, Group = "Risk")]
+        [Parameter("Max concurrent positions", DefaultValue = 10, MinValue = 1, MaxValue = 20, Group = "Risk")]
         public int MaxConcurrentPositions { get; set; }
 
         [Parameter("Min bars between same-direction entries", DefaultValue = 1, MinValue = 0, MaxValue = 50, Group = "Risk")]

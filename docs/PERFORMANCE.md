@@ -895,3 +895,55 @@ Gold's minimum trade is 1 oz, risking ~$18-64 depending on stop width
 widest-stop setups get skipped by the too-small guard. Below roughly $2,500
 this configuration cannot size properly at all. Sub-1% risk settings are not
 deployable at this account size however well they score in simulation.
+
+### Correction to the section above — idle DAYS, not trades per week
+
+The frequency fix above was measured against the wrong target. The owner's
+complaint was "it hasn't traded today", and trades-per-week hides exactly that:
+a config averaging 28/week can stand aside for three days and then fire twenty
+times inside one trend.
+
+Measured properly — share of days with ZERO trades:
+
+| threshold | idle days | median trades/day |
+|---|---|---|
+| 0.50 (what was running) | **76%** | 0 |
+| 0.45 (the "fix" above) | **66%** | 0 |
+| 0.40 | 51% | 0 |
+| **0.35** | **36%** | 3 |
+| 0.30 | 23% | 10 |
+| 0.25 | 11% | 17 |
+
+**Lowering 0.50 to 0.45 barely moved the thing being complained about** — 76%
+idle to 66%. The fix was real but aimed at the wrong metric.
+
+Why: trend quality has a **median of 0.17** and a 95th percentile of **0.47**,
+so a 0.50 gate fires in roughly the top 3% of bars. The live log reading
+0.22-0.27 was an *ordinary* tape near the 70th percentile — not unusual chop.
+The threshold had been set where the bot is nearly always standing aside.
+
+### Final config, certified on FOUR independent virgin seed sets
+
+`eff >= 0.35, gap 1 bar, 10 concurrent, 1.0% risk, ensemble trend quality`
+
+| seeds | win% | trades/wk | edge | worst DD | growth | losing |
+|---|---|---|---|---|---|---|
+| 3300-3349 | 66.5 | 54.3 | +0.499 | 41% | x1.91 | 7/100 |
+| 3500-3549 | 64.7 | 50.8 | +0.474 | 37% | x1.71 | 7/100 |
+| 3600-3649 | 65.1 | 50.4 | +0.484 | 30% | x1.76 | 8/100 |
+| 3700-3749 | 66.2 | 51.8 | +0.527 | 33% | x1.84 | 6/100 |
+
+Against the eff.45/14-position config from the previous section, on the same
+four sets: **1.7x the trades, half the idle days, consistently higher growth
+(x1.71-1.91 vs x1.43-1.61), and fewer losing runs (6-8/100 vs 7-18/100)**, for
+about 4 points more drawdown and 5 points less win rate.
+
+Reported as a RANGE across seed sets rather than one number — quoting a single
+sample as though exact is the mistake that produced the "73.7%" episode.
+
+Edge +0.47 to +0.53 stays clear of the ~+0.3R floor below which the cushion
+stops reliably covering real slippage.
+
+**Dials, both flat in edge so they cost only trades:** raise the threshold
+toward 0.45 to trade less and more selectively; lower concurrency to 6-7 to cut
+drawdown.
