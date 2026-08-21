@@ -542,3 +542,47 @@ way (71.3%) — only survivability changes.
 | Pyramiding into winners | 67.9%, +0.535 — neutral |
 | Asymmetric long/short thresholds | 68.2%, +0.533 (longs easier) — within noise |
 | Wider entry spacing (gap 8) | 67.1%, +0.515 — worse |
+
+## Trader-technique pass (Aug 2026) — three claims tested, none adopted
+
+Source note: YouTube itself is blocked by this environment's egress proxy
+(`EGRESS_BLOCKED`), and there is no video capability here, so the claims below
+came from written summaries and transcripts of widely-followed gold traders
+rather than from watching anything. Treat the sourcing as second-hand; the
+measurement is what decides.
+
+Each claim was reduced to a testable rule and run with **the reward:risk ratio
+held fixed**, so nothing could win by quietly shortening the target.
+
+| claim (as commonly taught) | rule tested | result |
+|---|---|---|
+| "Trade the 20 EMA / 9 SMA crossover" | enter only on the bar the fast MA crosses | **starved — 12 trades** across the whole seed set. Unmeasurable, not adoptable. |
+| "Take the 4H bias, enter on the 15M" | require higher-timeframe direction to agree | 71.9% win, edge +0.618 vs 71.6% / +0.610 for the champion — see certification below |
+| "Buy at discount, never chase extended price" | skip entries far from the fast EMA | **starved — 2 trades**. Same failure as the earlier pullback test: in a high-efficiency trend price is never near the fast EMA. |
+
+The two starved rules are the same lesson twice: **a rule that only fires when
+the trend filter is already excluding the setup does not exist as a strategy.**
+
+### 4H-bias certification — within noise, NOT adopted
+
+50 fresh seeds (1100-1149), never used for tuning:
+
+| config | win% | trades/wk | edge | worst-model | n | med DD | worst DD | losing runs |
+|---|---|---|---|---|---|---|---|---|
+| current (no HTF bias) | 69.8 | 9.4 | +0.563 | +0.473 | 11,297 | 12% | 43% | 6/100 |
+| + 4H bias filter | 70.1 | 9.2 | +0.570 | +0.479 | 11,056 | 12% | 42% | 4/100 |
+
++0.3 points of win rate and +0.007 of edge is **inside the noise band** for this
+sample. The losing-run count fell from 6/100 to 4/100, which looks like a
+robustness gain, but at n=100 runs that difference is about one standard error
+— it is not evidence.
+
+**Verdict: not adopted.** It costs 0.2 trades/week and adds a second timeframe
+(a real crash risk in cBots — `MarketData.GetBars` is on the suspected-null
+list) to buy nothing that can be distinguished from chance. Recorded here so it
+is not re-tested without a specific reason.
+
+The shipped configuration is unchanged: 48-bar trend window, 3 voters, swing
+stop, adaptive RR 1.0-2.0, 10 concurrent positions, 1.5% risk —
+**71.3% win, 9.9 trades/week, edge +0.584, 37% worst drawdown, 0/100 runs
+losing money.** All figures SIMULATED.
