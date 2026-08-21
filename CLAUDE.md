@@ -6,12 +6,13 @@ religious reasons; do not reintroduce memecoin trading.
 
 ## Commands
 ```bash
-python3 -m unittest discover -s tests          # must stay green (21 tests)
+python3 -m unittest discover -s tests          # must stay green (33 tests)
 python3 -m goldtrader campaign [--anchor-price X]  # one sim day per date, real-price anchored
 python3 -m goldtrader evolve [--cross-model]   # Strategy Lab (holdout-gated)
 python3 -m goldtrader backtest --days N        # simulator runs
 python3 -m goldtrader mistakes                 # Mistake Analyst report
 python3 -m goldtrader preflight                # pre-live verification
+./tools/verify/build-check.sh tools/GoldEdgeNews.cs  # COMPILE a cBot before sending it
 python3 -m goldtrader mac --forever            # LIVE demo bridge (owner's Mac)
 ```
 Zero dependencies (pure stdlib). This cloud env blocks ALL market/news
