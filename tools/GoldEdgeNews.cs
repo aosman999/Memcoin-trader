@@ -215,6 +215,41 @@ namespace cAlgo.Robots
         // point of the exercise.
         private static readonly int[] EnsembleWindows = { 24, 36, 48, 60, 72 };
 
+        // ---- MEAN-REVERSION SIDE (off by default) --------------------------
+        // The trend filter only fires when the tape is trending, so on a
+        // mean-reverting market this bot stands aside all day and, worse, its
+        // few trades lose: edge -0.265 at H=0.40. Fading an RSI extreme when
+        // trend quality is LOW is the opposite bet, and it is the right one
+        // there. Measured across markets of known Hurst exponent:
+        //        H     market          trend-only   fade-only   both
+        //       0.40   mean-reverting    -0.265      +0.298    +0.098
+        //       0.45   mean-reverting    -0.104      +0.160    +0.016
+        //       0.50   random walk       +0.052      +0.021    +0.038
+        //       0.55   trending          +0.215      -0.170    +0.129
+        //       0.60   trending          +0.446      -0.208    +0.317
+        // (subtract the ~0.06 geometry floor from all of these)
+        //
+        // OFF BY DEFAULT ON PURPOSE. Running both halves is robust to being
+        // wrong about the regime, but the loser drags on the winner, so it is
+        // insurance rather than an improvement. Turn it on only once the DAY
+        // SUMMARY has shown, over several sessions, that gold's implied Hurst
+        // is running at or below 0.50 — at which point trend-following is the
+        // wrong strategy and this is the right one.
+        [Parameter("Also fade RSI extremes when the tape is CHOPPY", DefaultValue = false, Group = "Mean reversion")]
+        public bool UseMeanReversion { get; set; }
+
+        [Parameter("Fade only when trend quality is BELOW", DefaultValue = 0.20, MinValue = 0.0, MaxValue = 1.0, Group = "Mean reversion")]
+        public double ChopMax { get; set; }
+
+        [Parameter("Fade: RSI oversold (buy below)", DefaultValue = 30.0, MinValue = 5, MaxValue = 50, Group = "Mean reversion")]
+        public double FadeRsiLow { get; set; }
+
+        [Parameter("Fade: RSI overbought (sell above)", DefaultValue = 70.0, MinValue = 50, MaxValue = 95, Group = "Mean reversion")]
+        public double FadeRsiHigh { get; set; }
+
+        [Parameter("Fade: reward:risk", DefaultValue = 1.0, MinValue = 0.5, MaxValue = 5.0, Group = "Mean reversion")]
+        public double FadeRewardRisk { get; set; }
+
         [Parameter("News: use economic calendar", DefaultValue = true, Group = "News agent")]
         public bool UseCalendar { get; set; }
 
@@ -667,18 +702,25 @@ namespace cAlgo.Robots
             if (UseShockVeto && RecentShock())
                 return;
 
-            // ---- the certified strategy gates ---------------------------
-            if (adx < AdxMin)
+            // ---- which side of the book has anything to say here? --------
+            if (quality >= EfficiencyMin)
+            {
+                if (adx < AdxMin) return;
+                if (RequireAdxRising && adx <= adxPrev) return;
+                if (bulls >= votesNeeded)
+                    OpenTrade(1, bulls, adx, quality);
+                else if (bears >= votesNeeded && AllowShort)
+                    OpenTrade(-1, bears, adx, quality);
                 return;
-            if (RequireAdxRising && adx <= adxPrev)
-                return;
-            if (quality < EfficiencyMin)
-                return;
+            }
 
-            if (bulls >= votesNeeded)
-                OpenTrade(1, bulls, adx, quality);
-            else if (bears >= votesNeeded && AllowShort)
-                OpenTrade(-1, bears, adx, quality);
+            // CHOPPY tape: the trend side has nothing to say here. Fade an RSI
+            // extreme instead, if the mean-reversion side is enabled.
+            if (!UseMeanReversion || quality > ChopMax) return;
+            if (rsi <= FadeRsiLow)
+                OpenFade(1, rsi, quality);
+            else if (rsi >= FadeRsiHigh && AllowShort)
+                OpenFade(-1, rsi, quality);
         }
 
         // ================= news agent ====================================
@@ -1085,6 +1127,47 @@ namespace cAlgo.Robots
                     (Server.TimeInUtc - pos.EntryTime).TotalMinutes < minutes)
                     return true;
             return false;
+        }
+
+        // Counter-trend entry. Same stop and sizing machinery as OpenTrade —
+        // only the reason for entering differs — so the two sides cannot be
+        // compared unfairly on exit geometry.
+        private void OpenFade(int direction, double rsi, double quality)
+        {
+            if (TooSoonForSameSide(direction)) return;
+            var price = direction > 0 ? Symbol.Ask : Symbol.Bid;
+            if (price <= 0) return;
+
+            var loClamp = price * (MinStopPercent / 100.0);
+            var hiClamp = price * (MaxStopPercent / 100.0);
+            var stopDist = Math.Max(loClamp, Math.Min(hiClamp,
+                                    SwingStopDistance(direction, price)));
+            if (stopDist <= 0) return;
+            var tpDist = stopDist * FadeRewardRisk;
+
+            var riskUsd = Account.Equity * (RiskPercent / 100.0);
+            var units = Symbol.NormalizeVolumeInUnits(riskUsd / stopDist, RoundingMode.Down);
+            var minRisk = Symbol.VolumeInUnitsMin * stopDist;
+            if (minRisk > riskUsd * 2.0)
+            {
+                Print("SKIP (fade): account too small — smallest trade risks {0:F2}, budget {1:F2}.",
+                      minRisk, riskUsd);
+                return;
+            }
+            if (units < Symbol.VolumeInUnitsMin) units = Symbol.VolumeInUnitsMin;
+
+            var side = direction > 0 ? TradeType.Buy : TradeType.Sell;
+            var result = ExecuteMarketOrder(side, SymbolName, units, Label,
+                                            stopDist / Symbol.PipSize, tpDist / Symbol.PipSize);
+            if (result.IsSuccessful)
+            {
+                _tradesToday++;
+                Print("FADE {0} {1} units @ {2:F2} | stop {3:F2} ({4:F2}%) | target {5:F2} ({6:F2}:1) | RSI {7:F0}, quality {8:F2} (choppy)",
+                      side, units, price, price - direction * stopDist,
+                      stopDist / price * 100.0, price + direction * tpDist,
+                      FadeRewardRisk, rsi, quality);
+            }
+            else Print("FADE ORDER FAILED: {0}", result.Error);
         }
 
         private void OpenTrade(int direction, int votes, double adx, double quality)

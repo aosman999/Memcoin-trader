@@ -1311,3 +1311,60 @@ Mean reversion, re-tested on genuinely mean-reverting markets this time
 (H=0.40 and 0.45) rather than on trending or random-walk ones, still never
 turns positive (-0.064 at H=0.40, its best result). So there is no
 "trade the other side when gold is choppy" fallback available.
+
+## CORRECTION — mean reversion was rejected on a measurement bug
+
+Earlier in this document mean reversion is rejected three times, most recently
+with "it loses on the choppy model too, so the original rejection stands". That
+was **wrong**, and for the same reason as the trend-side numbers: the
+mean-reversion test carried the per-minute/per-bar baseline bug, so its
+baseline was 1/15th the intended size and its mean was noise.
+
+Re-run with the baseline fixed, on markets of known Hurst exponent:
+
+| market | trades/wk | win% | edge (reported before) | edge (correct) |
+|---|---|---|---|---|
+| H=0.40 mean-reverting | 3.0 | 62.6 | -0.064 | **+0.298** |
+| H=0.45 mean-reverting | 5.1 | 56.4 | -0.121 | **+0.160** |
+| H=0.50 random walk | 7.6 | 49.3 | -0.077 | +0.021 |
+| H=0.60 trending | 11.7 | 38.1 | -0.191 | -0.208 |
+
+The H=0.50 control now reads ~zero, as it must. **Mean reversion works on
+mean-reverting markets.** The three earlier rejections were all run on markets
+that trend (M1/M2) or on a random walk (M3) — never on a mean-reverting one.
+Testing a counter-trend strategy only on trending data is not a test.
+
+### The full regime map
+
+| Hurst | market | trend only | fade only | both |
+|---|---|---|---|---|
+| 0.40 | mean-reverting | **-0.265** | **+0.298** | +0.098 |
+| 0.45 | mean-reverting | -0.104 | +0.160 | +0.016 |
+| 0.50 | random walk | +0.052 | +0.021 | +0.038 |
+| 0.55 | trending | +0.215 | -0.170 | +0.129 |
+| 0.60 | trending | **+0.446** | -0.208 | +0.317 |
+
+Subtract the ~0.06 geometry floor from every figure.
+
+Two things follow.
+
+**1. Trend-following does not merely fail on a mean-reverting tape — it loses
+money there** (-0.265 at H=0.40, i.e. about -0.33 after the floor). The risk of
+the unverified Hurst assumption is worse than previously stated: it is not
+"no edge", it is negative edge.
+
+**2. Running both sides is insurance, not an improvement.** It is positive at
+every H, which trend-only is not, but the idle half drags on the working half:
++0.32 becomes +0.10 in the best case. It buys robustness with return.
+
+### Shipped as an off-by-default option
+
+`UseMeanReversion` (default **false**) adds the fade side: enter against an RSI
+extreme when trend quality is at or below 0.20, using the same stop, sizing and
+news machinery so the two sides cannot be compared unfairly.
+
+**Off by default deliberately.** Turning it on is only correct once the DAY
+SUMMARY has shown, across several live sessions, that gold's implied Hurst runs
+at or below 0.50 — the point at which trend-following is the wrong strategy
+rather than merely a quiet one. That decision now rests on a live measurement
+instead of on the simulators that assumed the answer.
