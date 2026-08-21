@@ -385,6 +385,19 @@ namespace cAlgo.Robots
         private AverageTrueRange _atr;
         private int _barCount;
         private bool _stopped;
+
+        // ---- daily diagnostics -------------------------------------------
+        // "It didn't trade today" is unanswerable from the status line alone.
+        // These counters make each session self-explaining: how close the
+        // market actually came to the gate, and what threshold WOULD have
+        // traded. One live day of this settles the setting from real gold
+        // instead of from a simulator.
+        private static readonly double[] DiagThresholds = { 0.45, 0.40, 0.35, 0.30, 0.25, 0.20 };
+        private DateTime _statsDay = DateTime.MinValue;
+        private int _barsToday;
+        private int _tradesToday;
+        private double _bestQualityToday;
+        private readonly int[] _wouldSignal = new int[6];
         private DateTime _lastProtectCheck = DateTime.MinValue;
 
         // ---- news agent state (written by a background task) --------------
@@ -510,6 +523,7 @@ namespace cAlgo.Robots
         private void Evaluate()
         {
             _barCount++;
+            RollDailyDiagnostics();
 
             // refresh the calendar every 6 hours (fail-safe, off-thread)
             // Normal refresh is 6-hourly. After a FAILED fetch (usually the
@@ -587,11 +601,13 @@ namespace cAlgo.Robots
             var bears = total - bulls;
 
             var quality = CurrentTrendQuality();
+            RecordDiagnostics(quality, adx, bulls, bears, votesNeeded);
 
             if (StatusEveryBars > 0 && _barCount % StatusEveryBars == 0)
-                Print("status: {0:F2} | {1}/{2} votes | ADX {3:F1}{4} | quality {5:F2} {6} | news: {7}",
+                Print("status: {0:F2} | {1}/{2} votes | ADX {3:F1}{4} | quality {5:F2} {6} (need {7:F2}, best today {8:F2}) | {9} trades today | news: {10}",
                       close, bulls, bears, adx, adx > adxPrev ? "+" : "-", quality,
-                      quality >= EfficiencyMin ? "TREND" : "chop", NewsStatusLine());
+                      quality >= EfficiencyMin ? "TREND" : "chop", EfficiencyMin,
+                      _bestQualityToday, _tradesToday, NewsStatusLine());
 
             // Room for another position? Holding several at once is what
             // lifts trade count without touching entry quality.
@@ -1098,6 +1114,8 @@ namespace cAlgo.Robots
             var result = ExecuteMarketOrder(side, SymbolName, units, Label,
                                             stopDist / Symbol.PipSize, tpDist / Symbol.PipSize);
             if (result.IsSuccessful)
+                _tradesToday++;
+            if (result.IsSuccessful)
                 Print("OPEN {0} {1} units @ {2:F2} | stop {3:F2} ({4:F2}%{5}) | target {6:F2} ({7:F2}:1{8}) | {9} votes, ADX {10:F0}, quality {11:F2}",
                       side, units, price, price - direction * stopDist,
                       stopDist / price * 100.0, UseSwingStop ? " swing" : (AdaptiveStop ? " adaptive" : ""),
@@ -1105,6 +1123,47 @@ namespace cAlgo.Robots
                       votes, adx, quality);
             else
                 Print("ORDER FAILED: {0}", result.Error);
+        }
+
+        private void RollDailyDiagnostics()
+        {
+            var today = Server.TimeInUtc.Date;
+            if (_statsDay == today) return;
+            if (_statsDay != DateTime.MinValue)
+                PrintDaySummary();
+            _statsDay = today;
+            _barsToday = 0;
+            _tradesToday = 0;
+            _bestQualityToday = 0.0;
+            for (var k = 0; k < _wouldSignal.Length; k++) _wouldSignal[k] = 0;
+        }
+
+        private void RecordDiagnostics(double quality, double adx, int bulls,
+                                       int bears, int votesNeeded)
+        {
+            _barsToday++;
+            if (quality > _bestQualityToday) _bestQualityToday = quality;
+            // A "signal" here means everything EXCEPT the quality threshold
+            // agreed — so the counts isolate what the threshold alone costs.
+            var directional = bulls >= votesNeeded || bears >= votesNeeded;
+            if (!directional || adx < AdxMin) return;
+            for (var k = 0; k < DiagThresholds.Length; k++)
+                if (quality >= DiagThresholds[k]) _wouldSignal[k]++;
+        }
+
+        private void PrintDaySummary()
+        {
+            var parts = new List<string>();
+            for (var k = 0; k < DiagThresholds.Length; k++)
+                parts.Add(string.Format("{0:F2}:{1}", DiagThresholds[k], _wouldSignal[k]));
+            Print("DAY SUMMARY {0:yyyy-MM-dd} | {1} bars | best quality {2:F2} " +
+                  "(threshold {3:F2}) | {4} trades opened",
+                  _statsDay, _barsToday, _bestQualityToday, EfficiencyMin, _tradesToday);
+            Print("   signals available at each threshold -> {0}",
+                  string.Join("  ", parts));
+            if (_tradesToday == 0)
+                Print("   NO TRADES: the market never reached the threshold. The line " +
+                      "above shows which setting would have traded, and how often.");
         }
 
         private IEnumerable<Position> OwnPositions()
@@ -1123,6 +1182,10 @@ namespace cAlgo.Robots
 
         protected override void OnStop()
         {
+            // Print the day's diagnostics on the way out too — otherwise a bot
+            // stopped before midnight UTC never reports the session at all.
+            if (_statsDay != DateTime.MinValue && _barsToday > 0)
+                PrintDaySummary();
             Print("GoldEdgeNews stopped. Open positions keep their broker-side SL/TP.");
         }
     }

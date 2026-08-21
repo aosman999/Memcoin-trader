@@ -947,3 +947,53 @@ stops reliably covering real slippage.
 **Dials, both flat in edge so they cost only trades:** raise the threshold
 toward 0.45 to trade less and more selectively; lower concurrency to 6-7 to cut
 drawdown.
+
+## The live tape vs the simulators — and a diagnostic to settle it
+
+The owner's log showed trend quality 0.22-0.27 for four straight hours. Checked
+whether the new 0.35 threshold would have helped there. It would not.
+
+**The ensemble reads the same as the single window, not higher.** Measured over
+68,400 bars — when the single 48-bar window reads 0.22-0.27, the ensemble reads
+a median of **0.23**, and clears a 0.35 gate only **3%** of the time.
+
+| single-48 reads | ensemble median | clears 0.35 |
+|---|---|---|
+| 0.15-0.20 | 0.17 | 0% |
+| 0.20-0.25 | 0.21 | 2% |
+| 0.25-0.30 | 0.26 | 6% |
+| 0.30-0.35 | 0.30 | 21% |
+| 0.35-0.40 | 0.35 | 48% |
+| 0.40-0.50 | 0.41 | 81% |
+
+So the shipped build would also have stood aside through that window. Lowering
+0.50 to 0.35 cuts idle days from 76% to 34% *on average*, but that particular
+afternoon sat below even the new gate. Simulated days of exactly that shape
+exist and look identical: best quality 0.23, zero signals at every threshold
+down to 0.25, seven at 0.20.
+
+### Rather than guess the threshold a third time, instrument it
+
+Added daily diagnostics to the cBot. Every session now reports:
+
+```
+DAY SUMMARY 2026-08-22 | 84 bars | best quality 0.23 (threshold 0.35) | 0 trades opened
+   signals available at each threshold -> 0.45:0  0.40:0  0.35:0  0.30:0  0.25:0  0.20:7
+   NO TRADES: the market never reached the threshold. The line above shows
+   which setting would have traded, and how often.
+```
+
+The counts hold everything except the quality threshold constant, so they
+isolate exactly what that one setting costs. The status line also now carries
+`need 0.35, best today 0.23` and a running trade count.
+
+**Why this matters more than another tuning round.** Every threshold
+recommendation so far rests on two synthetic gold models. Whether real gold
+produces clean trends as often as they do is unverified, and it is the
+assumption the whole filter rests on. One live day of these summaries answers
+it from real prices — and if real gold's efficiency distribution sits below the
+simulators', the threshold has been wrong all along for reasons no amount of
+re-certification here would have caught.
+
+Printed at UTC day rollover and again on stop, so a bot shut down before
+midnight still reports its session.
