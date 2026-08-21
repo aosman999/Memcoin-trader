@@ -1368,3 +1368,28 @@ SUMMARY has shown, across several live sessions, that gold's implied Hurst runs
 at or below 0.50 — the point at which trend-following is the wrong strategy
 rather than merely a quiet one. That decision now rests on a live measurement
 instead of on the simulators that assumed the answer.
+
+### The fade side certified on M1/M2 (the reference markets)
+
+It had only been measured on synthetic Hurst paths. Certified at the shipped
+settings on virgin seeds 3800-3839, both reference models — which are the
+TRENDING case (implied H ~0.59-0.62), so this is the fade side's worst
+environment:
+
+| configuration | trades/wk | idle days | win% | edge | worst DD | growth | losing runs |
+|---|---|---|---|---|---|---|---|
+| trend only (**shipped default**) | 49.7 | 38% | 66.3 | **+0.508** | 38% | **x1.92** | 5/80 |
+| fade only | 7.5 | 19% | 40.5 | -0.207 | 19% | x0.95 | 64/80 |
+| both (`UseMeanReversion=true`) | 57.2 | **19%** | 63.0 | +0.424 | 39% | x1.76 | 8/80 |
+
+Exactly as the regime map predicts: on a trending market the fade side loses
+money (64 of 80 runs), and switching it on costs about **0.08 of edge and 16%
+of growth**.
+
+**But it halves idle days, 38% -> 19%.** That is the trade available today: if
+fewer flat days matter more than growth, enabling it buys that immediately at a
+known price. If gold turns out to be mean-reverting instead, the same switch is
+worth +0.30 rather than -0.21, and leaving it off is the expensive mistake.
+
+The default stays OFF because these two models say trending, and they are all
+the evidence there is until live sessions report otherwise.
