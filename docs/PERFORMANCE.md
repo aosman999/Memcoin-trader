@@ -459,3 +459,41 @@ partner by a wide margin:
 (efficiency) filter does nearly all the work. ADX 18/25/30 give near-identical
 results, meaning it is close to inert once efficiency >= 0.55 — it is kept only
 for the small edge/robustness contribution (+0.056 edge, +0.046 worst-model).
+
+## The six voters are redundant (Aug 2026)
+
+Leave-one-out testing on the confluence system, holding everything else fixed:
+
+| voter removed | win% | edge | verdict |
+|---|---|---|---|
+| ema20>ema75 | 67.4 | +0.524 | no change |
+| px>ema75 | 67.4 | +0.524 | no change |
+| macd>0 | 67.5 | +0.524 | no change |
+| rsi>50 | 67.5 | +0.524 | no change |
+| ema20 rising | 67.5 | +0.524 | no change |
+| px>px[-20] | 67.5 | +0.524 | no change |
+
+**Removing any single voter changes edge by less than 0.001.** They are not six
+independent opinions — they all answer "is price going up?" through different
+lenses, so any five carry the same information as six.
+
+Pushing further, certified on 50 FRESH seeds (3300-3349):
+
+| voter set | win% | trades/wk | edge | worst-model |
+|---|---|---|---|---|
+| 6 voters, 5-of-6 | 67.0 | 11.0 | +0.502 | +0.445 |
+| **3 voters (ema-cross, rsi, momentum), all 3** | **67.2** | 10.5 | **+0.505** | **+0.451** |
+| 3 voters (ema-cross, px>ema75, macd), all 3 | 68.0 | 9.0 | +0.515 | +0.444 |
+| **1 voter (px > px[-20]) alone** | **66.9** | 11.1 | **+0.500** | +0.442 |
+| 2 voters | 66.7 | 10.6 | +0.493 | +0.442 |
+
+**A single momentum check scores the same as the whole six-voter apparatus.**
+
+Adopted the 3-voter set — not because it earns more (the differences are within
+noise) but because fewer fitted parts means less to overfit and less to break.
+The 6-voter path is retained behind `UseSimpleVoters = false`.
+
+The real lesson: **the edge is in the trend-quality FILTER and the EXITS (swing
+stop, adaptive target), not in stacking entry indicators.** Adding indicators
+was never what made this work, and the long list of rejected filters above says
+the same thing from the other direction.

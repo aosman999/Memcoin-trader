@@ -168,7 +168,20 @@ namespace cAlgo.Robots
     [Robot(TimeZone = TimeZones.UTC, AccessRights = AccessRights.FullAccess)]
     public class GoldEdgeNews : Robot
     {
-        [Parameter("Votes needed (of 6)", DefaultValue = 5, MinValue = 3, MaxValue = 6, Group = "Signal")]
+        // SIMPLIFIED VOTER SET. Leave-one-out testing showed the six voters
+        // are almost entirely REDUNDANT — they all answer "is price going up?"
+        // through different lenses. Dropping any one changed edge by <0.001,
+        // and a single momentum check scored the same as all six:
+        //   6 voters   win 67.0%, edge +0.502, 11.0 tr/wk
+        //   3 voters   win 67.2%, edge +0.505, 10.5 tr/wk   <- default
+        //   1 voter    win 66.9%, edge +0.500, 11.1 tr/wk
+        // The edge lives in the trend-quality FILTER and the EXITS, not in
+        // stacking indicators. Three is chosen over six for robustness — fewer
+        // fitted parts, less to break — not because it earns more.
+        [Parameter("Use simplified 3-voter set", DefaultValue = true, Group = "Signal")]
+        public bool UseSimpleVoters { get; set; }
+
+        [Parameter("Votes needed (of 6, when simplified is OFF)", DefaultValue = 5, MinValue = 3, MaxValue = 6, Group = "Signal")]
         public int VotesNeeded { get; set; }
 
         [Parameter("Minimum ADX", DefaultValue = 18.0, MinValue = 0, MaxValue = 50, Group = "Signal")]
@@ -420,9 +433,10 @@ namespace cAlgo.Robots
 
             Print("GoldEdgeNews started | {0} {1} | account {2} (DEMO) | balance {3:F2}",
                   SymbolName, Bars.TimeFrame, Account.Number, Account.Balance);
-            Print("Entry: {0}/6 votes | ADX>={1}{2} | trend quality>={3} over {4} bars",
-                  VotesNeeded, AdxMin, RequireAdxRising ? " and rising" : "",
-                  EfficiencyMin, EfficiencyWindow);
+            Print("Entry: {0} | ADX>={1}{2} | trend quality>={3} over {4} bars | up to {5} positions",
+                  UseSimpleVoters ? "3/3 votes (simplified)" : VotesNeeded + "/6 votes",
+                  AdxMin, RequireAdxRising ? " and rising" : "",
+                  EfficiencyMin, EfficiencyWindow, MaxConcurrentPositions);
             Print("Exit: stop {0} | target {1} | max hold {2} bars | risk {3}%",
                   UseSwingStop
                     ? string.Format("SWING structure ({0}-bar, +{1}% buffer, clamped {2}-{3}%)",
@@ -519,19 +533,35 @@ namespace cAlgo.Robots
             var adxPrev = _dms.ADX.Last(AdxRisingLookback);
             var past = Bars.ClosePrices.Last(20);
 
-            var bulls = 0;
-            if (emaFast > emaSlow) bulls++;
-            if (close > emaSlow) bulls++;
-            if (macdHist > 0) bulls++;
-            if (rsi > 50.0) bulls++;
-            if (emaFast > emaFastPrev) bulls++;
-            if (close > past) bulls++;
-            var bears = 6 - bulls;
+            int bulls, total;
+            if (UseSimpleVoters)
+            {
+                // Three near-independent reads: trend structure, momentum
+                // oscillator, and raw displacement. All three must agree.
+                bulls = 0;
+                if (emaFast > emaSlow) bulls++;
+                if (rsi > 50.0) bulls++;
+                if (close > past) bulls++;
+                total = 3;
+            }
+            else
+            {
+                bulls = 0;
+                if (emaFast > emaSlow) bulls++;
+                if (close > emaSlow) bulls++;
+                if (macdHist > 0) bulls++;
+                if (rsi > 50.0) bulls++;
+                if (emaFast > emaFastPrev) bulls++;
+                if (close > past) bulls++;
+                total = 6;
+            }
+            var votesNeeded = UseSimpleVoters ? 3 : VotesNeeded;
+            var bears = total - bulls;
 
             var quality = TrendQuality(EfficiencyWindow);
 
             if (StatusEveryBars > 0 && _barCount % StatusEveryBars == 0)
-                Print("status: {0:F2} | {1}b/{2}s | ADX {3:F1}{4} | quality {5:F2} {6} | news: {7}",
+                Print("status: {0:F2} | {1}/{2} votes | ADX {3:F1}{4} | quality {5:F2} {6} | news: {7}",
                       close, bulls, bears, adx, adx > adxPrev ? "+" : "-", quality,
                       quality >= EfficiencyMin ? "TREND" : "chop", NewsStatusLine());
 
@@ -572,9 +602,9 @@ namespace cAlgo.Robots
             if (quality < EfficiencyMin)
                 return;
 
-            if (bulls >= VotesNeeded)
+            if (bulls >= votesNeeded)
                 OpenTrade(1, bulls, adx, quality);
-            else if (bears >= VotesNeeded && AllowShort)
+            else if (bears >= votesNeeded && AllowShort)
                 OpenTrade(-1, bears, adx, quality);
         }
 
@@ -1023,7 +1053,7 @@ namespace cAlgo.Robots
             var result = ExecuteMarketOrder(side, SymbolName, units, Label,
                                             stopDist / Symbol.PipSize, tpDist / Symbol.PipSize);
             if (result.IsSuccessful)
-                Print("OPEN {0} {1} units @ {2:F2} | stop {3:F2} ({4:F2}%{5}) | target {6:F2} ({7:F2}:1{8}) | {9}/6 votes, ADX {10:F0}, quality {11:F2}",
+                Print("OPEN {0} {1} units @ {2:F2} | stop {3:F2} ({4:F2}%{5}) | target {6:F2} ({7:F2}:1{8}) | {9} votes, ADX {10:F0}, quality {11:F2}",
                       side, units, price, price - direction * stopDist,
                       stopDist / price * 100.0, UseSwingStop ? " swing" : (AdaptiveStop ? " adaptive" : ""),
                       price + direction * tpDist, rrUsed, AdaptiveTarget ? " adaptive" : "",
