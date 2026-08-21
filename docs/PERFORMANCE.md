@@ -1073,3 +1073,64 @@ worse rather than better.
 **This is now the highest-value measurement in the project.** A few live
 sessions reporting real gold's median trend quality is worth more than any
 further certification against the two models that produced these numbers.
+
+## The random-walk floor — the reference point that was missing
+
+Trend quality on a **pure random walk** is not zero. It is mechanically about
+`1/sqrt(window)`; measured over 40 random-walk series it is **0.124** for a
+48-bar window (theory: 1/sqrt(48) = 0.144).
+
+That reframes every threshold discussion in this document. A reading of 0.12
+does not mean "weak trend" — it means **no trend at all**. The strategy's edge
+comes entirely from the EXCESS above that floor, and across four markets it
+tracked that excess almost linearly:
+
+| market | median 48-bar efficiency | excess over chance | edge |
+|---|---|---|---|
+| pure random walk | 0.124 | +0.000 | — (nothing works) |
+| M3 choppy | 0.135 | +0.011 | +0.083 |
+| M1 | 0.165 | +0.041 | +0.565 |
+| M2 | 0.185 | +0.061 | +0.432 |
+
+**Both markets this strategy was certified on sit 0.04-0.06 above chance.**
+Whether real gold does was never tested.
+
+### Mean reversion re-tested, and re-rejected — but for the right reason now
+
+Mean reversion was rejected early on, but only ever on M1/M2. A counter-trend
+strategy losing on trending markets proves nothing about a choppy one, so it
+was worth re-testing on M3. Fading RSI extremes when efficiency is low:
+
+| market | trades/wk | win% | edge |
+|---|---|---|---|
+| M1 trending | 6.9 | 39.3 | -0.121 |
+| M2 trending | 7.2 | 43.7 | -0.211 |
+| **M3 choppy** | 7.6 | 45.0 | **-0.125** |
+
+It loses on the choppy model too — so the original rejection stands, and now
+for a defensible reason. The explanation is the floor above: M3 has a lag-1
+autocorrelation of +0.005. It is not a *mean-reverting* market, it is a
+*random walk*. Low efficiency does not imply exploitable reversion; it implies
+nothing is there. **No strategy of any kind can extract edge from a random
+walk**, which is exactly why trend-following and mean reversion both scored
+~zero on it.
+
+### What the live diagnostic now reports
+
+Bands are set against the 0.124 floor rather than against the simulators, so
+they carry absolute meaning:
+
+| excess over chance | verdict |
+|---|---|
+| **>= +0.030** | gold trends as much as the certified markets; tested edge should carry over |
+| **+0.012 to +0.030** | trending, but less than either certified market; expect a thinner edge |
+| **< +0.012** | no exploitable trend. Nothing works here — not trend-following, not mean reversion. Do NOT loosen the filter. |
+
+The last band matters most, because the intuitive response to "it isn't
+trading" is to loosen the filter, and on a random-walk tape that raises
+drawdown without adding any edge at all.
+
+**Open question, and now the only one worth spending effort on: where does real
+gold's median 48-bar efficiency actually sit relative to 0.124?** Nothing in
+this repository can answer it — every model here was built by this project.
+A few live sessions can.

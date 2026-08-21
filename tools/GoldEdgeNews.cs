@@ -398,13 +398,21 @@ namespace cAlgo.Robots
         private int _tradesToday;
         private double _bestQualityToday;
         private readonly int[] _wouldSignal = new int[6];
-        // The MEDIAN matters more than the best. The strategy was certified on
-        // two simulated markets whose median 48-bar trend quality is 0.17-0.19.
-        // A third model, identical in volatility but trending less (median
-        // 0.12), destroys the edge completely — +0.08 instead of +0.43/+0.57,
-        // a 51% win rate, and no growth at any threshold. So this one number
-        // decides whether the strategy has an edge on real gold at all, and no
-        // amount of re-tuning against those simulators could reveal it.
+        // THE MEDIAN IS THE NUMBER THAT MATTERS, and it has an absolute
+        // reference point. Trend quality on a PURE RANDOM WALK is not zero —
+        // it is mechanically about 1/sqrt(window), measured at 0.124 for a
+        // 48-bar window. So 0.12 does not mean "weak trend", it means NO
+        // trend: pure chance. The strategy's edge comes entirely from the
+        // EXCESS above that floor, and across four markets it tracked it
+        // almost linearly:
+        //     random walk   median 0.124  (+0.000)   edge  0.00
+        //     choppy model  median 0.135  (+0.011)   edge +0.08
+        //     model M1      median 0.165  (+0.041)   edge +0.57
+        //     model M2      median 0.185  (+0.061)   edge +0.43
+        // Both models this bot was certified on sit 0.04-0.06 above chance.
+        // Whether real gold does was never tested — it is the assumption the
+        // whole strategy rests on, and no amount of re-tuning against those
+        // same two models could ever reveal it. Hence this reading.
         private readonly List<double> _qualitiesToday = new List<double>();
         private DateTime _lastProtectCheck = DateTime.MinValue;
 
@@ -1182,17 +1190,24 @@ namespace cAlgo.Robots
                       med, p75, _bestQualityToday);
                 // The single number that says whether this strategy can work
                 // on real gold at all. See the note on _qualitiesToday.
-                if (med >= 0.16)
-                    Print("   -> median {0:F2} is IN LINE with the markets this was certified on " +
-                          "(0.17-0.19). The edge measured in testing should carry over.", med);
-                else if (med >= 0.13)
-                    Print("   -> median {0:F2} is BELOW the certified range (0.17-0.19). Edge is " +
-                          "likely thinner live than in testing. Collect more days before tuning.", med);
+                // Bands are set against the RANDOM-WALK FLOOR of 0.124, not
+                // against the simulators, so they mean something absolute.
+                var excess = med - 0.124;
+                Print("   -> that is {0:+0.000;-0.000} versus the random-walk floor of 0.124 " +
+                      "(what pure chance produces on a 48-bar window).", excess);
+                if (excess >= 0.030)
+                    Print("      GOOD: gold is genuinely trending, as much as the markets this " +
+                          "was certified on (+0.041 and +0.061). The tested edge should carry over.");
+                else if (excess >= 0.012)
+                    Print("      THIN: gold is trending, but less than either certified market. " +
+                          "Expect a smaller edge than the backtest showed. Collect more days " +
+                          "before changing anything.");
                 else
-                    Print("   -> WARNING: median {0:F2} is far below the certified range " +
-                          "(0.17-0.19). On a market this choppy the tested edge collapses to " +
-                          "roughly zero AT EVERY THRESHOLD. Do not loosen the filter to force " +
-                          "trades — that made things worse, not better, in testing. Report this.", med);
+                    Print("      STOP: at {0:F3} above chance there is no exploitable trend in " +
+                          "this tape. A model at this level scored ZERO edge for trend-following " +
+                          "AND for mean reversion — nothing works on a random walk. Do NOT loosen " +
+                          "the filter to force trades; that raised drawdown without adding edge. " +
+                          "Report this number.", excess);
             }
 
             if (_tradesToday == 0)
