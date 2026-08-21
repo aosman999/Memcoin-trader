@@ -497,3 +497,48 @@ The real lesson: **the edge is in the trend-quality FILTER and the EXITS (swing
 stop, adaptive target), not in stacking entry indicators.** Adding indicators
 was never what made this work, and the long list of rejected filters above says
 the same thing from the other direction.
+
+## Final configuration (Aug 2026) — 71.3% win, 9.9 trades/week
+
+Two further levers found after the research pass:
+
+**1. A LONGER trend-quality window is the biggest win-rate lever found.**
+
+| window | win% | edge | trades/wk |
+|---|---|---|---|
+| 12 bars | 62.9 | +0.393 | 21.2 |
+| 24 bars (previous) | 67.9 | +0.532 | 10.5 |
+| 36 bars | 71.0 | +0.600 | 5.8 |
+| **48 bars** | **73.1** | **+0.640** | 3.3 |
+
+Twelve bars is too short to tell a real trend from a wiggle. Longer windows
+judge trend quality over a fuller stretch and select far better setups — but
+they trade less, so the lost frequency has to be bought back elsewhere.
+
+**2. Concurrency buys the frequency back at no cost to quality**, because the
+extra trades are signals that were previously skipped while the bot was busy.
+
+Combining them, certified on 50 FRESH seeds (2200-2249), 11,897 trades:
+
+| config | win% | trades/wk | edge | worst-model | worst DD |
+|---|---|---|---|---|---|
+| previous (24-bar, 4 pos, 3%) | 65.7 | 10.5 | +0.463 | +0.414 | 46% |
+| **48-bar, 10 pos, gap2, eff.50, 1.5%** | **71.3** | **9.9** | **+0.584** | **+0.498** | **37%** |
+| 36-bar, 8 pos, gap2, eff.50 | 68.9 | 14.3 | +0.538 | +0.470 | 62% |
+| 48-bar, 8 pos, gap3, eff.55 | 73.1 | 4.6 | +0.623 | +0.543 | 52% |
+
+Better win rate, better edge, better drawdown, same frequency.
+
+**Sizing note.** 10 concurrent positions means exposure is 10x the per-trade
+risk, so risk drops to 1.5% (= 15% maximum exposure). The same config at 3%
+risk has a 60% worst drawdown; at 1.5% it is 37%. Win rate is identical either
+way (71.3%) — only survivability changes.
+
+### Also tested in this pass, not adopted
+
+| idea | result |
+|---|---|
+| Dynamic threshold by volatility | 66.9%, +0.520 — slightly worse |
+| Pyramiding into winners | 67.9%, +0.535 — neutral |
+| Asymmetric long/short thresholds | 68.2%, +0.533 (longs easier) — within noise |
+| Wider entry spacing (gap 8) | 67.1%, +0.515 — worse |
