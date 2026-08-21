@@ -1170,3 +1170,79 @@ GoldBotPro, GoldBot.
 **Run this before sending any bot file.** Shipping code that does not build
 wastes a cTrader build cycle and, worse, teaches the owner to distrust files
 that are otherwise fine.
+
+## The assumption underneath everything, finally stated in standard units
+
+The trend filter gates on the Kaufman efficiency ratio, which is a
+project-specific quantity. Converted to the **Hurst exponent** — the standard
+measure of whether a series trends more than chance — the whole project's
+assumption becomes checkable against published research.
+
+Method: generate fractional Brownian motion at known H by random midpoint
+displacement, normalise to gold's ~0.174% per-15m volatility, and measure the
+same median 48-bar efficiency the cBot reports.
+
+| Hurst H | median 48-bar efficiency | vs random-walk floor | meaning |
+|---|---|---|---|
+| 0.40 | 0.088 | -0.036 | mean-reverting |
+| 0.45 | 0.103 | -0.021 | mean-reverting |
+| **0.50** | **0.121** | -0.003 | **random walk** |
+| 0.55 | 0.144 | +0.020 | trending |
+| 0.60 | 0.172 | +0.048 | trending |
+| 0.65 | 0.208 | +0.084 | trending |
+
+Control: H=0.50 reproduces the independently measured random-walk floor of
+0.124 (got 0.121), so the generator is sound.
+
+### What this project's simulators actually assume
+
+| model | median efficiency | **implied H** |
+|---|---|---|
+| M1 (`simulator.py`) | 0.165 | **~0.59** |
+| M2 (`simulator2.py`) | 0.185 | **~0.62** |
+
+**Both simulators assume gold has a Hurst exponent near 0.60** — strongly
+trending. Every result in this document inherits that assumption.
+
+### What the literature says about real gold
+
+Published findings, from search summaries rather than papers read in full, so
+treat as indicative:
+
+- Intraday Hurst estimates on high-frequency data cluster **close to 0.50**.
+- Persistence *falls* with frequency: monthly persistent, daily near a random
+  walk, **intraday anti-persistent** (H < 0.5) — consistent with well-known
+  microstructure effects.
+- One study reports **gold at H = 0.41 on eight years of daily returns** —
+  mean-reverting, not trending.
+
+If real 15-minute gold sits anywhere near H = 0.50, its median efficiency is
+about 0.12 and the strategy's edge is roughly zero. At H = 0.45 it is 0.103,
+*below* the random-walk floor, and a trend filter is gating on noise.
+
+**This is the single largest risk in the project, and no amount of
+certification against M1/M2 could ever have surfaced it** — those two models
+are where the H≈0.60 assumption lives.
+
+### Caveats, stated honestly
+
+- Hurst estimation is notoriously noisy and method-dependent; different
+  estimators disagree by more than the gap being argued about here.
+- The cited figures are second-hand from search summaries.
+- The relevant scale is 15 minutes to 12 hours. Tick-level anti-persistence
+  (bid-ask bounce) need not carry to that horizon.
+- None of this proves the strategy fails live. It shows the assumption is
+  unverified and that published evidence points the wrong way.
+
+### The bot now reports it directly
+
+```
+   -> implied Hurst exponent ~0.52. (0.50 = random walk, nothing to trade;
+      below 0.50 = mean-reverting; this bot's simulators assumed 0.59-0.62.)
+```
+
+A few live sessions produce a number comparable with published research.
+**That measurement now outranks every other open item in this project** — if
+real gold reads near 0.50, no threshold, no ensemble and no exit tweak will
+help, and the correct decision is to stop trading this strategy rather than to
+tune it further.

@@ -1195,6 +1195,9 @@ namespace cAlgo.Robots
                 var excess = med - 0.124;
                 Print("   -> that is {0:+0.000;-0.000} versus the random-walk floor of 0.124 " +
                       "(what pure chance produces on a 48-bar window).", excess);
+                Print("   -> implied Hurst exponent ~{0:F2}. (0.50 = random walk, nothing to " +
+                      "trade; below 0.50 = mean-reverting; this bot's simulators assumed 0.59-0.62.)",
+                      ImpliedHurst(med));
                 if (excess >= 0.030)
                     Print("      GOOD: gold is genuinely trending, as much as the markets this " +
                           "was certified on (+0.041 and +0.061). The tested edge should carry over.");
@@ -1213,6 +1216,29 @@ namespace cAlgo.Robots
             if (_tradesToday == 0)
                 Print("   NO TRADES: the market never reached the threshold. The line " +
                       "above shows which setting would have traded, and how often.");
+        }
+
+        // Median efficiency -> Hurst exponent, from fractional-Brownian-motion
+        // paths generated at known H and measured with this same 48-bar window
+        // (volatility held equal). H is the standard measure of whether a
+        // series trends more than chance, which makes the reading comparable
+        // to published research instead of only to this project's simulators.
+        private static readonly double[] EffTable = { 0.088, 0.103, 0.121, 0.144, 0.172, 0.208 };
+        private static readonly double[] HurstTable = { 0.40, 0.45, 0.50, 0.55, 0.60, 0.65 };
+
+        private static double ImpliedHurst(double medianEfficiency)
+        {
+            if (medianEfficiency <= EffTable[0]) return HurstTable[0];
+            var last = EffTable.Length - 1;
+            if (medianEfficiency >= EffTable[last]) return HurstTable[last];
+            for (var k = 0; k < last; k++)
+            {
+                if (medianEfficiency > EffTable[k + 1]) continue;
+                var span = EffTable[k + 1] - EffTable[k];
+                var frac = span > 0 ? (medianEfficiency - EffTable[k]) / span : 0.0;
+                return HurstTable[k] + frac * (HurstTable[k + 1] - HurstTable[k]);
+            }
+            return HurstTable[last];
         }
 
         private IEnumerable<Position> OwnPositions()
