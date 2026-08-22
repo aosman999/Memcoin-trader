@@ -235,7 +235,8 @@ namespace cAlgo.Robots
         // SUMMARY has shown, over several sessions, that gold's implied Hurst
         // is running at or below 0.50 — at which point trend-following is the
         // wrong strategy and this is the right one.
-        // These stay STRICT on purpose, and that decision was nearly got wrong.
+        // These stay STRICT on purpose, and that decision was nearly got wrong —
+        // the sweep below argued convincingly for the opposite.
         // Sweeping them on mean-reverting markets picked chop<=0.30, RSI 35/65,
         // rr 1.5: same edge in the right regime (+0.263 vs +0.272 at H=0.40)
         // with 16x the trades, which looked like a clear win. It was not — the
