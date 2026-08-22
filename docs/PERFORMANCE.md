@@ -1409,3 +1409,25 @@ the two, then certified on virgin seeds 750-789:
 never fired — the identical mistake the trend side was making at eff>=0.50.
 Deliberately tuned where the rule is meant to operate: tuning a counter-trend
 rule on trending data would just select whichever settings fire least.
+
+### ...and the fade tuning was then REVERTED — it optimised only one regime
+
+The sweep above picked `chop<=0.30, RSI 35/65, rr 1.5` on mean-reverting
+markets: same edge, 16x the trades. That looked like a clear win and it was
+not. **The sweep only scored the regime the rule is meant for.** Checked on
+M1/M2 — trending, the case where enabling the fade side is *wrong*, virgin
+seeds 3900-3939:
+
+| configuration | trades/wk | win% | edge | worst DD | losing runs |
+|---|---|---|---|---|---|
+| trend only (default) | 50.6 | 66.2 | +0.519 | 41% | 9/80 |
+| **+ fade, strict (kept)** | 58.0 | 63.2 | +0.430 | 44% | 11/80 |
+| + fade, "tuned" | 137.5 | 46.5 | **+0.100** | **74%** | **26/80** |
+
+The looser settings **triple the losing runs and take drawdown to 74%** if gold
+trends, in exchange for +0.009 of edge where they are right.
+
+**Reverted to `chop<=0.20, RSI 30/70, rr 1.0`.** Since the regime is precisely
+what is unknown, the correct setting is the one that is nearly as good when
+right and far cheaper when wrong — which is this project's own worst-model rule,
+broken by tuning a switch on only half the cases it will face.
