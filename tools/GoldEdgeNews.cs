@@ -70,6 +70,27 @@
 // them. It is also what keeps the bot out of chop: ADX read 29-47 ("strong")
 // through a whole flat afternoon where efficiency correctly read 0.22-0.27.
 //
+// THRESHOLD CALIBRATED TO REAL GOLD, NOT TO THE SIMULATORS. This is the
+// correction that mattered most, and it came from the owner's own cTrader log
+// rather than from any amount of re-testing here.
+//
+// Ten live 48-bar readings, 21-23 Aug 2026: 0.23 0.25 0.22 0.27 0.30 0.26
+// 0.21 0.12 0.12 0.09 — median 0.23, max 0.30.
+//
+//   Random-walk floor is 0.124, so real gold sits +0.10 above chance, an
+//   implied Hurst of ~0.65. It is MORE trending than either simulator (median
+//   0.165 and 0.185). The strategy premise was never the problem.
+//
+//   THE THRESHOLD WAS. Share of those live bars that pass each gate:
+//        gate 0.50   0 of 10     <- what was shipped for weeks. Never fires.
+//        gate 0.35   0 of 10
+//        gate 0.25   4 of 10
+//        gate 0.22   5 of 10     <- default now
+//        gate 0.20   7 of 10
+//   A gate set at 0.50 against a market whose median is 0.23 is not selective,
+//   it is switched off. Certified at 0.22 on virgin seeds: 72 trades/week,
+//   win 59.3%, edge +0.346, worst DD 41% at 1% risk with 6 positions.
+//
 // IDLE DAYS ARE THE REAL COMPLAINT, and trades-per-week hides them. A config
 // averaging 28/week can still stand aside three days running and then fire 20
 // times in one trend. Share of days with ZERO trades:
@@ -189,7 +210,7 @@ namespace cAlgo.Robots
         [Parameter("Trend quality window (bars)", DefaultValue = 48, MinValue = 4, MaxValue = 200, Group = "Trend filter")]
         public int EfficiencyWindow { get; set; }
 
-        [Parameter("Min trend quality (0-1)", DefaultValue = 0.35, MinValue = 0.0, MaxValue = 1.0, Group = "Trend filter")]
+        [Parameter("Min trend quality (0-1)", DefaultValue = 0.22, MinValue = 0.0, MaxValue = 1.0, Group = "Trend filter")]
         public double EfficiencyMin { get; set; }
 
         // Carver's overfitting rule, applied to our own tuning. A sweep picked
@@ -413,7 +434,7 @@ namespace cAlgo.Robots
         // fired), but the simulators contain no GAPS, and a gap through several
         // correlated stops is exactly what they cannot show. Lower this to 5-7
         // if that risk matters more than frequency.
-        [Parameter("Max concurrent positions", DefaultValue = 10, MinValue = 1, MaxValue = 20, Group = "Risk")]
+        [Parameter("Max concurrent positions", DefaultValue = 6, MinValue = 1, MaxValue = 20, Group = "Risk")]
         public int MaxConcurrentPositions { get; set; }
 
         [Parameter("Min bars between same-direction entries", DefaultValue = 1, MinValue = 0, MaxValue = 50, Group = "Risk")]
