@@ -1,14 +1,24 @@
 // GoldEdgeNews — gold (XAU/USD) strategy + news agent. DEMO-ONLY, XAUUSD m15.
 //
 // ============================ HOW IT TRADES ============================
-// ENTRY  3 voters (ema20>ema75, rsi14>50, close>close[-20]) must ALL agree,
-//        only when trend quality >= 0.35 and ADX >= 18, during 01-22 UTC.
+// REGIME It measures which market it is in before choosing a side. Rolling
+//        median of trend quality over 300 bars vs the RANDOM-WALK FLOOR (the
+//        value pure chance produces on that same measure: 0.131 for the
+//        5-window ensemble, 0.124 for a lone 48-bar window).
+//          above the floor -> trending      -> only the TREND side runs
+//          below the floor -> mean-reverting -> only the FADE side runs
+//        Running both at once means one of them is always the wrong bet.
+// TREND  3 voters (ema20>ema75, rsi14>50, close>close[-20]) must ALL agree,
+//        only when trend quality >= 0.22 and ADX >= 18, during 01-22 UTC.
 //        Trend quality = Kaufman efficiency (net move / path travelled),
 //        AVERAGED over 24/36/48/60/72 bars rather than read from one window.
+// FADE   on a mean-reverting tape: buy RSI <= 35 / sell RSI >= 65 while trend
+//        quality <= 0.20, at 1:1. Same stop and sizing machinery as the trend
+//        side, so the two cannot be compared unfairly on exit geometry.
 // STOP   just beyond the recent 12-bar swing low/high (+5% buffer), clamped
 //        0.4-1.4% of price. Binary — no trailing, no early exit.
 // TARGET adaptive 1.0-2.0 reward:risk, scaled by conviction.
-// SIZE   1.0% risk per trade, up to 10 at once = 10% maximum exposure.
+// SIZE   1.0% risk per trade, up to 6 at once = 6% maximum exposure.
 //        -15% daily loss stop. 40-bar (10h) time stop.
 // NEWS   Forex Factory calendar, 9 currencies + oil. Moves the stop to
 //        breakeven before an event when ALREADY in profit, and vetoes entries
@@ -16,16 +26,26 @@
 //        often as it dumps it, and closing on news measured clearly worse.
 //
 // ========================= CERTIFIED PERFORMANCE ========================
-// Four INDEPENDENT virgin seed sets of 50 (3300/3500/3600/3700). SIMULATED.
-//   win rate   64.7 - 66.5%
-//   frequency  50 - 54 trades/week
-//   idle days  34% (was 76% at the old 0.50 threshold)
-//   edge       +0.463 to +0.498 over a random-entry baseline (as measured)
-//              ~+0.40 to +0.44 after subtracting the bias below
-//   drawdown   median ~13%, worst 30-41%, at 1.0% risk
-//   losing runs 6-8 of 100
-// Quoted as a RANGE across seed sets, not a single number. A headline figure
-// from one sample carries +/-3 points of noise and reads as precision it does
+// 30 VIRGIN seeds per market (9100-9129), 22 days, 1.0% risk. SIMULATED.
+// Reported per REGIME, because a single average across regimes would hide
+// the whole point of the switch.
+//
+//   market                    tr/wk   win     edge    worst DD   losing runs
+//   H=0.40 mean-reverting      27.5  62.7%   +0.259     33%         4/30
+//   H=0.45 mean-reverting      37.5  53.2%   +0.079     33%        10/30
+//   H=0.50 random walk         50.5  49.3%   +0.016     46%        16/30
+//   H=0.55 trending            62.1  51.9%   +0.125     48%        11/30
+//   H=0.60 trending            75.1  56.4%   +0.310     39%         2/30
+//   M1+M2 (project models)     71.1  60.6%   +0.372     45%         3/60
+//
+// Read this honestly rather than reading the best row. On a RANDOM WALK the
+// edge is +0.016 — indistinguishable from nothing, which is correct, because
+// nothing works on a random walk. The strategy earns where the tape has a
+// character, either direction. Subtract ~0.06 from every figure for the
+// geometry bias described below; on the middle rows that leaves zero.
+//
+// Quoted per regime and as measured, never as one headline number. A single
+// sample carries +/-3 points of win-rate noise and reads as precision it does
 // not have — that mistake was made in earlier versions of this file.
 //
 // Scored as EDGE OVER RANDOM because a coin flip earns +0.11 to +0.28R on
@@ -74,12 +94,18 @@
 // correction that mattered most, and it came from the owner's own cTrader log
 // rather than from any amount of re-testing here.
 //
-// Ten live 48-bar readings, 21-23 Aug 2026: 0.23 0.25 0.22 0.27 0.30 0.26
+// Ten live readings, 21-23 Aug 2026: 0.23 0.25 0.22 0.27 0.30 0.26
 // 0.21 0.12 0.12 0.09 — median 0.23, max 0.30.
 //
-//   Random-walk floor is 0.124, so real gold sits +0.10 above chance, an
-//   implied Hurst of ~0.65. It is MORE trending than either simulator (median
-//   0.165 and 0.185). The strategy premise was never the problem.
+//   Ensemble floor is 0.131, so that tape sat +0.10 above chance, an implied
+//   Hurst of ~0.65. It was MORE trending than either simulator (median 0.165
+//   and 0.185). The strategy premise was never the problem.
+//
+//   BUT THE NEXT SESSION READ THE OTHER WAY. 24 Aug: 0.19 0.14 0.12 0.08 0.13
+//   0.07 0.07 0.07 0.07 0.10 0.10 0.11 — median 0.100, which is BELOW the
+//   0.131 floor: implied Hurst ~0.42, genuinely mean-reverting. Three days
+//   apart, opposite regimes. That is the entire argument for measuring the
+//   regime each bar instead of choosing a side once and hoping.
 //
 //   THE THRESHOLD WAS. Share of those live bars that pass each gate:
 //        gate 0.50   0 of 10     <- what was shipped for weeks. Never fires.
@@ -122,8 +148,9 @@
 //   Win rate drops to ~65% — that is the honest price of a looser gate, and it
 //   is paid back in frequency and in fewer losing runs (6-8/100 vs 14-18/100).
 //   TO TRADE LESS AND MORE SELECTIVELY: raise the threshold back toward 0.45.
-//   TO CUT DRAWDOWN: lower max concurrent positions to 6-7; edge is flat
-//   across that range, so it costs only trades.
+//   TO CUT DRAWDOWN: lower max concurrent positions; edge is flat across
+//   6-10, so it costs only trades. SHIPPED AT 6 for that reason — the table
+//   above was measured at 10, which is why its exposure line says 10%.
 //
 // ENSEMBLE TREND QUALITY, not a single window. A sweep picked 48 bars, but 48
 //   turned out to be a PEAK rather than a plateau — its neighbours all scored
@@ -147,9 +174,18 @@
 // ALSO REJECTED after measurement: liquidity-sweep/stop-hunt reversals (lose
 //   money alone AND dilute this strategy), the 12-16 UTC overlap as an
 //   exclusive filter (cut trades six-fold), partial take-profit ladders (raise
-//   win rate, cut money), trailing stops, EMA200 alignment, mean reversion,
-//   and closing positions on news. See docs/PERFORMANCE.md for the full list —
-//   checking it first saves re-discovering the same losers.
+//   win rate, cut money), trailing stops, EMA200 alignment, and closing
+//   positions on news. See docs/PERFORMANCE.md for the full list — checking it
+//   first saves re-discovering the same losers.
+//
+// MEAN REVERSION WAS ON THAT LIST AND CAME OFF IT. It was rejected twice, and
+//   both rejections were sound *on the markets they were run on* — M1 and M2
+//   trend, so fading them loses. It had never been tested on a mean-reverting
+//   market because the project owned no mean-reverting market to test it on.
+//   Built one (fractional Brownian motion at known Hurst exponent) and the
+//   sign flips: -0.191 at H=0.60, +0.259 at H=0.40. The lesson is about
+//   method, not about mean reversion: a strategy tested only where it is
+//   expected to fail will duly fail, and that proves nothing.
 //
 // ============================== CAVEATS ================================
 // Every number above is SIMULATED on two synthetic gold models. They contain
@@ -300,14 +336,79 @@ namespace cAlgo.Robots
         [Parameter("Fade only when trend quality is BELOW", DefaultValue = 0.20, MinValue = 0.0, MaxValue = 1.0, Group = "Mean reversion")]
         public double ChopMax { get; set; }
 
-        [Parameter("Fade: RSI oversold (buy below)", DefaultValue = 30.0, MinValue = 5, MaxValue = 50, Group = "Mean reversion")]
+        // WIDENED from 30/70 to 35/65, and this reverses the note above — but
+        // only because the regime switch below now exists. Re-read that note:
+        // the loose band was rejected because it "triples the losing runs if
+        // gold happens to trend". The switch removes exactly that exposure by
+        // refusing to fade a trending tape at all, so the band can be judged
+        // on the tape it actually runs on. At 30/70 the fade side fired 4.1
+        // times a week — too rare to cover a choppy day, which is what left
+        // the bot idle.
+        [Parameter("Fade: RSI oversold (buy below)", DefaultValue = 35.0, MinValue = 5, MaxValue = 50, Group = "Mean reversion")]
         public double FadeRsiLow { get; set; }
 
-        [Parameter("Fade: RSI overbought (sell above)", DefaultValue = 70.0, MinValue = 50, MaxValue = 95, Group = "Mean reversion")]
+        [Parameter("Fade: RSI overbought (sell above)", DefaultValue = 65.0, MinValue = 50, MaxValue = 95, Group = "Mean reversion")]
         public double FadeRsiHigh { get; set; }
 
         [Parameter("Fade: reward:risk", DefaultValue = 1.0, MinValue = 0.5, MaxValue = 5.0, Group = "Mean reversion")]
         public double FadeRewardRisk { get; set; }
+
+        // ---- REGIME SWITCH -------------------------------------------------
+        // Running both halves at once means one of them is always wrong, and
+        // the wrong one bleeds. The bot already computes trend quality every
+        // bar, so it can measure which regime it is in instead of guessing:
+        // keep a rolling median of trend quality and compare it to the
+        // RANDOM-WALK FLOOR — the value pure chance produces on this same
+        // measure (0.124 for a single 48-bar window, 0.131 for the ensemble,
+        // because efficiency scales ~1/sqrt(n) and the shorter windows in the
+        // average read higher).
+        //
+        //   median >= floor + margin  ->  the tape trends more than chance
+        //                                 -> TREND side only
+        //   median <  floor + margin  ->  the tape mean-reverts
+        //                                 -> FADE side only
+        //
+        // Certified on 30 VIRGIN seeds per market (22 days, 1% risk), against
+        // the previous shipped setting (both sides always on, fade 30/70):
+        //
+        //   market            config          tr/wk    win     edge   losing runs
+        //   H=0.40 revert     both on          20.3   37.4%  -0.188      25/30
+        //                     switch+35/65     27.5   62.7%  +0.259       4/30
+        //   H=0.45 revert     both on          35.3   42.7%  -0.073      22/30
+        //                     switch+35/65     37.5   53.2%  +0.079      10/30
+        //   H=0.50 random     both on          52.1   47.8%  +0.026      16/30
+        //                     switch+35/65     50.5   49.3%  +0.016      16/30
+        //   H=0.55 trending   both on          68.1   52.7%  +0.171       7/30
+        //                     switch+35/65     62.1   51.9%  +0.125      11/30
+        //   H=0.60 trending   both on          84.2   55.6%  +0.286       1/30
+        //                     switch+35/65     75.1   56.4%  +0.310       2/30
+        //   M1+M2 (models)    both on          79.6   61.4%  +0.409       1/60
+        //                     switch+35/65     71.1   60.6%  +0.372       3/60
+        //   (subtract the ~0.06 trade-geometry floor from every edge)
+        //
+        // Read it honestly: the switch COSTS about 0.04 of edge where the old
+        // setting was already right (trending), and it is the only tested
+        // configuration that is positive in every regime. On the tape the
+        // owner actually logged — implied H ~0.42 — it turns -0.188 into
+        // +0.259 and cuts losing runs from 25/30 to 4/30. That trade is worth
+        // making because the regime is precisely what is not known in advance.
+        //
+        // Worst drawdown did not deteriorate (32-48% vs 32-46%), which is the
+        // check that killed the last attempt at a wider fade band.
+        [Parameter("Regime switch: run only the side that fits the tape", DefaultValue = true, Group = "Regime switch")]
+        public bool UseRegimeSwitch { get; set; }
+
+        // Both knobs sit on a plateau, not a peak — every one of nine
+        // combinations (window 100/200/400 x margin 0.000/0.005/0.015) was
+        // positive on BOTH regimes on a second virgin block: choppy +0.110 to
+        // +0.157, trending +0.290 to +0.356. 300 and 0.005 are the middle of
+        // that region rather than the sweep winner, per the same
+        // averaging-over-variations rule that produced the ensemble.
+        [Parameter("Regime: bars of history in the median", DefaultValue = 300, MinValue = 60, MaxValue = 2000, Group = "Regime switch")]
+        public int RegimeWindow { get; set; }
+
+        [Parameter("Regime: margin above the random-walk floor", DefaultValue = 0.005, MinValue = 0.0, MaxValue = 0.05, Group = "Regime switch")]
+        public double RegimeMargin { get; set; }
 
         [Parameter("News: use economic calendar", DefaultValue = true, Group = "News agent")]
         public bool UseCalendar { get; set; }
@@ -480,7 +581,11 @@ namespace cAlgo.Robots
         [Parameter("Allow shorts", DefaultValue = true, Group = "Risk")]
         public bool AllowShort { get; set; }
 
-        [Parameter("Log status every N bars", DefaultValue = 4, MinValue = 0, Group = "Diagnostics")]
+        // Was 4, which on m15 meant a full HOUR of silence between lines — long
+        // enough to look broken while working normally. Every closed bar now
+        // reports. The cost is log volume; the benefit is that "is it alive?"
+        // is answerable in 15 minutes instead of 60.
+        [Parameter("Log status every N bars", DefaultValue = 1, MinValue = 0, Group = "Diagnostics")]
         public int StatusEveryBars { get; set; }
 
         private const string Label = "GoldEdgeNews";
@@ -492,6 +597,16 @@ namespace cAlgo.Robots
         private AverageTrueRange _atr;
         private int _barCount;
         private bool _stopped;
+
+        // ---- regime switch state ------------------------------------------
+        // Rolling trend-quality history, updated once per bar whether or not
+        // the bot trades that bar — the regime reading must not depend on
+        // whether we happened to have room for a position.
+        private readonly List<double> _regimeHistory = new List<double>();
+        private double _regimeMedian;
+        private bool _regimeTrending = true;
+        private bool _regimeKnown;
+        private string _regimeLogged = "";
 
         // ---- daily diagnostics -------------------------------------------
         // "It didn't trade today" is unanswerable from the status line alone.
@@ -606,6 +721,13 @@ namespace cAlgo.Robots
                     ? string.Format("ADAPTIVE {0}:1-{1}:1 by conviction", MinRewardRisk, MaxRewardRisk)
                     : string.Format("fixed {0}:1", RewardRisk),
                   MaxHoldBars, RiskPercent);
+            Print("Regime switch: {0} | fade side {1} (RSI {2}/{3} when quality<={4:F2}, {5}:1)",
+                  UseRegimeSwitch
+                    ? string.Format("ON — rolling median of {0} bars vs random-walk floor {1:F3} +{2:F3}",
+                                    RegimeWindow, RandomWalkFloor(), RegimeMargin)
+                    : "OFF — both sides always active",
+                  UseMeanReversion ? "ON" : "OFF",
+                  FadeRsiLow, FadeRsiHigh, ChopMax, FadeRewardRisk);
             Print("No early exit: every 'exit when the market changes' rule tested was neutral or harmful (ADX-fall exit cut edge +0.633 -> +0.369).");
             Print("News agent: calendar {0} watching {1} | protect-open-trade {2} ({3} min before) | block-entries {4} | shock veto {5}",
                   UseCalendar ? "ON" : "OFF", WatchCurrencies,
@@ -615,6 +737,8 @@ namespace cAlgo.Robots
             if (Bars.TimeFrame != TimeFrame.Minute15)
                 Print("NOTE: certified on the 15-MINUTE chart; you are on {0}. Settings assume m15.",
                       Bars.TimeFrame);
+
+            PrimeRegimeHistory();
 
             if (UseCalendar)
                 BeginCalendarFetch();
@@ -724,13 +848,29 @@ namespace cAlgo.Robots
             var bears = total - bulls;
 
             var quality = CurrentTrendQuality();
+            // Regime first, and unconditionally: it must see every bar, not
+            // only the bars on which the bot was free to trade.
+            UpdateRegime(quality);
             RecordDiagnostics(quality, adx, bulls, bears, votesNeeded);
 
+            // Which half of the book is allowed to speak right now. Until the
+            // history is long enough to have an opinion, both are — that is
+            // the previous behaviour, and it only lasts until the median fills.
+            var regimeUnknown = !UseRegimeSwitch || !_regimeKnown;
+            var trendAllowed = regimeUnknown || _regimeTrending;
+            var fadeAllowed = regimeUnknown || !_regimeTrending;
+
             if (StatusEveryBars > 0 && _barCount % StatusEveryBars == 0)
-                Print("status: {0:F2} | {1}/{2} votes | ADX {3:F1}{4} | quality {5:F2} {6} (need {7:F2}, best today {8:F2}) | {9} trades today | news: {10}",
+                Print("status: {0:F2} | {1}/{2} votes | ADX {3:F1}{4} | quality {5:F2} {6} (need {7:F2}, best today {8:F2}) | regime {9} | {10} trades today | news: {11}",
                       close, bulls, bears, adx, adx > adxPrev ? "+" : "-", quality,
                       quality >= EfficiencyMin ? "TREND" : "chop", EfficiencyMin,
-                      _bestQualityToday, _tradesToday, NewsStatusLine());
+                      _bestQualityToday,
+                      !UseRegimeSwitch ? "OFF (both sides)"
+                        : !_regimeKnown ? "warming up (both sides)"
+                        : _regimeTrending
+                          ? string.Format("TRENDING med {0:F3} -> trend side", _regimeMedian)
+                          : string.Format("MEAN-REVERTING med {0:F3} -> fade side", _regimeMedian),
+                      _tradesToday, NewsStatusLine());
 
             // Room for another position? Holding several at once is what
             // lifts trade count without touching entry quality.
@@ -762,7 +902,7 @@ namespace cAlgo.Robots
                 return;
 
             // ---- which side of the book has anything to say here? --------
-            if (quality >= EfficiencyMin)
+            if (trendAllowed && quality >= EfficiencyMin)
             {
                 if (adx < AdxMin) return;
                 if (RequireAdxRising && adx <= adxPrev) return;
@@ -775,7 +915,7 @@ namespace cAlgo.Robots
 
             // CHOPPY tape: the trend side has nothing to say here. Fade an RSI
             // extreme instead, if the mean-reversion side is enabled.
-            if (!UseMeanReversion || quality > ChopMax) return;
+            if (!UseMeanReversion || !fadeAllowed || quality > ChopMax) return;
             if (rsi <= FadeRsiLow)
                 OpenFade(1, rsi, quality);
             else if (rsi >= FadeRsiHigh && AllowShort)
@@ -1147,30 +1287,129 @@ namespace cAlgo.Robots
         // Trend quality actually used for gating and for target conviction.
         private double CurrentTrendQuality()
         {
-            if (!UseEnsembleQuality) return TrendQuality(EfficiencyWindow);
+            return TrendQualityAt(0);
+        }
+
+        // offset 0 is the bar that just closed; offset k is k bars before it.
+        // The offset exists so the regime history can be pre-filled from real
+        // history at start-up instead of taking 60 bars (15 hours) to become
+        // usable — during which the bot would be running both sides blind on
+        // exactly the tape the switch is meant to protect it from.
+        private double TrendQualityAt(int offset)
+        {
+            if (!UseEnsembleQuality) return TrendQuality(EfficiencyWindow, offset);
             double sum = 0.0;
             var count = 0;
             foreach (var w in EnsembleWindows)
             {
-                if (Bars.ClosePrices.Count <= w + 1) continue;
-                sum += TrendQuality(w);
+                if (Bars.ClosePrices.Count <= w + offset + 1) continue;
+                sum += TrendQuality(w, offset);
                 count++;
             }
             // Fall back to the single window rather than reporting 0.0 (which
             // would silently gate every trade off) if history is still short.
-            return count > 0 ? sum / count : TrendQuality(EfficiencyWindow);
+            return count > 0 ? sum / count : TrendQuality(EfficiencyWindow, offset);
         }
 
-        private double TrendQuality(int window)
+        private double TrendQuality(int window, int offset)
         {
             var c = Bars.ClosePrices;
-            var n = Math.Min(window, c.Count - 1);
+            var n = Math.Min(window, c.Count - 1 - offset);
             if (n < 2) return 0.0;
-            var net = Math.Abs(c.Last(0) - c.Last(n));
+            var net = Math.Abs(c.Last(offset) - c.Last(offset + n));
             double path = 0.0;
-            for (var i = 0; i < n; i++)
+            for (var i = offset; i < offset + n; i++)
                 path += Math.Abs(c.Last(i) - c.Last(i + 1));
             return path > 0 ? net / path : 0.0;
+        }
+
+        // What pure chance produces on whichever quality measure is in use.
+        // Anchored on the measured 48-bar random-walk value (0.124) and scaled
+        // by 1/sqrt(n), which is how efficiency behaves on a random walk. For
+        // the default ensemble this returns 0.131, NOT 0.124 — getting that
+        // wrong makes a mean-reverting tape look like a weakly trending one.
+        private double RandomWalkFloor()
+        {
+            if (!UseEnsembleQuality)
+                return 0.124 * Math.Sqrt(48.0 / Math.Max(1, EfficiencyWindow));
+            double sum = 0.0;
+            var count = 0;
+            foreach (var w in EnsembleWindows)
+            {
+                sum += 0.124 * Math.Sqrt(48.0 / w);
+                count++;
+            }
+            return count > 0 ? sum / count : 0.124;
+        }
+
+        // Averages the two middle values on an even count. That is the
+        // convention the backtest used, and the regime call is a threshold
+        // comparison — taking the upper middle instead would put the shipped
+        // bot on a very slightly different series from the one certified.
+        private static double Median(List<double> values)
+        {
+            var sorted = new List<double>(values);
+            sorted.Sort();
+            var n = sorted.Count;
+            if (n == 0) return 0.0;
+            return n % 2 == 1
+                ? sorted[n / 2]
+                : 0.5 * (sorted[n / 2 - 1] + sorted[n / 2]);
+        }
+
+        private int RegimeMinSamples()
+        {
+            return Math.Min(60, Math.Max(20, RegimeWindow / 5));
+        }
+
+        private void UpdateRegime(double quality)
+        {
+            _regimeHistory.Add(quality);
+            var cap = Math.Max(RegimeMinSamples(), RegimeWindow);
+            while (_regimeHistory.Count > cap)
+                _regimeHistory.RemoveAt(0);
+            if (_regimeHistory.Count < RegimeMinSamples())
+            {
+                _regimeKnown = false;
+                return;
+            }
+            _regimeMedian = Median(_regimeHistory);
+            _regimeKnown = true;
+            _regimeTrending = _regimeMedian >= RandomWalkFloor() + RegimeMargin;
+
+            if (!UseRegimeSwitch) return;
+            var now = _regimeTrending ? "TRENDING" : "MEAN-REVERTING";
+            if (now == _regimeLogged) return;
+            _regimeLogged = now;
+            Print("REGIME -> {0} | rolling median quality {1:F3} over {2} bars " +
+                  "vs random-walk floor {3:F3} (+{4:F3} margin) | {5} side active",
+                  now, _regimeMedian, _regimeHistory.Count, RandomWalkFloor(),
+                  RegimeMargin, _regimeTrending ? "TREND" : "FADE");
+        }
+
+        // Fill the regime history from bars that already exist, so the switch
+        // is live on the first bar rather than after 60 of them.
+        private void PrimeRegimeHistory()
+        {
+            _regimeHistory.Clear();
+            var longest = EfficiencyWindow;
+            if (UseEnsembleQuality)
+                foreach (var w in EnsembleWindows)
+                    if (w > longest) longest = w;
+            var room = Bars.ClosePrices.Count - longest - 2;
+            if (room < 1) return;
+            var take = Math.Min(RegimeWindow, room);
+            for (var offset = take; offset >= 1; offset--)
+                _regimeHistory.Add(TrendQualityAt(offset));
+            if (_regimeHistory.Count < RegimeMinSamples()) return;
+            _regimeMedian = Median(_regimeHistory);
+            _regimeKnown = true;
+            _regimeTrending = _regimeMedian >= RandomWalkFloor() + RegimeMargin;
+            _regimeLogged = _regimeTrending ? "TRENDING" : "MEAN-REVERTING";
+            Print("Regime primed from {0} historical bars: median quality {1:F3} " +
+                  "vs floor {2:F3} -> {3} | {4} side active from the first bar",
+                  _regimeHistory.Count, _regimeMedian, RandomWalkFloor(),
+                  _regimeLogged, _regimeTrending ? "TREND" : "FADE");
         }
 
         // Several positions at once is fine; several near-identical ones on
@@ -1345,38 +1584,57 @@ namespace cAlgo.Robots
                       med, p75, _bestQualityToday);
                 // The single number that says whether this strategy can work
                 // on real gold at all. See the note on _qualitiesToday.
-                // Bands are set against the RANDOM-WALK FLOOR of 0.124, not
-                // against the simulators, so they mean something absolute.
-                var excess = med - 0.124;
-                Print("   -> that is {0:+0.000;-0.000} versus the random-walk floor of 0.124 " +
-                      "(what pure chance produces on a 48-bar window).", excess);
+                // Bands are set against the RANDOM-WALK FLOOR, not against the
+                // simulators, so they mean something absolute.
+                //
+                // The floor has to match the measure. This median is the
+                // ENSEMBLE average when the ensemble is on, whose chance value
+                // is 0.131, not the 0.124 of a lone 48-bar window — comparing
+                // the two was reporting a below-chance tape as a trending one.
+                var floor = RandomWalkFloor();
+                var excess = med - floor;
+                Print("   -> that is {0:+0.000;-0.000} versus the random-walk floor of {1:F3} " +
+                      "(what pure chance produces on this same measure).", excess, floor);
+                // ImpliedHurst was calibrated on a single 48-bar window, so an
+                // ensemble median has to be converted back to 48-bar terms
+                // before it is looked up, or the reading comes out too high.
+                var med48 = floor > 0 ? med * (0.124 / floor) : med;
                 Print("   -> implied Hurst exponent ~{0:F2}. (0.50 = random walk, nothing to " +
                       "trade; below 0.50 = mean-reverting; this bot's simulators assumed 0.59-0.62.)",
-                      ImpliedHurst(med));
+                      ImpliedHurst(med48));
                 if (excess >= 0.030)
                     Print("      GOOD: gold is genuinely trending, as much as the markets this " +
                           "was certified on (+0.041 and +0.061). The tested edge should carry " +
-                          "over, and the trend side is the right one. Leave mean reversion OFF.");
+                          "over and the regime switch should be running the TREND side.");
                 else if (excess >= 0.012)
                     Print("      THIN: trending, but less than either certified market. Expect a " +
                           "smaller edge than the backtest showed. Collect more days before " +
                           "changing anything — this is the band where both sides are near zero.");
                 else if (excess >= -0.005)
                     Print("      FLAT: at {0:F3} above chance this tape is a random walk. Nothing " +
-                          "works on one — not trend-following, not mean reversion. Do NOT loosen " +
-                          "the filter to force trades; in testing that raised drawdown without " +
-                          "adding any edge.", excess);
+                          "works well on one — measured edge was +0.016 to +0.068 either way. Do " +
+                          "NOT loosen the filter to force trades; in testing that raised drawdown " +
+                          "without adding any edge.", excess);
                 else
-                    Print("      WRONG SIDE: at {0:F3} this tape is MEAN-REVERTING, and trend " +
-                          "following does not merely go quiet here — it LOSES money (-0.265 at " +
-                          "H=0.40 in testing). Fading is the profitable side there (+0.298). If " +
-                          "several sessions read like this, set 'Also fade RSI extremes when the " +
-                          "tape is CHOPPY' to true. Do not just lower the trend threshold.", excess);
+                    Print("      WRONG SIDE for trend-following: at {0:F3} this tape is " +
+                          "MEAN-REVERTING, where the trend side does not merely go quiet — it " +
+                          "LOSES money (-0.265 at H=0.40 in testing) while fading earns +0.259. " +
+                          "The regime switch should have handed the day to the FADE side; check " +
+                          "the REGIME line above says MEAN-REVERTING. Do not lower the trend " +
+                          "threshold to compensate.", excess);
             }
 
+            if (_regimeKnown)
+                Print("   regime at close: {0} (rolling median {1:F3} vs floor {2:F3}) — {3} side was active",
+                      _regimeTrending ? "TRENDING" : "MEAN-REVERTING", _regimeMedian,
+                      RandomWalkFloor(),
+                      !UseRegimeSwitch ? "both" : (_regimeTrending ? "TREND" : "FADE"));
+
             if (_tradesToday == 0)
-                Print("   NO TRADES: the market never reached the threshold. The line " +
-                      "above shows which setting would have traded, and how often.");
+                Print("   NO TRADES: neither side found a setup. The line above shows what the " +
+                      "trend threshold alone would have allowed; if the regime reads " +
+                      "MEAN-REVERTING then the trend side was held back on purpose and the fade " +
+                      "side simply saw no RSI extreme below quality {0:F2}.", ChopMax);
         }
 
         // Median efficiency -> Hurst exponent, from fractional-Brownian-motion

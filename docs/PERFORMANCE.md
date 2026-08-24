@@ -1431,3 +1431,114 @@ trends, in exchange for +0.009 of edge where they are right.
 what is unknown, the correct setting is the one that is nearly as good when
 right and far cheaper when wrong — which is this project's own worst-model rule,
 broken by tuning a switch on only half the cases it will face.
+
+---
+
+## The regime switch: measure which market you are in, run only that side
+
+*Certified 24 Aug 2026, virgin seeds 9100-9129 and 9200-9217.*
+
+The revert above ended with a real problem left open. The strict fade settings
+are cheap when wrong — but they fire **4.1 times a week**, which is not enough
+to cover a choppy day. On the tape the owner logged on 24 Aug (ensemble median
+0.100, implied H≈0.42) the bot opened **zero** trades in a session. Running
+both halves always-on was measured at **−0.177** there. So the choice looked
+like: idle, or lose.
+
+It was a false choice. The reason the wider fade band was dangerous is that it
+ran on trending tapes, where fading is the wrong bet. **The bot already knows
+which tape it is on** — it computes trend quality every bar.
+
+### The rule
+
+Keep a rolling median of trend quality; compare it to the random-walk floor for
+that same measure:
+
+```
+median >= floor + margin  ->  trends more than chance  ->  TREND side only
+median <  floor + margin  ->  mean-reverting           ->  FADE side only
+```
+
+The floor must match the measure. For a single 48-bar window it is **0.124**;
+for the 5-window ensemble it is **0.131**, because efficiency scales ~1/√n and
+the shorter windows read higher on chance alone. The bot now derives it from
+whichever windows are configured rather than hard-coding a number.
+
+### Certification — 30 virgin seeds per market, 22 days, 1% risk
+
+Three configurations, across five markets of known Hurst exponent plus both
+project models. "both on" is what was previously shipped.
+
+| market | config | tr/wk | win% | edge | med DD | worst DD | losing runs |
+|---|---|---|---|---|---|---|---|
+| H=0.40 mean-revert | both on | 20.3 | 37.4 | −0.188 | 17% | 32% | 25/30 |
+| | switch only | 4.9 | 48.6 | −0.000 | 2% | 21% | 12/30 |
+| | **switch + 35/65** | 27.5 | 62.7 | **+0.259** | 9% | 33% | **4/30** |
+| H=0.45 mean-revert | both on | 35.3 | 42.7 | −0.073 | 21% | 44% | 22/30 |
+| | switch only | 13.2 | 43.1 | −0.081 | 10% | 25% | 21/30 |
+| | **switch + 35/65** | 37.5 | 53.2 | **+0.079** | 16% | 33% | 10/30 |
+| H=0.50 random walk | both on | 52.1 | 47.8 | +0.026 | 23% | 46% | 16/30 |
+| | switch only | 29.5 | 49.0 | +0.068 | 13% | 32% | 13/30 |
+| | switch + 35/65 | 50.5 | 49.3 | +0.016 | 20% | 46% | 16/30 |
+| H=0.55 trending | both on | 68.1 | 52.7 | +0.171 | 21% | 40% | 7/30 |
+| | switch only | 47.6 | 53.9 | **+0.182** | 19% | 44% | 8/30 |
+| | switch + 35/65 | 62.1 | 51.9 | +0.125 | 21% | 48% | 11/30 |
+| H=0.60 trending | both on | 84.2 | 55.6 | +0.286 | 21% | 40% | 1/30 |
+| | switch only | 66.8 | 58.0 | **+0.359** | 18% | 40% | 2/30 |
+| | switch + 35/65 | 75.1 | 56.4 | +0.310 | 21% | 39% | 2/30 |
+| M1+M2 models | both on | 79.6 | 61.4 | +0.409 | 17% | 36% | 1/60 |
+| | switch only | 63.5 | 62.5 | **+0.433** | 14% | 36% | 3/60 |
+| | switch + 35/65 | 71.1 | 60.6 | +0.372 | 16% | 45% | 3/60 |
+
+*(subtract the ~0.06 trade-geometry floor from every edge)*
+
+**ADOPTED: switch + fade band 35/65.** Stated honestly, it is not the best
+configuration in any single regime — the switch alone beats it on all three
+trending markets. It is the only one that is **positive in every regime**, and
+the case it fixes is the case that actually happened: −0.188 → +0.259 and
+25/30 losing runs → 4/30 on the owner's measured tape. The price is about 0.04
+of edge where the old setting was already right.
+
+Worst drawdown did **not** deteriorate (32–48% vs 32–46%) — the check that
+killed the previous attempt at a wider fade band. The switch is what makes the
+difference: it stops the loose band ever running on a trending tape.
+
+### The knobs are a plateau, not a peak
+
+Virgin seeds 9200-9217, all nine combinations:
+
+| window | margin | choppy tr/wk | choppy edge | trending tr/wk | trending edge |
+|---|---|---|---|---|---|
+| 100 | 0.000 | 34.3 | +0.110 | 73.4 | +0.311 |
+| 100 | 0.005 | 34.3 | +0.122 | 72.9 | +0.302 |
+| 100 | 0.015 | 34.7 | +0.124 | 72.3 | +0.290 |
+| 200 | 0.000 | 32.9 | +0.113 | 72.2 | +0.341 |
+| 200 | 0.005 | 33.0 | +0.122 | 71.3 | +0.331 |
+| 200 | 0.015 | 32.9 | +0.136 | 70.4 | +0.304 |
+| 400 | 0.000 | 32.1 | +0.137 | 73.0 | +0.356 |
+| 400 | 0.005 | 31.9 | +0.141 | 72.0 | +0.350 |
+| 400 | 0.015 | 31.5 | +0.157 | 70.0 | +0.314 |
+
+Every cell positive on both regimes. **Shipped 300 / 0.005 — the middle of the
+region, not the sweep winner**, per the same rule that produced the ensemble.
+
+### Two reporting bugs found and fixed while shipping this
+
+1. **The DAY SUMMARY compared an ensemble median against the single-window
+   floor** (0.124). Since the ensemble floor is 0.131, a tape sitting exactly
+   at chance was reported as +0.007 *above* it. The verdict bands were reading
+   one notch too optimistic on every session since the ensemble was enabled.
+2. **`ImpliedHurst` was calibrated on a lone 48-bar window** but was being fed
+   the ensemble median, which runs ~5.6% higher. The owner's 24 Aug tape was
+   reported as H≈0.44 when the correct reading is **H≈0.42**. Both now convert
+   to 48-bar-equivalent terms first. Port-tested against the Python: the C#
+   returns floor 0.1309 and maps an M1-like ensemble median of 0.174 to H=0.59,
+   matching M1's independently measured H≈0.59.
+
+### Live-only refinement, stated because it differs from the harness
+
+The backtest lets the rolling median fill from an empty deque. The cBot instead
+**pre-fills it from historical bars at start-up**, so the switch is live on the
+first bar rather than after 60 of them (15 hours on m15) spent running both
+sides blind. This is strictly in the direction the harness measured — it only
+removes a warm-up period that the harness paid once per 22-day run.
