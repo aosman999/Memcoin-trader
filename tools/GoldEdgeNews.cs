@@ -250,7 +250,30 @@ namespace cAlgo.Robots
         //       0.60   trending          +0.446      -0.208    +0.317
         // (subtract the ~0.06 geometry floor from all of these)
         //
-        // OFF BY DEFAULT ON PURPOSE. Running both halves is robust to being
+        // NOW ON BY DEFAULT, and the reason is live evidence rather than
+        // simulation. The owner's session of 24 Aug 2026 logged ensemble
+        // readings of 0.19 0.14 0.12 0.08 0.13 0.07 0.07 0.07 0.07 0.10 0.10
+        // 0.11 — median 0.100.
+        //
+        // The random-walk floor for the ENSEMBLE is 0.131, not the 0.124 that
+        // applies to a single 48-bar window: efficiency scales as ~1/sqrt(n) on
+        // chance alone, so the shorter windows in the average read higher and
+        // lift the floor. A median of 0.100 is therefore BELOW chance — that
+        // tape was genuinely mean-reverting, not weakly trending.
+        //
+        // On such a tape the trend side does not merely go quiet, it loses
+        // money (-0.265 measured at H=0.40) while fading earns +0.298. Two
+        // consecutive live sessions produced no trend signal at all. Running
+        // only the trend half means a dead bot on every day like that.
+        //
+        // The cost, measured on the trending simulators (virgin seeds
+        // 4200-4239, eff>=0.22, 6 positions, 1% risk):
+        //   trend only    71.2 tr/wk, edge +0.397, worst DD 40%
+        //   trend + fade  77.9 tr/wk, edge +0.351, worst DD 49%
+        // About 0.05 of edge and 9 points of drawdown, in exchange for a bot
+        // that has something to do when gold is not trending.
+        //
+        // Was OFF BY PURPOSE before. Running both halves is robust to being
         // wrong about the regime, but the loser drags on the winner, so it is
         // insurance rather than an improvement. Turn it on only once the DAY
         // SUMMARY has shown, over several sessions, that gold's implied Hurst
@@ -271,7 +294,7 @@ namespace cAlgo.Robots
         // if gold happens to trend. Since the regime is exactly what is NOT
         // known, the strict settings are correct: they are nearly as good when
         // right and far cheaper when wrong.
-        [Parameter("Also fade RSI extremes when the tape is CHOPPY", DefaultValue = false, Group = "Mean reversion")]
+        [Parameter("Also fade RSI extremes when the tape is CHOPPY", DefaultValue = true, Group = "Mean reversion")]
         public bool UseMeanReversion { get; set; }
 
         [Parameter("Fade only when trend quality is BELOW", DefaultValue = 0.20, MinValue = 0.0, MaxValue = 1.0, Group = "Mean reversion")]
