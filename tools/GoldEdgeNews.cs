@@ -236,6 +236,34 @@ namespace cAlgo.Robots
         [Parameter("Require ADX rising", DefaultValue = false, Group = "Signal")]
         public bool RequireAdxRising { get; set; }
 
+        // BREAK OF STRUCTURE. The one idea from standard trader education that
+        // survived measurement here: don't take the trade until price has
+        // actually taken out the prior swing. "Wait for BOS before looking for
+        // entries" — the votes can all agree while price is still inside the
+        // previous range, and those are the entries that were being paid for.
+        //
+        // Certified on VIRGIN seeds, added on top of the 3-voter rule:
+        //   market            baseline            + BOS
+        //   mixed regime      49.6/wk +0.092      43.3/wk +0.121   losing 26->23/60
+        //   model M1          65.3/wk +0.287      54.7/wk +0.311   worst DD 42%->28%
+        //   model M2          77.4/wk +0.334      63.5/wk +0.345   worst DD 42%->41%
+        // Better on all three, and the same direction on the tuning set
+        // (+0.070 -> +0.088). Five samples, one sign — which is the bar this
+        // project uses, because any single one of these is only 1-2 SE.
+        //
+        // It costs about 13% of the trade count. That is the honest price.
+        //
+        // NOT adopted alongside it: filtering the FADE side to price being at
+        // a support/resistance level with 3+ touches. It measured slightly
+        // better again (mixed +0.126, M1 +0.345) but cost a further 15% of
+        // trades for a gain inside one standard error — not worth the
+        // frequency when frequency is already the complaint.
+        [Parameter("Require break of structure (prior swing taken out)", DefaultValue = true, Group = "Signal")]
+        public bool RequireBreakOfStructure { get; set; }
+
+        [Parameter("Break of structure: lookback bars", DefaultValue = 12, MinValue = 2, MaxValue = 100, Group = "Signal")]
+        public int BosLookback { get; set; }
+
         [Parameter("ADX rising lookback (bars)", DefaultValue = 3, MinValue = 1, MaxValue = 20, Group = "Signal")]
         public int AdxRisingLookback { get; set; }
 
@@ -703,13 +731,16 @@ namespace cAlgo.Robots
 
             Print("GoldEdgeNews started | {0} {1} | account {2} (DEMO) | balance {3:F2}",
                   SymbolName, Bars.TimeFrame, Account.Number, Account.Balance);
-            Print("Entry: {0} | ADX>={1}{2} | trend quality>={3} over {4} bars | up to {5} positions",
+            Print("Entry: {0}{6} | ADX>={1}{2} | trend quality>={3} over {4} bars | up to {5} positions",
                   UseSimpleVoters ? "3/3 votes (simplified)" : VotesNeeded + "/6 votes",
                   AdxMin, RequireAdxRising ? " and rising" : "",
                   EfficiencyMin,
                   UseEnsembleQuality ? "24/36/48/60/72 (ensemble avg)"
                                      : EfficiencyWindow.ToString(),
-                  MaxConcurrentPositions);
+                  MaxConcurrentPositions,
+                  RequireBreakOfStructure
+                    ? string.Format(" + break of structure ({0}-bar)", BosLookback)
+                    : "");
             Print("Exit: stop {0} | target {1} | max hold {2} bars | risk {3}%",
                   UseSwingStop
                     ? string.Format("SWING structure ({0}-bar, +{1}% buffer, clamped {2}-{3}%)",
@@ -906,9 +937,9 @@ namespace cAlgo.Robots
             {
                 if (adx < AdxMin) return;
                 if (RequireAdxRising && adx <= adxPrev) return;
-                if (bulls >= votesNeeded)
+                if (bulls >= votesNeeded && BrokeStructure(1))
                     OpenTrade(1, bulls, adx, quality);
-                else if (bears >= votesNeeded && AllowShort)
+                else if (bears >= votesNeeded && AllowShort && BrokeStructure(-1))
                     OpenTrade(-1, bears, adx, quality);
                 return;
             }
@@ -1321,6 +1352,26 @@ namespace cAlgo.Robots
             for (var i = offset; i < offset + n; i++)
                 path += Math.Abs(c.Last(i) - c.Last(i + 1));
             return path > 0 ? net / path : 0.0;
+        }
+
+        // Break of structure: this close takes out every close in the lookback,
+        // i.e. price has actually left the prior range rather than merely
+        // looking bullish inside it. Deliberately reads CLOSES, not wicks — a
+        // wick through a level is the thing the same course warns is a
+        // rejection, not a break.
+        private bool BrokeStructure(int direction)
+        {
+            if (!RequireBreakOfStructure) return true;
+            var c = Bars.ClosePrices;
+            var n = Math.Min(BosLookback, c.Count - 1);
+            if (n < 2) return false;
+            var close = c.Last(0);
+            for (var k = 1; k <= n; k++)
+            {
+                if (direction > 0 && c.Last(k) >= close) return false;
+                if (direction < 0 && c.Last(k) <= close) return false;
+            }
+            return true;
         }
 
         // What pure chance produces on whichever quality measure is in use.

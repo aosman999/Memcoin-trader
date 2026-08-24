@@ -1640,3 +1640,66 @@ seeds. It then **reversed on 20 virgin seeds** (+0.100 vs +0.149) and came back
 two orderings: the window is not resolvable at this sample size. Per Carver's
 rule and this project's own history of peak-picking, **it stays at 300** rather
 than being set from the sample that happened to be run last.
+
+---
+
+## Testing a retail gold course: 7 lessons, one idea that survived
+
+*24 Aug 2026. Owner sent Days 1-7 of a "XAUUSD Gold Masterclass" (SabFX Trader).*
+
+Content by day: what trading is / sessions · candlestick anatomy · market
+structure · support & resistance · BOS and CHOCH · trends · higher highs and
+lower lows. Most of it is either already implemented, already in the rejected
+ledger, or not a testable rule at all ("candles tell a story, not the future").
+
+**Already settled here:**
+
+| lesson | status |
+|---|---|
+| Top-down / higher-timeframe bias (Day 5, 6) | 4H bias + 15M entry: +0.570 vs +0.563 on 50 virgin seeds. Inside noise, costs frequency. **Rejected.** |
+| "Enter on the pullback to structure" (Day 5) | Starved — 2 trades over a full seed set. In a high-quality trend price never returns to the level. |
+| "Never buy because price is already going up" (Day 1) | The discount-entry rule. Same failure, 2 trades. |
+| S/R for stop placement (Day 4) | **Already shipped** — the stop sits beyond the 12-bar swing plus a 5% buffer. That is a structure stop. |
+| "Wait for confirmation, never trade one candle" (Day 2) | Already implied: entries decide on bar close and need 3 independent voters. |
+| "Avoid ranging markets" (Day 7) | Already the trend-quality filter, and measured far more precisely than eyeballing a range. |
+
+### The one that measured better: Break of Structure
+
+Day 5's rule — *don't enter until price actually takes out the prior swing* —
+added on top of the existing 3-voter test. All voters can agree while price is
+still inside the previous range; those are the entries being paid for.
+
+| market | baseline | + BOS | trades | worst DD |
+|---|---|---|---|---|
+| mixed regime (60 virgin tapes) | +0.092 | **+0.121** | 49.6 → 43.3/wk | 49% → 49% |
+| model M1 (30 virgin seeds) | +0.287 | **+0.311** | 65.3 → 54.7/wk | 42% → **28%** |
+| model M2 (30 virgin seeds) | +0.334 | **+0.345** | 77.4 → 63.5/wk | 42% → 41% |
+| mixed regime (tuning set) | +0.070 | +0.088 | 48.8 → 43.0/wk | 49% → 38% |
+
+Any one of these is 1-2 standard errors — but it is the same sign in every
+market, on tuning and virgin sets alike, and losing runs fall (26/60 → 23/60).
+That is the bar this project uses. **ADOPTED**, at a cost of ~13% of the trade
+count. Reads closes, not wicks: a wick through a level is the rejection the
+same course warns about, not a break.
+
+### Measured and NOT adopted
+
+- **HH/HL structure trend** (Day 7's core rule: long only while making higher
+  highs *and* higher lows) — **+0.061 vs +0.070 baseline**, worst drawdown 51%
+  vs 49%. It is a slower, noisier restatement of what the trend-quality filter
+  already measures. Adding BOS to it (+0.073) only recovers what BOS
+  contributes on its own.
+- **BOS replacing the voters entirely** — +0.081 vs +0.088 for BOS *plus*
+  voters. The structure break is a filter, not a signal.
+- **Fading only at a support/resistance level with 3+ touches** — genuinely
+  better (mixed +0.126, M1 +0.345, M2 +0.361) but costs a further 15% of trades
+  for a gain inside one standard error. Held back because frequency is the
+  binding complaint, not because it failed. Worth revisiting if the live ledger
+  ever says the fade side is the problem. Levels were built as the course
+  describes — swing pivots, clustered at 0.15%, counted by touches — and only
+  usable after confirmation, so there is no lookahead.
+
+The pattern across all seven lessons is the same one this file keeps recording:
+the teachable, quotable parts ("trend is your friend", "structure is king") are
+either already in the filter or unmeasurable, and the single mechanical rule
+buried among them is worth about +0.03R.
