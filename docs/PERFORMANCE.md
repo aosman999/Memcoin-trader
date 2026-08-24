@@ -1703,3 +1703,111 @@ The pattern across all seven lessons is the same one this file keeps recording:
 the teachable, quotable parts ("trend is your friend", "structure is king") are
 either already in the filter or unmeasurable, and the single mechanical rule
 buried among them is worth about +0.03R.
+
+---
+
+## Timeframe, re-measured on the current build — m5 replaces m15
+
+*24 Aug 2026. Certified on virgin seeds 9600-9639.*
+
+This file's old timeframe table (m15 best at +0.974, m5 at +0.590) was measured
+on a much stricter configuration: eff>=0.55, no fade side, no structure break.
+Its own note says timeframe and exit style interact and a conclusion must not
+be carried across a change to either. The entry rules have since changed twice,
+so the table had to be re-run.
+
+| market | tf | tr/wk | win% | mean R | growth | losing | worst DD |
+|---|---|---|---|---|---|---|---|
+| mixed regime | m15 | 45.6 | 52.1 | +0.121 | x1.17 | 12/40 | 39% |
+| | **m5** | **81.0** | 53.1 | **+0.200** | **x1.52** | **2/40** | 36% |
+| | m3 | 110.0 | 52.1 | +0.194 | x1.89 | 5/40 | 44% |
+| mixed + microstructure | m15 | 41.7 | 52.2 | +0.113 | x1.11 | 12/40 | 34% |
+| | **m5** | **64.7** | 53.6 | **+0.178** | **x1.32** | 4/40 | 30% |
+| | m3 | 78.2 | 54.5 | +0.198 | x1.56 | 4/40 | 34% |
+| model M1 | m15 | 54.5 | 59.9 | +0.351 | x1.71 | 2/30 | 28% |
+| | **m5** | **89.4** | 54.8 | +0.284 | **x2.03** | 5/30 | 40% |
+| model M2 | m15 | 62.9 | 60.2 | +0.372 | x1.80 | 3/30 | 30% |
+| | **m5** | **96.0** | 55.8 | +0.342 | **x2.63** | 3/30 | 38% |
+
+**Reported as ABSOLUTE mean R and growth, not edge-over-baseline** — and that
+change was forced by a flaw found in the metric itself. Edge is measured
+against a random-entry baseline that also pays the spread; because this
+strategy holds wider stops than a coin flip, *raising* the spread *raises* the
+measured edge. Edge answers "is there skill". It does not answer "does the
+account grow". At 80+ trades a week the difference matters.
+
+**ADOPTED: m5.** Roughly double the trades of m15 with higher growth on all
+four markets. Per-trade expectancy falls on the two project models (0.35 →
+0.28) and win rate drops about 5 points — frequency more than pays for it.
+
+### Two artifact checks it had to survive
+
+**1. Trade geometry.** On a pure random walk no rule can predict anything, so
+any measured edge is geometry. Re-run on 40 random walks:
+
+| config | timeframe | measured edge on a random walk |
+|---|---|---|
+| old trend-only (control) | m15 | +0.039 — reproduces the documented +0.057 |
+| this build | m15 | +0.030 |
+| this build | m5 | −0.026 |
+| this build | m3 | −0.012 |
+
+The control reproduces the old bias, so the measurement is sound — and **the
++0.06 geometry bias has essentially vanished on this build**. It existed
+because a trend-only entry fires solely when swings are wide, giving stops
+twice a coin flip's. Adding the fade side, which fires in chop where swings are
+tight, balanced the stop distribution. **The instruction to subtract ~0.06 no
+longer applies to this configuration** — earlier sections of this file that
+apply it to the current build understate it.
+
+**2. Self-similarity.** fBm has the same Hurst exponent at every scale by
+construction. Real intraday gold does not: at 1-5 minutes it is dominated by
+microstructure noise. A synthetic tape without that is unrealistically smooth
+exactly where the m5 result claims its advantage. Adding observation noise:
+
+| noise (× one minute's true move) | m15 mean R | m5 | m3 | m3 trades/wk |
+|---|---|---|---|---|
+| 0 (self-similar fBm) | +0.087 | +0.157 | +0.176 | 108.8 |
+| 0.5 | +0.096 | +0.154 | +0.168 | 99.2 |
+| 1.0 | +0.090 | +0.147 | +0.154 | 75.8 |
+| 2.0 | +0.084 | +0.147 | +0.158 | 34.3 |
+
+The advantage survives. What noise removes is trade *count*, not quality — the
+trend-quality filter stands down when the tape is noise-dominated, which is the
+correct behaviour and a good sign for the filter.
+
+**3. Spread**, at 4x realistic: mean R +0.157 → +0.135 → +0.092 at m5. Still
+clearly positive.
+
+### Two timeframe bugs found while shipping this
+
+1. **`BarMinutes()` returned 60 for any unlisted timeframe** — m2, m3, m4, m10,
+   m20, h2, h3. On those charts a "40 bar" hold silently became 40 *hours*.
+2. **Hold and entry spacing were expressed in BARS**, so the same setting meant
+   10 hours on m15 and 3h20 on m5. The timeframe test was run at a fixed
+   wall-clock horizon, so the bar-based version was not what was certified.
+   Both are now **wall-clock minutes** and mean the same thing on every chart.
+
+## Verification: a bot that is run, not just compiled
+
+`tools/verify/all.sh` is now the gate before anything is sent:
+
+1. **Compile** with warnings-as-errors, plus a compiler negative control.
+2. **`bot-sim.sh`** — the *real* robot against a simulated broker
+   (`calgo_sim.cs`: working indicators, positions that fill and stop out, an
+   account whose equity moves). 16 behaviour assertions across trending,
+   crashing, dead-flat and barely-any-history tapes and six timeframes.
+3. **`bot-sim-negcontrol.py`** — injects six real faults and requires the
+   simulation to catch each: stop on the wrong side, clamp ignored, sizing 50x,
+   demo lock removed, position limit ignored, and both entry gates made
+   unreachable (the silent no-trade failure that actually happened live).
+4. **Port test** — C# and backtester agree bar for bar.
+5. The 33 Python unit tests.
+
+**The negative controls immediately earned their place.** Two faults initially
+went undetected, and the cause was a real hole: the simulated tapes were random
+walks, so the regime switch correctly chose the fade side and **the entire
+trend entry path was never executed**. Half the bot was untested. The driver
+now asserts both paths fire (151 trend / 67 fade entries) and the control's
+contract is simply "a broken bot must not pass", rather than matching a
+specific message that a skipped scenario would never print.

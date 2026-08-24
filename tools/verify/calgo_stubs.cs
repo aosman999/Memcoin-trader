@@ -39,11 +39,23 @@ namespace cAlgo.API
         private readonly string _n;
         private TimeFrame(string n) { _n = n; }
         public static readonly TimeFrame Minute = new TimeFrame("m1");
+        public static readonly TimeFrame Minute2 = new TimeFrame("m2");
+        public static readonly TimeFrame Minute3 = new TimeFrame("m3");
+        public static readonly TimeFrame Minute4 = new TimeFrame("m4");
         public static readonly TimeFrame Minute5 = new TimeFrame("m5");
+        public static readonly TimeFrame Minute6 = new TimeFrame("m6");
+        public static readonly TimeFrame Minute10 = new TimeFrame("m10");
         public static readonly TimeFrame Minute15 = new TimeFrame("m15");
+        public static readonly TimeFrame Minute20 = new TimeFrame("m20");
         public static readonly TimeFrame Minute30 = new TimeFrame("m30");
+        public static readonly TimeFrame Minute45 = new TimeFrame("m45");
         public static readonly TimeFrame Hour = new TimeFrame("h1");
+        public static readonly TimeFrame Hour2 = new TimeFrame("h2");
+        public static readonly TimeFrame Hour3 = new TimeFrame("h3");
         public static readonly TimeFrame Hour4 = new TimeFrame("h4");
+        public static readonly TimeFrame Hour6 = new TimeFrame("h6");
+        public static readonly TimeFrame Hour8 = new TimeFrame("h8");
+        public static readonly TimeFrame Hour12 = new TimeFrame("h12");
         public static readonly TimeFrame Daily = new TimeFrame("d1");
         public static bool operator ==(TimeFrame a, TimeFrame b) { return ReferenceEquals(a, b); }
         public static bool operator !=(TimeFrame a, TimeFrame b) { return !ReferenceEquals(a, b); }

@@ -1,4 +1,4 @@
-// GoldEdgeNews — gold (XAU/USD) strategy + news agent. DEMO-ONLY, XAUUSD m15.
+// GoldEdgeNews — gold (XAU/USD) strategy + news agent. DEMO-ONLY, XAUUSD m5.
 //
 // ============================ HOW IT TRADES ============================
 // REGIME It measures which market it is in before choosing a side. Rolling
@@ -8,7 +8,9 @@
 //          above the floor -> trending      -> only the TREND side runs
 //          below the floor -> mean-reverting -> only the FADE side runs
 //        Running both at once means one of them is always the wrong bet.
-// TREND  3 voters (ema20>ema75, rsi14>50, close>close[-20]) must ALL agree,
+// TREND  price must BREAK STRUCTURE (close takes out every close in the
+//        prior 12 bars) AND 3 voters (ema20>ema75, rsi14>50, close>close[-20])
+//        must ALL agree,
 //        only when trend quality >= 0.22 and ADX >= 18, during 01-22 UTC.
 //        Trend quality = Kaufman efficiency (net move / path travelled),
 //        AVERAGED over 24/36/48/60/72 bars rather than read from one window.
@@ -19,35 +21,59 @@
 //        0.4-1.4% of price. Binary — no trailing, no early exit.
 // TARGET adaptive 1.0-2.0 reward:risk, scaled by conviction.
 // SIZE   1.0% risk per trade, up to 6 at once = 6% maximum exposure.
-//        -15% daily loss stop. 40-bar (10h) time stop.
+//        -15% daily loss stop. 600-MINUTE time stop (wall clock, so it means
+//        the same thing on every chart), 15 minutes between same-side entries.
 // NEWS   Forex Factory calendar, 9 currencies + oil. Moves the stop to
 //        breakeven before an event when ALREADY in profit, and vetoes entries
 //        during price shocks. It NEVER closes a trade: news pumps gold as
 //        often as it dumps it, and closing on news measured clearly worse.
 //
 // ========================= CERTIFIED PERFORMANCE ========================
-// 30 VIRGIN seeds per market (9100-9129), 22 days, 1.0% risk. SIMULATED.
-// Reported per REGIME, because a single average across regimes would hide
-// the whole point of the switch.
+// 40 VIRGIN tapes per market (seeds 9600-9639), 22 days, 1.0% risk, spread
+// charged relative to the stop. SIMULATED. Reported as ABSOLUTE expectancy
+// per trade and the resulting account growth, because that is what compounds
+// -- edge-over-a-random-baseline answers "is there skill", not "does it pay".
 //
-//   market                    tr/wk   win     edge    worst DD   losing runs
-//   H=0.40 mean-reverting      27.5  62.7%   +0.259     33%         4/30
-//   H=0.45 mean-reverting      37.5  53.2%   +0.079     33%        10/30
-//   H=0.50 random walk         50.5  49.3%   +0.016     46%        16/30
-//   H=0.55 trending            62.1  51.9%   +0.125     48%        11/30
-//   H=0.60 trending            75.1  56.4%   +0.310     39%         2/30
-//   M1+M2 (project models)     71.1  60.6%   +0.372     45%         3/60
+//   market                    tr/wk   win     mean R   growth  losing  worstDD
+//   mixed regime               81.0  53.1%   +0.200    x1.52    2/40     36%
+//   mixed + microstructure     64.7  53.6%   +0.178    x1.32    4/40     30%
+//   model M1                   89.4  54.8%   +0.284    x2.03    5/30     40%
+//   model M2                   96.0  55.8%   +0.342    x2.63    3/30     38%
 //
-// Read this honestly rather than reading the best row. On a RANDOM WALK the
-// edge is +0.016 — indistinguishable from nothing, which is correct, because
-// nothing works on a random walk. The strategy earns where the tape has a
-// character, either direction. Subtract ~0.06 from every figure for the
-// geometry bias described below; on the middle rows that leaves zero.
+// "Mixed regime" is the honest market: trend character changes every half-day
+// to two days, which is what the owner's own live logs show. The homogeneous
+// tapes that earlier versions of this file quoted held one Hurst exponent for
+// 22 days and flattered every result. "+ microstructure" adds observation
+// noise of one minute's true move, which is what makes short timeframes hard
+// in reality.
 //
-// Quoted per regime and as measured, never as one headline number. A single
-// sample carries +/-3 points of win-rate noise and reads as precision it does
-// not have — that mistake was made in earlier versions of this file.
+// SAME BUILD AT m15, for comparison: 45.6 tr/wk, +0.121 mean R, x1.17 growth,
+// 12/40 losing. m5 roughly doubles the trades AND improves growth on all four
+// markets. That reverses this file's old timeframe table, which was measured
+// on a much stricter config (eff>=0.55, no fade side, no structure break) --
+// timeframe and entry rules interact, so an old timeframe conclusion cannot
+// be carried across a change to either.
 //
+// THE GEOMETRY BIAS IS NOW ~ZERO, and that is a correction. Earlier builds
+// measured +0.057 on a PURE RANDOM WALK, where no rule can predict anything,
+// because the trend-only entry fired solely when swings were wide and so held
+// stops twice as wide as a coin flip. Re-measured on this build against 40
+// random walks:
+//        old trend-only config, m15   +0.039 (reproduces the documented bias)
+//        this build, m15              +0.030
+//        this build, m5               -0.026
+//        this build, m3               -0.012
+// Adding the fade side (which fires in chop, where swings are tight) balanced
+// the stop distribution that caused it. Figures above are NOT reduced by the
+// old 0.06 -- that subtraction no longer applies to this configuration.
+//
+// STRESS-TESTED, on the mixed tapes:
+//   spread 0.50 -> 1.00 -> 2.00 (4x realistic):  mean R +0.157 -> +0.135 -> +0.092
+//   microstructure noise 0 -> 1x -> 2x a minute: mean R +0.176 -> +0.154 -> +0.158
+//   Under heavy noise it trades LESS (109 -> 34/wk) rather than worse: the
+//   trend-quality filter stands down when the tape is noise-dominated.
+//
+// Quoted per market and as measured, never as one headline number. A single
 // Scored as EDGE OVER RANDOM because a coin flip earns +0.11 to +0.28R on
 // these simulators — raw returns from any trend strategy are inflated here.
 // Spread is charged relative to the stop (spread/stop_distance), never as a
@@ -562,8 +588,14 @@ namespace cAlgo.Robots
         [Parameter("Reward:risk — used when adaptive target is OFF", DefaultValue = 4.0, MinValue = 0.5, MaxValue = 10.0, Group = "Exits")]
         public double RewardRisk { get; set; }
 
-        [Parameter("Max hold (bars)", DefaultValue = 40, MinValue = 1, MaxValue = 400, Group = "Exits")]
-        public int MaxHoldBars { get; set; }
+        // EXPRESSED IN MINUTES, NOT BARS, and that is a bug fix rather than a
+        // preference. "40 bars" means 10 hours on m15 and 3h20 on m5 -- the same
+        // setting silently becomes a different strategy when the chart changes,
+        // and the timeframe test below was run at a fixed 10-hour horizon. A
+        // wall-clock horizon is what was certified, so a wall-clock horizon is
+        // what ships.
+        [Parameter("Max hold (minutes)", DefaultValue = 600, MinValue = 5, MaxValue = 20000, Group = "Exits")]
+        public int MaxHoldMinutes { get; set; }
 
         [Parameter("Daily loss stop (%)", DefaultValue = 15.0, MinValue = 1.0, Group = "Risk")]
         public double DailyLossStopPercent { get; set; }
@@ -589,8 +621,9 @@ namespace cAlgo.Robots
         [Parameter("Max concurrent positions", DefaultValue = 6, MinValue = 1, MaxValue = 20, Group = "Risk")]
         public int MaxConcurrentPositions { get; set; }
 
-        [Parameter("Min bars between same-direction entries", DefaultValue = 1, MinValue = 0, MaxValue = 50, Group = "Risk")]
-        public int MinBarsBetweenSameSide { get; set; }
+        // Also wall-clock, for the same reason.
+        [Parameter("Min minutes between same-direction entries", DefaultValue = 15, MinValue = 0, MaxValue = 600, Group = "Risk")]
+        public int MinMinutesBetweenSameSide { get; set; }
 
         // SESSION FILTER — from research into professional gold trading, then
         // measured. The strong claim ("only trade the 12-16 UTC London/NY
@@ -741,7 +774,7 @@ namespace cAlgo.Robots
                   RequireBreakOfStructure
                     ? string.Format(" + break of structure ({0}-bar)", BosLookback)
                     : "");
-            Print("Exit: stop {0} | target {1} | max hold {2} bars | risk {3}%",
+            Print("Exit: stop {0} | target {1} | max hold {2} min | risk {3}%",
                   UseSwingStop
                     ? string.Format("SWING structure ({0}-bar, +{1}% buffer, clamped {2}-{3}%)",
                                     SwingLookback, SwingBufferPercent, MinStopPercent, MaxStopPercent)
@@ -751,7 +784,7 @@ namespace cAlgo.Robots
                   AdaptiveTarget
                     ? string.Format("ADAPTIVE {0}:1-{1}:1 by conviction", MinRewardRisk, MaxRewardRisk)
                     : string.Format("fixed {0}:1", RewardRisk),
-                  MaxHoldBars, RiskPercent);
+                  MaxHoldMinutes, RiskPercent);
             Print("Regime switch: {0} | fade side {1} (RSI {2}/{3} when quality<={4:F2}, {5}:1)",
                   UseRegimeSwitch
                     ? string.Format("ON — rolling median of {0} bars vs random-walk floor {1:F3} +{2:F3}",
@@ -765,8 +798,11 @@ namespace cAlgo.Robots
                   ProtectOnNews ? "ON" : "OFF", ProtectBeforeMinutes,
                   BlockEntriesOnNews ? "ON" : "OFF", UseShockVeto ? "ON" : "OFF");
             Print("News policy: never closes a trade on news (measured worse) — protects it instead.");
-            if (Bars.TimeFrame != TimeFrame.Minute15)
-                Print("NOTE: certified on the 15-MINUTE chart; you are on {0}. Settings assume m15.",
+            if (Bars.TimeFrame != TimeFrame.Minute5)
+                Print("NOTE: certified on the 5-MINUTE chart; you are on {0}. m5 measured " +
+                      "roughly double the trades of m15 with better growth on all four test " +
+                      "markets. Exits are wall-clock so they are unchanged by the chart, but " +
+                      "the quality windows and the regime window are in BARS and do shift.",
                       Bars.TimeFrame);
 
             PrimeRegimeHistory();
@@ -814,9 +850,9 @@ namespace cAlgo.Robots
 
             foreach (var pos in OwnPositions().ToList())
             {
-                if ((Server.TimeInUtc - pos.EntryTime).TotalMinutes >= MaxHoldBars * BarMinutes())
+                if ((Server.TimeInUtc - pos.EntryTime).TotalMinutes >= MaxHoldMinutes)
                 {
-                    Print("Closing {0} — max hold {1} bars reached.", pos.Id, MaxHoldBars);
+                    Print("Closing {0} — max hold {1} minutes reached.", pos.Id, MaxHoldMinutes);
                     ClosePosition(pos);
                 }
             }
@@ -1280,17 +1316,35 @@ namespace cAlgo.Robots
 
         // ================= strategy plumbing =============================
 
+        // Every cTrader minute/hour timeframe, not a partial list. The old
+        // version fell through to 60 for m2/m3/m4/m10/m20 and h2/h3 -- so on
+        // those charts a "40 bar" hold silently became 40 HOURS. Nothing now
+        // depends on this for exits (they are wall-clock), but it still feeds
+        // the diagnostics, and a silent wrong answer is worse than a loud one.
         private double BarMinutes()
         {
             var tf = Bars.TimeFrame;
             if (tf == TimeFrame.Minute) return 1;
+            if (tf == TimeFrame.Minute2) return 2;
+            if (tf == TimeFrame.Minute3) return 3;
+            if (tf == TimeFrame.Minute4) return 4;
             if (tf == TimeFrame.Minute5) return 5;
+            if (tf == TimeFrame.Minute6) return 6;
+            if (tf == TimeFrame.Minute10) return 10;
             if (tf == TimeFrame.Minute15) return 15;
+            if (tf == TimeFrame.Minute20) return 20;
             if (tf == TimeFrame.Minute30) return 30;
+            if (tf == TimeFrame.Minute45) return 45;
             if (tf == TimeFrame.Hour) return 60;
+            if (tf == TimeFrame.Hour2) return 120;
+            if (tf == TimeFrame.Hour3) return 180;
             if (tf == TimeFrame.Hour4) return 240;
+            if (tf == TimeFrame.Hour6) return 360;
+            if (tf == TimeFrame.Hour8) return 480;
+            if (tf == TimeFrame.Hour12) return 720;
             if (tf == TimeFrame.Daily) return 1440;
-            return 60;
+            Print("WARNING: unrecognised timeframe {0} — assuming 5 minutes for diagnostics only.", tf);
+            return 5;
         }
 
         // Distance from entry to just beyond the recent swing low (for longs)
@@ -1468,9 +1522,9 @@ namespace cAlgo.Robots
         // same-direction entries out so concurrency adds diversity, not weight.
         private bool TooSoonForSameSide(int direction)
         {
-            if (MinBarsBetweenSameSide <= 0) return false;
+            if (MinMinutesBetweenSameSide <= 0) return false;
             var side = direction > 0 ? TradeType.Buy : TradeType.Sell;
-            var minutes = MinBarsBetweenSameSide * BarMinutes();
+            var minutes = (double)MinMinutesBetweenSameSide;
             foreach (var pos in OwnPositions())
                 if (pos.TradeType == side &&
                     (Server.TimeInUtc - pos.EntryTime).TotalMinutes < minutes)
