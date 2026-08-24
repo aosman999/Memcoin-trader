@@ -1542,3 +1542,101 @@ The backtest lets the rolling median fill from an empty deque. The cBot instead
 first bar rather than after 60 of them (15 hours on m15) spent running both
 sides blind. This is strictly in the direction the harness measured — it only
 removes a warm-up period that the harness paid once per 22-day run.
+
+---
+
+## The regime switch met real gold and deadlocked — and why the certification missed it
+
+*24 Aug 2026, from a live demo log. This is a correction to the section above.*
+
+The owner ran the regime-switch build. It opened correctly:
+
+```
+Regime primed from 300 historical bars: median quality 0.161 vs floor 0.131
+   -> TRENDING | TREND side active from the first bar
+```
+
+Then, over the next four hours, every bar read:
+
+```
+quality 0.14 / 0.20 / 0.21 / 0.10 / 0.04 / 0.09 / 0.11 / 0.10 / 0.03 / 0.06
+   / 0.05 / 0.04 / 0.05 / 0.07 / 0.04 / 0.07 / 0.09
+regime TRENDING med 0.161 -> trend side | 0 trades today
+```
+
+**Zero trades, and structurally so.** The trend side needs quality ≥ 0.22 and
+16 of 17 bars were below 0.20. The fade side could have taken all 16 — and was
+blocked, because a 300-bar (75-hour) median still remembered the trending
+stretch of 21-23 Aug.
+
+### Why the certification could never have caught it
+
+Every market the switch was certified on — the five fBm tapes and both project
+models — **held one Hurst exponent for 22 days straight**. On a tape like that
+a slow rolling median is never stale, so the switch's central weakness was
+invisible by construction. Real gold changed character between the owner's own
+sessions: H≈0.65 on 21-23 Aug, H≈0.42 on 24 Aug, and inside that afternoon
+quality fell from 0.21 to 0.03 in two hours.
+
+This is the same class of error as the twice-rejected mean-reversion result:
+**a mechanism tested only in conditions where it cannot fail.** Homogeneous
+tapes are to a regime switch what trending markets were to mean reversion.
+
+### The market that should have existed first
+
+`mixed.py` concatenates fBm blocks of differing H (0.38-0.65) in runs of half a
+day to two days, volatility held equal so the *only* thing changing is how much
+the tape trends. 80 tapes x 22 days, 1% risk, standard errors shown:
+
+| configuration | tr/wk | win% | edge | ± | idle days | blocked bars | worst DD | losing |
+|---|---|---|---|---|---|---|---|---|
+| switch w300 + fade 30/70 | 32.6 | 48.3 | +0.107 | 0.014 | 32% | 31% | 49% | 37/80 |
+| relative gates, top/bottom 15% | 43.5 | 49.7 | +0.130 | 0.012 | 23% | — | 48% | 32/80 |
+| **switch w300 + fade 35/65 (SHIPPED)** | 49.2 | 49.2 | +0.079 | 0.011 | 8% | **31%** | 54% | 33/80 |
+| switch w150 + fade 35/65 | 51.2 | 50.1 | +0.101 | 0.011 | 7% | 30% | 51% | 29/80 |
+| no switch, fade 30/70 | 55.5 | 48.1 | +0.095 | 0.011 | 14% | 0% | 56% | 31/80 |
+| no switch, fade 35/65 | 84.0 | 48.7 | +0.056 | 0.009 | 2% | 0% | 69% | 35/80 |
+| relative gates, top/bottom 25% | 59.6 | 48.6 | +0.095 | 0.010 | 9% | — | 58% | 29/80 |
+| relative gates, top/bottom 40% | 82.9 | 47.2 | +0.059 | 0.009 | 2% | — | 67% | 29/80 |
+| trend-side-only switch (fade always allowed) | 74.8 | 49.3 | +0.048 | 0.009 | 2% | 0% | 66% | 38/80 |
+
+*(subtract the ~0.06 trade-geometry floor from every edge)*
+
+### What this actually says
+
+**Frequency and edge trade off monotonically, and there is no configuration
+that escapes it.** Sort the table by trades/week and the edge falls almost
+without exception. After the geometry bias, **everything above roughly 60
+trades a week is at or below zero.**
+
+The direct fix for the deadlock — letting the fade side run whatever the regime
+believes — is the *worst* row in the table: +0.048 against +0.101 for leaving
+the block in place, worst drawdown 51% → 66%, losing runs 29/80 → 38/80. **The
+block is earning its keep.** The bot standing still through that afternoon was
+not a malfunction; it was the measured-correct action.
+
+The relative-gate idea (fire in the top/bottom slice of the tape's own recent
+quality distribution, so a threshold can never sit above everything the market
+is producing) is the natural answer to "the gate is too high for this market".
+It does not help: at 25% it matches the fixed gate inside one standard error,
+and at 15% it *increases* idle days to 23%.
+
+### The number that matters, restated honestly
+
+The section above quotes +0.259 at H=0.40 and +0.372 on the project models.
+**Those assume a regime that persists for weeks.** On a tape that changes
+character every half-day to two days, the same strategy earns **+0.08 to +0.13
+before the geometry bias, so roughly +0.02 to +0.07 after it.**
+
+This project's own documented slippage floor is +0.3R. A strategy at +0.05R is
+not a strategy; it is a coin flip paying rent to the spread. That applies to
+the whole trend/fade family here, not just to the regime switch.
+
+### Not changed, deliberately
+
+The regime window looked worth shortening — 150 beat 300 by 0.044 on the tuning
+seeds. It then **reversed on 20 virgin seeds** (+0.100 vs +0.149) and came back
++0.022 on the 80-tape set that partly overlaps the tuning seeds. Three samples,
+two orderings: the window is not resolvable at this sample size. Per Carver's
+rule and this project's own history of peak-picking, **it stays at 300** rather
+than being set from the sample that happened to be run last.
