@@ -198,9 +198,10 @@ public static class BotSim
     }
 
     static World Run(List<double> c, List<double> h, List<double> l, TimeFrame tf,
-                     bool isLive = false, int startBar = 250)
+                     bool isLive = false, int startBar = 250, double risk = -1)
     {
         var w = Build(c, h, l, tf, isLive);
+        if (risk > 0) w.Bot.RiskPercent = risk;
         w.S.Cursor = startBar;
         w.Sym.Ask = c[startBar] + 0.25; w.Sym.Bid = c[startBar] - 0.25;
         w.Bot.DriveStart();
@@ -313,7 +314,22 @@ public static class BotSim
               (wf.Violations.Count == 0 ? "none" : string.Join("; ", wf.Violations.Distinct().Take(4))));
         Check(wf.Bot.Log.Any(x => x.Contains("status:")), "still prints status on a flat tape");
 
-        // 6. short history must not crash it (a fresh chart with little data)
+        // 6. the setup check must actually fire on the two settings that keep
+        //    being wrong live, and must stay quiet when they are right.
+        Series(1200, 66, out c, out h, out l);
+        var wbad = Run(c, h, l, TimeFrame.Minute15, risk: 10.0);
+        Check(wbad.Bot.Log.Any(x => x.Contains("SETUP PROBLEM")),
+              "warns loudly when the chart is not m5 and risk is 10%");
+        Check(wbad.Bot.Log.Any(x => x.Contains("CHART IS")),
+              "names the wrong timeframe specifically");
+        Check(wbad.Bot.Log.Any(x => x.Contains("RISK IS")),
+              "names the oversized risk specifically");
+        var wgood = Run(c, h, l, TimeFrame.Minute5, risk: 1.0);
+        Check(wgood.Bot.Log.Any(x => x.Contains("SETUP OK")) &&
+              !wgood.Bot.Log.Any(x => x.Contains("SETUP PROBLEM")),
+              "stays quiet when the setup is correct (no crying wolf)");
+
+        // 7. short history must not crash it (a fresh chart with little data)
         Series(300, 55, out c, out h, out l);
         var ws = Run(c, h, l, TimeFrame.Minute5, startBar: 130);
         Check(ws.Violations.Count == 0 && !ws.Bot.Log.Any(x => x.StartsWith("ERROR")),

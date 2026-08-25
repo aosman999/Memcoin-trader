@@ -805,6 +805,8 @@ namespace cAlgo.Robots
                       "the quality windows and the regime window are in BARS and do shift.",
                       Bars.TimeFrame);
 
+            SetupCheck();
+
             PrimeRegimeHistory();
 
             if (UseCalendar)
@@ -1406,6 +1408,51 @@ namespace cAlgo.Robots
             for (var i = offset; i < offset + n; i++)
                 path += Math.Abs(c.Last(i) - c.Last(i + 1));
             return path > 0 ? net / path : 0.0;
+        }
+
+        // Loud, unmissable check of the two settings that are wrong most often.
+        // Both have gone unnoticed repeatedly because the old notes were one
+        // quiet line among eight. cTrader keeps an instance's saved parameters
+        // when the code is edited, so a value set weeks ago silently survives
+        // every update -- which is exactly how a 10% risk kept coming back.
+        private void SetupCheck()
+        {
+            var problems = new List<string>();
+
+            if (Bars.TimeFrame != TimeFrame.Minute5)
+                problems.Add(string.Format(
+                    "CHART IS {0}, NOT m5. Certified on m5: 78.8 trades/week vs 42.9 on m15 " +
+                    "(virgin seeds), growth x1.45 vs x1.11, and drawdown barely moves. " +
+                    "You are running the half-frequency version. Change the CHART timeframe " +
+                    "— no code setting controls this.", Bars.TimeFrame));
+
+            var exposure = RiskPercent * MaxConcurrentPositions;
+            if (RiskPercent > 2.0)
+                problems.Add(string.Format(
+                    "RISK IS {0}% PER TRADE. Everything here was certified at 1%. With {1} " +
+                    "concurrent positions that is {2}% of the account exposed to one " +
+                    "correlated move. If this is not what you chose, the instance was reused " +
+                    "rather than deleted — cTrader kept the old value.",
+                    RiskPercent, MaxConcurrentPositions, exposure));
+            else if (exposure > 12.0)
+                problems.Add(string.Format(
+                    "TOTAL EXPOSURE {0}% ({1}% x {2} positions). Certified at 6%.",
+                    exposure, RiskPercent, MaxConcurrentPositions));
+
+            if (problems.Count == 0)
+            {
+                Print("SETUP OK: m5 chart, {0}% risk, max {1} positions = {2}% exposure — " +
+                      "matches what was certified.", RiskPercent, MaxConcurrentPositions, exposure);
+                return;
+            }
+
+            Print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+            Print("!!  SETUP PROBLEM — {0} thing(s) do not match what was tested", problems.Count);
+            for (var i = 0; i < problems.Count; i++)
+                Print("!!  {0}) {1}", i + 1, problems[i]);
+            Print("!!  Fix: DELETE this cBot instance and add a fresh one on an m5 chart.");
+            Print("!!  Editing the code does NOT reset an existing instance's saved settings.");
+            Print("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         }
 
         // Break of structure: this close takes out every close in the lookback,
