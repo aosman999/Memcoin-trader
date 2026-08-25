@@ -1811,3 +1811,75 @@ trend entry path was never executed**. Half the bot was untested. The driver
 now asserts both paths fire (151 trend / 67 fade entries) and the control's
 contract is simply "a broken bot must not pass", rather than matching a
 specific message that a skipped scenario would never print.
+
+---
+
+## Why the fade side fires so rarely — and why that is not a bug
+
+*25 Aug 2026, prompted by a live log: the regime switch flipped to
+MEAN-REVERTING at 06:00 and the fade side sat live for seven hours with no
+entry.*
+
+The suspicion was that the fade side is **gated twice by conditions that
+anti-correlate**. It is only *allowed* to run when trend quality is low, and it
+only *fires* when RSI reaches an extreme — but RSI reaches extremes when price
+is moving, which is what chop is not. Measured across 30 mixed tapes:
+
+**How often RSI is at an extreme, by trend quality (m5; m15 is identical):**
+
+| bucket | bars | RSI 35/65 | RSI 40/60 | RSI 45/55 |
+|---|---|---|---|---|
+| chop, quality ≤ 0.20 | 132,151 | **9.0%** | 27.5% | 59.3% |
+| middle, 0.20-0.22 | 8,108 | 36.4% | 64.3% | 85.9% |
+| trending, quality ≥ 0.22 | 43,521 | **66.9%** | 84.2% | 94.4% |
+
+**The suspicion was correct: the fade trigger fires 7x less often exactly where
+it is the only side permitted to run.** Seven quiet hours is not a malfunction,
+it is arithmetic — 28 m15 bars at 9% is ~2.5 expected opportunities, and drawing
+zero from that has probability ~7%.
+
+### The obvious fix measured worse
+
+If chop produces displacement rather than momentum, measure displacement:
+`z = (price − mean20) / stdev20`, which is large exactly when price has
+stretched away from the middle of a range. 40 mixed tapes, m5:
+
+| fade trigger | tr/wk | mean R | growth | worst DD |
+|---|---|---|---|---|
+| **RSI 35/65 (shipped)** | 78.7 | **+0.157** | x1.36 | **36%** |
+| RSI 40/60 | 142.4 | +0.108 | x1.52 | 48% |
+| z-score \|z\| ≥ 2.0 | 114.5 | +0.118 | x1.44 | 43% |
+| z-score \|z\| ≥ 1.5 | 159.1 | +0.092 | x1.42 | 44% |
+| z-score \|z\| ≥ 1.0 | 195.6 | +0.080 | x1.45 | 50% |
+| z ≥ 1.5 **and** RSI agrees | 159.1 | +0.092 | x1.43 | 44% |
+
+Every alternative trades far more at materially lower expectancy, and growth per
+unit of drawdown *falls*: 0.038 for the shipped trigger against 0.032-0.033 for
+the rest. **The RSI trigger is not broken, it is selective** — the rarity is
+earning its keep, and the trades it declines are the mediocre ones.
+
+### RSI 40/60 — REJECTED on virgin seeds (9700-9739)
+
+| config | tr/wk | mean R | growth | losing | worst DD |
+|---|---|---|---|---|---|
+| m15, RSI 35/65 | 42.9 | +0.104 | x1.11 | 12/40 | **37%** |
+| m15, RSI 40/60 | 81.6 | +0.055 | x1.11 | 17/40 | **57%** |
+| m5, RSI 35/65 | 78.8 | +0.146 | x1.45 | 7/40 | **40%** |
+| m5, RSI 40/60 | 140.6 | +0.091 | x1.52 | 7/40 | **52%** |
+| M1 m5, RSI 35/65 | 90.2 | +0.299 | **x1.94** | **0/30** | **39%** |
+| M1 m5, RSI 40/60 | 129.3 | +0.184 | x1.83 | 3/30 | 54% |
+| M2 m5, RSI 35/65 | 96.2 | +0.257 | x1.99 | 4/30 | **45%** |
+| M2 m5, RSI 40/60 | 116.8 | +0.205 | x2.07 | 5/30 | 53% |
+
+It doubles the trade count and buys it entirely with drawdown: **+15 to +20
+points of worst drawdown for growth that is unchanged on three of four markets
+and worse on one.** No parameter changed.
+
+### What the same table says about the timeframe, again
+
+On the same virgin tapes, m15 → m5 is 42.9 → 78.8 trades/week, mean R +0.104 →
++0.146, growth x1.11 → x1.45, losing runs 12/40 → 7/40, with drawdown moving
+only 37% → 40%. **The timeframe buys trade frequency almost for free; loosening
+the fade trigger does not.** They are not interchangeable ways of getting more
+trades, and the difference is the whole reason to measure rather than reason
+about it.
