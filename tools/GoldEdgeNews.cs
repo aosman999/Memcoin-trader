@@ -1803,10 +1803,12 @@ namespace cAlgo.Robots
             if (result.IsSuccessful)
             {
                 _tradesToday++;
-                Print("FADE {0} {1} units @ {2:F2} | stop {3:F2} ({4:F2}%) | target {5:F2} ({6:F2}:1) | RSI {7:F0}, quality {8:F2} (choppy)",
-                      side, units, price, price - direction * stopDist,
-                      stopDist / price * 100.0, price + direction * tpDist,
-                      FadeRewardRisk, rsi, quality);
+                Print("FADE {0} {1} units @ {2:F2} | stop {3:F2} (-{4:F2}) | target {5:F2} (+{6:F2}) " +
+                      "= {7:F2}:1 | RISKS {8:F2} = {9:F2}% of equity | RSI {10:F0}, quality {11:F2} (choppy)",
+                      side, units, price, price - direction * stopDist, stopDist,
+                      price + direction * tpDist, tpDist, FadeRewardRisk,
+                      units * stopDist, units * stopDist / Account.Equity * 100.0,
+                      rsi, quality);
             }
             else Print("FADE ORDER FAILED: {0}", result.Error);
         }
@@ -1869,10 +1871,11 @@ namespace cAlgo.Robots
             if (result.IsSuccessful)
                 _tradesToday++;
             if (result.IsSuccessful)
-                Print("OPEN {0} {1} units @ {2:F2} | stop {3:F2} ({4:F2}%{5}) | target {6:F2} ({7:F2}:1{8}) | {9} votes, ADX {10:F0}, quality {11:F2}",
-                      side, units, price, price - direction * stopDist,
-                      stopDist / price * 100.0, UseSwingStop ? " swing" : (AdaptiveStop ? " adaptive" : ""),
-                      price + direction * tpDist, rrUsed, AdaptiveTarget ? " adaptive" : "",
+                Print("OPEN {0} {1} units @ {2:F2} | stop {3:F2} (-{4:F2}) | target {5:F2} (+{6:F2}) " +
+                      "= {7:F2}:1 | RISKS {8:F2} = {9:F2}% of equity | {10} votes, ADX {11:F0}, quality {12:F2}",
+                      side, units, price, price - direction * stopDist, stopDist,
+                      price + direction * tpDist, tpDist, rrUsed,
+                      units * stopDist, units * stopDist / Account.Equity * 100.0,
                       votes, adx, quality);
             else
                 Print("ORDER FAILED: {0}", result.Error);
