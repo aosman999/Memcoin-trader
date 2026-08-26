@@ -404,7 +404,7 @@ namespace cAlgo.Robots
         [Parameter("Fade: RSI overbought (sell above)", DefaultValue = 65.0, MinValue = 50, MaxValue = 95, Group = "Mean reversion")]
         public double FadeRsiHigh { get; set; }
 
-        [Parameter("Fade: reward:risk", DefaultValue = 1.3, MinValue = 0.5, MaxValue = 5.0, Group = "Mean reversion")]
+        [Parameter("Fade: reward:risk", DefaultValue = 2.5, MinValue = 0.5, MaxValue = 5.0, Group = "Mean reversion")]
         public double FadeRewardRisk { get; set; }
 
         // ---- REGIME SWITCH -------------------------------------------------
@@ -614,13 +614,53 @@ namespace cAlgo.Robots
         // NOTE the interaction with the trailing stop: most winners now exit on
         // the trail rather than at the target, which is why raising the target
         // by 0.3 moves the average win by much less than 0.3R.
+        // RAISED AGAIN, 1.3 -> 2.5, after an owner question exposed that the
+        // first raise stopped far too early. The question was: "if the stop is
+        // set first and the target is a multiple of it, doesn't a bigger target
+        // mean less chance of hitting it?" Correct — and measuring the exit
+        // reasons showed exactly that, plus why it does not matter:
+        //
+        //   reward       hits target   exits on trail   hits stop   win rate
+        //   1.0-2.0         34.4%          27.2%         35.0%       61.0%
+        //   1.3-2.3         25.4%          36.0%         35.0%       61.0%
+        //   2.0-3.0         12.7%          48.0%         35.2%       60.7%
+        //   1.3-2.3 NO TRAIL 39.6%          --           48.8%       48.0%
+        //
+        // The target-hit rate collapses as predicted, but the STOP rate does
+        // not move, because the trailing stop absorbs every trade that no
+        // longer reaches target. Remove the trail (last row) and the prediction
+        // bites hard: stop-outs jump to 48.8% and the win rate falls to 48%.
+        // The trail and a wide target only work as a pair.
+        //
+        // At 2.5 the target is hit on about 8% of trades. It is close to
+        // vestigial: the trailing stop is doing the exiting, and the target's
+        // real job is simply to stay out of the way of a big move.
+        //
+        // Confirmed on THREE independent virgin blocks, real dollars, m5:
+        //   market      1.3-2.3 / 1.3      2.5-3.5 / 2.5
+        //   mixed A     $3,937  3/30       $4,349  2/30
+        //   mixed B     $4,154  4/40       $4,308  2/40
+        //   M1          $5,639  0/30       $5,840  0/30
+        //   M2          $5,396  1/30       $6,113  1/30
+        // Better on all four, win/loss ratio 1.04-1.21 (was 0.97-1.10), and
+        // losing runs fall. Win rate is essentially unchanged (~59-64%).
+        //
+        // MEASURED AND NOT ADOPTED: deriving the STOP from the target instead
+        // of the reverse — i.e. target from the recent swing range, stop at
+        // target/RR. It won on three of four markets on median account
+        // ($4,507 / $5,062 / $6,563) but LOST on M1 ($5,669 vs $5,840) and cut
+        // the win rate on all four by 2-6 points. It also fails as a clean
+        // test: deriving the stop from the target makes stops 2.5-3.5x tighter,
+        // which changes position size and trade count at the same time, so the
+        // gain cannot be attributed to the ordering. Worth re-testing properly,
+        // not worth shipping on this evidence.
                 [Parameter("Adaptive target (conviction-scaled)", DefaultValue = true, Group = "Exits")]
         public bool AdaptiveTarget { get; set; }
 
-        [Parameter("Adaptive target: MIN reward:risk", DefaultValue = 1.3, MinValue = 0.5, MaxValue = 10.0, Group = "Exits")]
+        [Parameter("Adaptive target: MIN reward:risk", DefaultValue = 2.5, MinValue = 0.5, MaxValue = 10.0, Group = "Exits")]
         public double MinRewardRisk { get; set; }
 
-        [Parameter("Adaptive target: MAX reward:risk", DefaultValue = 2.3, MinValue = 0.5, MaxValue = 20.0, Group = "Exits")]
+        [Parameter("Adaptive target: MAX reward:risk", DefaultValue = 3.5, MinValue = 0.5, MaxValue = 20.0, Group = "Exits")]
         public double MaxRewardRisk { get; set; }
 
         [Parameter("Reward:risk — used when adaptive target is OFF", DefaultValue = 4.0, MinValue = 0.5, MaxValue = 10.0, Group = "Exits")]
