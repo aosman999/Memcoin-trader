@@ -1960,3 +1960,90 @@ put a BUY stop above market, which a real broker rejects or fills instantly.
 That check now exists, and the fault is caught. Two of the eight controls have
 now found real holes in the harness rather than in the bot; the harness is only
 as good as its worst assertion.
+
+---
+
+## The backtest was assuming fractional lots. It cannot have them.
+
+*25 Aug 2026. From a live report: "the SL amount is higher than the TP amount."*
+
+The owner was right, and the cause was invisible to every measurement in this
+file until now.
+
+### Every result above compounds a clean 1% per trade. That is impossible here.
+
+Gold's minimum trade is **1 oz**. On a $3,000 account at 1% risk the budget is
+$30, and the bot wants between 0.47 and 1.63 ounces — so **every trade is
+exactly 1 oz**, and the dollar risk is set by the stop width rather than by the
+risk setting:
+
+| stop width | $ risk on 1 oz | vs the $30 budget |
+|---|---|---|
+| 0.4% | $18.40 | 0.61x |
+| 0.7% | $32.20 | 1.07x |
+| 1.0% | $46.00 | 1.53x |
+| 1.3% | $59.80 | 1.99x |
+
+**A 3.5x spread in dollar risk at a single "1%" setting.** The risk parameter is
+close to inert at this account size — it only decides whether a trade is
+skipped. A win on a tight-stop trade and a loss on a wide-stop trade produce
+exactly the reported asymmetry, with every trade still satisfying reward ≥ risk
+in points.
+
+### Re-measured in real dollars — whole ounces, spread AND commission
+
+30 virgin tapes (9800-9829), m5, $3,000 start, 22 days:
+
+| config | trades | win% | avg win | avg loss | W/L | median final | losing |
+|---|---|---|---|---|---|---|---|
+| as shipped | 7,399 | 59.2 | +$25.82 | −$27.59 | **0.94** | $3,865 | 4/30 |
+
+**The average loss really is larger than the average win.** The strategy earns
+because it wins 59% of the time, not because its winners are bigger. That is a
+legitimate way to make money, but it is not what the R-based tables imply, and
+it should have been reported this way from the start.
+
+### What fixed it, and what did not
+
+Second virgin block (9900-9939), all in real dollars:
+
+| market | config | win% | avg win | avg loss | W/L | median final | losing |
+|---|---|---|---|---|---|---|---|
+| mixed | shipped | 60.8 | +$30.53 | −$29.40 | 1.04 | $4,019 | 3/40 |
+| mixed | **reward floor 1.3** | 60.8 | +$32.54 | −$29.99 | **1.09** | $4,154 | 4/40 |
+| mixed | stop cap 0.8% | 61.5 | +$28.64 | −$28.63 | 1.00 | $3,964 | 4/40 |
+| M1 | shipped | 62.3 | +$28.32 | −$29.43 | 0.96 | $4,563 | 2/30 |
+| M1 | **reward floor 1.3** | 62.2 | +$30.54 | −$30.08 | **1.02** | $4,741 | 3/30 |
+| M2 | shipped | 62.5 | +$28.70 | −$29.46 | 0.97 | $4,606 | 1/30 |
+| M2 | **reward floor 1.3** | 62.2 | +$30.36 | −$29.73 | **1.02** | $4,884 | 1/30 |
+
+**ADOPTED: minimum reward 1.0 → 1.3** (trend side 1.3-2.3, fade side 1.3). It
+lifts the win/loss ratio above 1.0 on every market and raises the median
+account on five of the six market/block combinations.
+
+**NOT adopted: capping the maximum stop at 0.8%** so one ounce always fits the
+budget. Median $4,005 vs $3,865 on the first block, then $3,964 vs $4,019 on
+the second — two samples, two orderings — and it never moved the win/loss ratio
+at all. Noise.
+
+**Also rejected: tightening the minimum-lot skip guard** from 2.0x to 1.5/1.2/1.0x
+so trades whose minimum size exceeds the budget are declined. It monotonically
+destroys the account: median $3,865 → $3,444 → $3,411 → $3,174, losing runs
+4/30 → 10/30, and it skips up to 43% of signals. Refusing the wide-stop trades
+removes more edge than it removes risk.
+
+### An interaction worth stating
+
+Raising the target by 0.3R moved the average win by far less than 0.3R, because
+**most winners now exit on the trailing stop rather than at the target**. The
+two features adopted this session pull against each other, and the reward floor
+is doing less work than its number suggests.
+
+### The honest structural limit
+
+None of this fixes the underlying problem, which is that **$3,000 is too small
+for 1-oz gold to be sized properly**. The risk setting cannot express itself
+when the minimum trade is 60-200% of the intended risk. A cent account, where
+contract sizes are 100x smaller, is the only real fix — the same conclusion the
+deployment notes already reached, now confirmed against measured results rather
+than argued from arithmetic.

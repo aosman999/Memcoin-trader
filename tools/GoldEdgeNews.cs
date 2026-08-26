@@ -404,7 +404,7 @@ namespace cAlgo.Robots
         [Parameter("Fade: RSI overbought (sell above)", DefaultValue = 65.0, MinValue = 50, MaxValue = 95, Group = "Mean reversion")]
         public double FadeRsiHigh { get; set; }
 
-        [Parameter("Fade: reward:risk", DefaultValue = 1.0, MinValue = 0.5, MaxValue = 5.0, Group = "Mean reversion")]
+        [Parameter("Fade: reward:risk", DefaultValue = 1.3, MinValue = 0.5, MaxValue = 5.0, Group = "Mean reversion")]
         public double FadeRewardRisk { get; set; }
 
         // ---- REGIME SWITCH -------------------------------------------------
@@ -576,13 +576,51 @@ namespace cAlgo.Robots
         // a marginal setup aims 1:1, a powerful one 2:1. Do NOT shrink this
         // range to chase win rate — break-even win rate is 1/(1+RR), so a
         // nearer target needs a higher win rate merely to stand still.
-        [Parameter("Adaptive target (conviction-scaled)", DefaultValue = true, Group = "Exits")]
+// REWARD FLOOR RAISED 1.0 -> 1.3 (and the fade side with it), because a
+        // live account showed the average DOLLAR loss exceeding the average
+        // DOLLAR win while every trade still had reward >= risk in points.
+        //
+        // Two things cause that, and neither is visible in an R-based backtest:
+        //   1. Spread AND commission are paid on both ends. At 1:1 they come
+        //      straight off the winner and get added to the loser.
+        //   2. Gold's minimum trade is 1 oz. On a $3,000 account the bot wants
+        //      0.5-1.6 oz, so EVERY trade is 1 oz and the dollar risk is set by
+        //      the stop width, not by the risk setting: a 0.4% stop risks
+        //      $18.40 and a 1.3% stop risks $59.80. The configured risk % is
+        //      almost inert at that account size.
+        //
+        // Measured in real dollars with whole-ounce sizing, spread and
+        // commission, on a $3,000 account. Two independent virgin blocks:
+        //
+        //   block / market      config      win%   avg win  avg loss  W/L   median $
+        //   9800-9829 mixed     1.0 floor   59.2   +25.82   -27.59   0.94    3865
+        //   9900-9939 mixed     1.0 floor   60.8   +30.53   -29.40   1.04    4019
+        //   9900-9939 mixed     1.3 floor   60.8   +32.54   -29.99   1.09    4154
+        //   9900-9939 M1        1.0 floor   62.3   +28.32   -29.43   0.96    4563
+        //   9900-9939 M1        1.3 floor   62.2   +30.54   -30.08   1.02    4741
+        //   9900-9939 M2        1.0 floor   62.5   +28.70   -29.46   0.97    4606
+        //   9900-9939 M2        1.3 floor   62.2   +30.36   -29.73   1.02    4884
+        //
+        // The floor lifts the win/loss ratio above 1.0 on every market and
+        // raises the median account on five of six combinations tested.
+        //
+        // NOT adopted: capping the maximum stop at 0.8% so one ounce always
+        // fits the risk budget. It looked good on the first block (median
+        // $4005 vs $3865) and reversed on the second ($3964 vs $4019), and it
+        // never moved the win/loss ratio at all (0.96-1.00). Two samples, two
+        // orderings — that is noise, and fitting it to whichever ran last is
+        // the mistake this file exists to prevent.
+        //
+        // NOTE the interaction with the trailing stop: most winners now exit on
+        // the trail rather than at the target, which is why raising the target
+        // by 0.3 moves the average win by much less than 0.3R.
+                [Parameter("Adaptive target (conviction-scaled)", DefaultValue = true, Group = "Exits")]
         public bool AdaptiveTarget { get; set; }
 
-        [Parameter("Adaptive target: MIN reward:risk", DefaultValue = 1.0, MinValue = 0.5, MaxValue = 10.0, Group = "Exits")]
+        [Parameter("Adaptive target: MIN reward:risk", DefaultValue = 1.3, MinValue = 0.5, MaxValue = 10.0, Group = "Exits")]
         public double MinRewardRisk { get; set; }
 
-        [Parameter("Adaptive target: MAX reward:risk", DefaultValue = 2.0, MinValue = 0.5, MaxValue = 20.0, Group = "Exits")]
+        [Parameter("Adaptive target: MAX reward:risk", DefaultValue = 2.3, MinValue = 0.5, MaxValue = 20.0, Group = "Exits")]
         public double MaxRewardRisk { get; set; }
 
         [Parameter("Reward:risk — used when adaptive target is OFF", DefaultValue = 4.0, MinValue = 0.5, MaxValue = 10.0, Group = "Exits")]
