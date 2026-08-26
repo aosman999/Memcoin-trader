@@ -594,6 +594,53 @@ namespace cAlgo.Robots
         // and the timeframe test below was run at a fixed 10-hour horizon. A
         // wall-clock horizon is what was certified, so a wall-clock horizon is
         // what ships.
+// TRAILING STOP — adopted on evidence that REVERSES an earlier rejection.
+        // "Trailing stop after +2R" was measured at +0.649 vs +0.633 and shelved
+        // as noise. That test ran on a 2:1-6:1 reward config on m15, where +2R
+        // was rarely reached. This build runs 1.0-2.0 on the trend side and 1.0
+        // on the fade side, on m5, where a trade that reaches 90% of target and
+        // then reverses gives back the whole move. The old conclusion does not
+        // transfer, so it was re-measured.
+        //
+        // Once the trade is +0.7R in front, the stop follows 0.7R behind price.
+        // At the moment it activates the stop is already at breakeven, so a
+        // near-miss becomes a scratch instead of a full loss.
+        //
+        // Certified on VIRGIN tapes 9800-9839, m5, 1% risk:
+        //   market   variant     win%    mean R   growth  worst DD  near-misses
+        //   mixed    binary      51.3   +0.1413   x1.35     40%        155
+        //   mixed    trailing    61.2   +0.1409   x1.37     35%          0
+        //   M1       binary      57.1   +0.3642   x2.67     43%        114
+        //   M1       trailing    66.1   +0.3043   x2.47     36%          0
+        //   M2       binary      53.9   +0.3000   x2.41     29%        128
+        //   M2       trailing    64.2   +0.2634   x2.29     29%          0
+        //
+        // Read honestly, this is a TRADE, not a free win. On a strongly
+        // trending market it cuts winners short: mean R drops 0.06 and growth
+        // falls x2.67 -> x2.47 on M1. What it buys is +9 to +10 points of win
+        // rate, worst drawdown 40% -> 35% and 43% -> 36%, and it removes the
+        // near-miss-then-full-loss case entirely (155/114/128 -> 0).
+        //
+        // Both knobs are a plateau, not a peak: all nine combinations of
+        // activation 0.5/0.7/1.0 x distance 0.5/0.7/1.0 measured positive, with
+        // 0.5-0.7 on both consistently at 62-68% win rate and 23-25% drawdown.
+        //
+        // MEASURED AND REJECTED alongside it, same tapes:
+        //   partial close of half at +0.5R  mean R +0.157 -> +0.068 (the old
+        //     partial-ladder result holds: raises win rate, cuts money)
+        //   pulling the target in x0.90     +0.157 -> +0.149, and x0.80 worse
+        //     still — near-misses become hits but every full winner shrinks
+        //   plain breakeven at +0.7R        equal money, but win rate 41% and
+        //     no better drawdown than trailing. Strictly dominated.
+        [Parameter("Trailing stop (locks in a near-miss instead of losing it)", DefaultValue = true, Group = "Exits")]
+        public bool UseTrailingStop { get; set; }
+
+        [Parameter("Trail: activate at (R in profit)", DefaultValue = 0.7, MinValue = 0.1, MaxValue = 5.0, Group = "Exits")]
+        public double TrailActivateR { get; set; }
+
+        [Parameter("Trail: hold this far behind (R)", DefaultValue = 0.7, MinValue = 0.1, MaxValue = 5.0, Group = "Exits")]
+        public double TrailDistanceR { get; set; }
+
         [Parameter("Max hold (minutes)", DefaultValue = 600, MinValue = 5, MaxValue = 20000, Group = "Exits")]
         public int MaxHoldMinutes { get; set; }
 
@@ -698,6 +745,10 @@ namespace cAlgo.Robots
         // same two models could ever reveal it. Hence this reading.
         private readonly List<double> _qualitiesToday = new List<double>();
         private DateTime _lastProtectCheck = DateTime.MinValue;
+        // original stop distance per position, so R can still be computed
+        // after the stop has been moved by trailing or news protection.
+        private readonly Dictionary<int, double> _initialStopDistance =
+            new Dictionary<int, double>();
 
         // ---- news agent state (written by a background task) --------------
         private readonly object _newsLock = new object();
@@ -792,7 +843,13 @@ namespace cAlgo.Robots
                     : "OFF — both sides always active",
                   UseMeanReversion ? "ON" : "OFF",
                   FadeRsiLow, FadeRsiHigh, ChopMax, FadeRewardRisk);
-            Print("No early exit: every 'exit when the market changes' rule tested was neutral or harmful (ADX-fall exit cut edge +0.633 -> +0.369).");
+            Print("Trailing stop: {0}",
+                  UseTrailingStop
+                    ? string.Format("ON — once +{0:F1}R in front, stop follows {1:F1}R behind " +
+                                    "(a near-miss becomes a scratch, not a full loss)",
+                                    TrailActivateR, TrailDistanceR)
+                    : "OFF — binary stop/target only");
+            Print("No other early exit: every 'close when the market changes' rule tested was neutral or harmful (ADX-fall exit cut edge +0.633 -> +0.369).");
             Print("News agent: calendar {0} watching {1} | protect-open-trade {2} ({3} min before) | block-entries {4} | shock veto {5}",
                   UseCalendar ? "ON" : "OFF", WatchCurrencies,
                   ProtectOnNews ? "ON" : "OFF", ProtectBeforeMinutes,
@@ -826,14 +883,14 @@ namespace cAlgo.Robots
         // instead. Entries are still decided on bar close only.
         protected override void OnTick()
         {
-            if (_stopped || !ProtectOnNews)
+            if (_stopped || (!ProtectOnNews && !UseTrailingStop))
                 return;
             var now = Server.TimeInUtc;
             if ((now - _lastProtectCheck).TotalSeconds < 60)
                 return;
             _lastProtectCheck = now;
-            try { ProtectPositions(); }
-            catch (Exception ex) { Print("ERROR in news protect: {0} — {1}", ex.GetType().Name, ex.Message); }
+            try { ProtectPositions(); ManageTrailingStops(); }
+            catch (Exception ex) { Print("ERROR in position management: {0} — {1}", ex.GetType().Name, ex.Message); }
         }
 
         private void Evaluate()
@@ -1079,6 +1136,62 @@ namespace cAlgo.Robots
                           pos.Id, be, evt);
                 else
                     Print("NEWS PROTECT failed on {0}: {1}", pos.Id, r.Error);
+            }
+        }
+
+        private double InitialStopDistance(Position pos)
+        {
+            double sd;
+            if (_initialStopDistance.TryGetValue(pos.Id, out sd))
+                return sd;
+            // First sighting (including positions that predate a restart): the
+            // stop has not been moved yet, so its distance IS the original.
+            sd = pos.StopLoss.HasValue ? Math.Abs(pos.EntryPrice - pos.StopLoss.Value) : 0.0;
+            if (sd > 0)
+                _initialStopDistance[pos.Id] = sd;
+            return sd;
+        }
+
+        private void ManageTrailingStops()
+        {
+            if (!UseTrailingStop)
+                return;
+
+            foreach (var pos in OwnPositions().ToList())
+            {
+                var sd = InitialStopDistance(pos);
+                if (sd <= 0)
+                    continue;
+                var dir = pos.TradeType == TradeType.Buy ? 1 : -1;
+                // the price this position would actually exit at
+                var price = dir > 0 ? Symbol.Bid : Symbol.Ask;
+                if (price <= 0)
+                    continue;
+                var r = (price - pos.EntryPrice) / sd * dir;
+                if (r < TrailActivateR)
+                    continue;
+
+                var candidate = price - dir * TrailDistanceR * sd;
+                // NEVER move a stop against the position.
+                if (pos.StopLoss.HasValue &&
+                    ((dir > 0 && candidate <= pos.StopLoss.Value) ||
+                     (dir < 0 && candidate >= pos.StopLoss.Value)))
+                    continue;
+
+                var res = ModifyPosition(pos, candidate, pos.TakeProfit);
+                if (res.IsSuccessful)
+                    Print("TRAIL {0}: +{1:F2}R reached, stop -> {2:F2} (locks in {3:F2}R)",
+                          pos.Id, r, candidate, r - TrailDistanceR);
+                else
+                    Print("TRAIL failed on {0}: {1}", pos.Id, res.Error);
+            }
+
+            // drop bookkeeping for positions that have closed
+            if (_initialStopDistance.Count > 200)
+            {
+                var live = new HashSet<int>(OwnPositions().Select(p => p.Id));
+                foreach (var id in _initialStopDistance.Keys.Where(k => !live.Contains(k)).ToList())
+                    _initialStopDistance.Remove(id);
             }
         }
 

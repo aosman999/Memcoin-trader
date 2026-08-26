@@ -52,6 +52,16 @@ FAULTS = [
      "            if (trendAllowed && quality >= 99.0 && ChopMax < -1.0)",
      "opens trades"),
 
+    ("trailing stop moved BACKWARDS (against the position)",
+     "                var candidate = price - dir * TrailDistanceR * sd;",
+     "                var candidate = price + dir * TrailDistanceR * sd;",
+     "no order/risk violations"),
+
+    ("trailing stop never activates",
+     "                if (r < TrailActivateR)\n                    continue;",
+     "                if (r < 9999.0)\n                    continue;",
+     "trailing stop actually moves stops"),
+
     ("max concurrent positions ignored",
      "            if (OwnPositions().Count() >= MaxConcurrentPositions)\n                return;",
      "            if (false)\n                return;",

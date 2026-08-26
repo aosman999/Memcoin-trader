@@ -1883,3 +1883,80 @@ only 37% → 40%. **The timeframe buys trade frequency almost for free; loosenin
 the fade trigger does not.** They are not interchangeable ways of getting more
 trades, and the difference is the whole reason to measure rather than reason
 about it.
+
+---
+
+## Trailing stop — ADOPTED, reversing an earlier rejection
+
+*25 Aug 2026. Prompted by a live report: trades reaching within a few dollars
+of target, then running to the stop.*
+
+**The earlier rejection was stale, not wrong.** "Trailing stop after +2R"
+measured +0.649 vs +0.633 and was shelved as noise — on a **2:1-6:1 reward
+config on m15**, where +2R was rarely reached at all. This build runs 1.0-2.0
+on the trend side and 1.0 on the fade side, on m5. At those targets a trade
+that reaches 90% of the way and reverses gives back the entire move. The old
+conclusion cannot be carried across that change, so it was re-measured.
+
+### 40 mixed tapes, m5, 1% risk — every exit idea, same conditions
+
+"near" counts trades that reached 90% of target and then stopped out.
+
+| variant | tr/wk | win% | mean R | growth | losing | worst DD | near |
+|---|---|---|---|---|---|---|---|
+| binary SL/TP (was shipped) | 78.7 | 51.6 | +0.157 | x1.36 | 9/40 | 36% | 178 |
+| breakeven at +0.3R | 80.9 | 29.4 | +0.155 | x1.35 | 3/40 | 22% | 0 |
+| breakeven at +0.5R | 79.8 | 36.8 | +0.166 | x1.44 | 4/40 | 28% | 0 |
+| breakeven at +0.7R | 79.2 | 42.3 | +0.170 | x1.47 | 4/40 | 29% | 0 |
+| trail 1.0R after +0.5R | 79.3 | 48.5 | +0.167 | x1.40 | 4/40 | 30% | 194 |
+| **trail 0.7R after +0.7R** | 79.6 | **62.9** | **+0.179** | x1.44 | 4/40 | **25%** | **0** |
+| target pulled in x0.90 | 79.7 | 53.6 | +0.149 | x1.32 | 9/40 | 32% | 0 |
+| target pulled in x0.80 | 80.9 | 55.9 | +0.137 | x1.33 | 10/40 | 31% | 0 |
+| half off at +0.5R | 133.9 | 71.5 | +0.068 | x1.23 | 7/40 | 26% | 178 |
+| half off at +0.7R | 128.9 | 70.4 | +0.081 | x1.30 | 8/40 | 28% | 178 |
+
+The two ideas this file rejected years ago **still fail**: partial closes raise
+win rate to 71% and cut mean R by more than half (the classic illusion), and
+pulling the target in converts near-misses to hits while shrinking every real
+winner. Only the trailing stop improves things.
+
+### Plateau, not a peak — all nine neighbours
+
+| activation | distance 0.5R | 0.7R | 1.0R |
+|---|---|---|---|
+| +0.5R | +0.173 (68.2% win, 23% DD) | +0.174 (56.3%, 25%) | +0.167 (48.5%, 30%) |
+| +0.7R | +0.177 (64.2%, 23%) | **+0.179 (62.9%, 25%)** | +0.170 (51.1%, 30%) |
+| +1.0R | +0.171 (56.4%, 31%) | +0.172 (56.4%, 32%) | +0.165 (56.0%, 34%) |
+
+### Virgin certification (tapes 9800-9839) — and the honest cost
+
+| market | variant | win% | mean R | growth | worst DD | near |
+|---|---|---|---|---|---|---|
+| mixed | binary | 51.3 | +0.1413 | x1.35 | 40% | 155 |
+| mixed | **trailing** | **61.2** | +0.1409 | x1.37 | **35%** | **0** |
+| M1 | binary | 57.1 | **+0.3642** | **x2.67** | 43% | 114 |
+| M1 | trailing | **66.1** | +0.3043 | x2.47 | **36%** | **0** |
+| M2 | binary | 53.9 | **+0.3000** | **x2.41** | 29% | 128 |
+| M2 | trailing | **64.2** | +0.2634 | x2.29 | 29% | 0 |
+
+**This is a trade, not a free win, and it should not be sold as one.** On a
+strongly trending market the trail cuts winners short — mean R falls 0.06 and
+growth x2.67 → x2.47 on M1. What it buys:
+
+- **+9 to +10 points of win rate** (51-57% → 61-66%)
+- **worst drawdown 40% → 35% and 43% → 36%**
+- **the near-miss-then-full-loss case disappears entirely**: 155/114/128 → 0
+
+On the mixed market — the honest one — the money is a wash (+0.1413 vs +0.1409)
+and everything else improves. Adopted on that basis: same expectancy, materially
+smoother, and it removes the failure mode that was actually being reported.
+
+### A gap the negative controls found in the test harness itself
+
+Injecting "trailing stop moves backwards" was **not caught** at first. The
+driver checked that a stop never moves *against* a position, but not that it
+stays on the correct **side of the current price** — and the injected sign flip
+put a BUY stop above market, which a real broker rejects or fills instantly.
+That check now exists, and the fault is caught. Two of the eight controls have
+now found real holes in the harness rather than in the bot; the harness is only
+as good as its worst assertion.

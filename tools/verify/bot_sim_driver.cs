@@ -88,7 +88,7 @@ public static class BotSim
         public int NextId = 1;
         public List<string> Violations = new List<string>();
         public int Opened, Closed;
-        public int TrendEntries, FadeEntries;
+        public int TrendEntries, FadeEntries, Trails;
         public double MaxRiskFraction;
     }
 
@@ -163,7 +163,34 @@ public static class BotSim
             w.Opened++;
             return new TradeResult { IsSuccessful = true, Position = p };
         };
-        bot.OnModify = (p, sl, tp) => { p.StopLoss = sl; p.TakeProfit = tp; return new TradeResult { IsSuccessful = true, Position = p }; };
+        bot.OnModify = (p, sl, tp) =>
+        {
+            // A stop must never move AGAINST an open position. This is the
+            // check that a trailing implementation most often gets wrong.
+            if (sl.HasValue && p.StopLoss.HasValue)
+            {
+                var dir = p.TradeType == TradeType.Buy ? 1 : -1;
+                if (dir > 0 && sl.Value < p.StopLoss.Value - 1e-9)
+                    w.Violations.Add("stop moved DOWN on a BUY (against the position)");
+                if (dir < 0 && sl.Value > p.StopLoss.Value + 1e-9)
+                    w.Violations.Add("stop moved UP on a SELL (against the position)");
+                if (sl.Value != p.StopLoss.Value) w.Trails++;
+            }
+            // A stop must also stay on the correct SIDE of the current price.
+            // A BUY stop above market (or SELL stop below) is rejected by a real
+            // broker, or fills instantly at whatever price is there.
+            if (sl.HasValue)
+            {
+                var dir2 = p.TradeType == TradeType.Buy ? 1 : -1;
+                var mkt = dir2 > 0 ? w.Sym.Bid : w.Sym.Ask;
+                if (dir2 > 0 && sl.Value >= mkt)
+                    w.Violations.Add("BUY stop moved to/above the market price");
+                if (dir2 < 0 && sl.Value <= mkt)
+                    w.Violations.Add("SELL stop moved to/below the market price");
+            }
+            p.StopLoss = sl; p.TakeProfit = tp;
+            return new TradeResult { IsSuccessful = true, Position = p };
+        };
         bot.OnClose = p => { Settle(w, p, w.C[w.S.Cursor]); };
         return w;
     }
@@ -227,6 +254,7 @@ public static class BotSim
                 w.Violations.Add("more open positions than MaxConcurrentPositions");
             var before = w.Bot.Log.Count;
             w.Bot.DriveBar();
+            w.Bot.DriveTick();
             for (var k = before; k < w.Bot.Log.Count; k++)
             {
                 if (w.Bot.Log[k].StartsWith("OPEN ")) w.TrendEntries++;
@@ -313,6 +341,13 @@ public static class BotSim
         Check(wf.Violations.Count == 0, "no order/risk violations on a dead-flat tape: " +
               (wf.Violations.Count == 0 ? "none" : string.Join("; ", wf.Violations.Distinct().Take(4))));
         Check(wf.Bot.Log.Any(x => x.Contains("status:")), "still prints status on a flat tape");
+
+        // 5b. the trailing stop must actually trail, and never backwards
+        Check(wu.Trails > 0 || w.Trails > 0,
+              string.Format("trailing stop actually moves stops ({0} modifications)",
+                            wu.Trails + w.Trails));
+        Check(wu.Bot.Log.Any(x => x.StartsWith("TRAIL ")) || w.Bot.Log.Any(x => x.StartsWith("TRAIL ")),
+              "logs each trail with the R locked in");
 
         // 6. the setup check must actually fire on the two settings that keep
         //    being wrong live, and must stay quiet when they are right.
