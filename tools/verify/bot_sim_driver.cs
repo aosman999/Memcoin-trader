@@ -88,7 +88,9 @@ public static class BotSim
         public int NextId = 1;
         public List<string> Violations = new List<string>();
         public int Opened, Closed;
-        public int TrendEntries, FadeEntries, Trails;
+        public int TrendEntries, FadeEntries, Trails, ReachTargets;
+        public double MaxReward = 0.0, MinReward = 1e9;
+        public readonly List<double> ReachRatios = new List<double>();
         public double MaxRiskFraction;
     }
 
@@ -152,9 +154,20 @@ public static class BotSim
                 w.Violations.Add(string.Format("stop {0:F3}% outside the configured {1}-{2}% clamp",
                                                pct, bot.MinStopPercent, bot.MaxStopPercent));
             var rewardRatio = Math.Abs(tp - price) / stopDist;
-            if (rewardRatio < bot.MinRewardRisk - 1e-6)
+            var floorInForce = bot.UseReachTarget ? bot.ReachMinRR : bot.MinRewardRisk;
+            if (rewardRatio < floorInForce - 1e-6)
                 w.Violations.Add(string.Format(
-                    "reward {0:F2}:1 is below the {1:F2} floor", rewardRatio, bot.MinRewardRisk));
+                    "reward {0:F2}:1 is below the {1:F2} floor", rewardRatio, floorInForce));
+            // The owner's rule, checked on EVERY order regardless of settings:
+            // hitting the target must pay more than hitting the stop costs.
+            // Break-even after round-trip costs is 1 + 2*(spread+commission)/stop.
+            var costR = 2.0 * (0.50 + 0.42) / stopDist;
+            if (rewardRatio <= 1.0 + costR)
+                w.Violations.Add(string.Format(
+                    "reward {0:F2}:1 does not out-pay a stop-out (needs > {1:F2})",
+                    rewardRatio, 1.0 + costR));
+            if (rewardRatio > w.MaxReward) w.MaxReward = rewardRatio;
+            if (rewardRatio < w.MinReward) w.MinReward = rewardRatio;
             var riskFrac = units * stopDist / w.Acc.Equity;
             if (riskFrac > w.MaxRiskFraction) w.MaxRiskFraction = riskFrac;
             var p = new Position
@@ -263,6 +276,16 @@ public static class BotSim
             {
                 if (w.Bot.Log[k].StartsWith("OPEN ")) w.TrendEntries++;
                 else if (w.Bot.Log[k].StartsWith("FADE ")) w.FadeEntries++;
+                if (w.Bot.Log[k].Contains("from reach"))
+                {
+                    w.ReachTargets++;
+                    // "= 2.31:1 from reach" -> 2.31, so the adaptivity check
+                    // sees ONLY the calibrated targets.
+                    var m = System.Text.RegularExpressions.Regex.Match(
+                        w.Bot.Log[k], @"= *([0-9.]+):1 from reach");
+                    if (m.Success)
+                        w.ReachRatios.Add(double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture));
+                }
             }
         }
         w.Bot.DriveStop();
@@ -356,11 +379,32 @@ public static class BotSim
         // 5d. the structural target must never be nearer than the reward floor
         Check(w.Violations.Count == 0 || !w.Violations.Any(v => v.Contains("reward")),
               "target never lands inside the reward floor");
-        Check(w.Bot.Log.Any(x => x.Contains(":1 from structure")) ||
-              w.Bot.Log.Any(x => x.Contains(":1 from floor")) ||
-              wu.Bot.Log.Any(x => x.Contains(":1 from structure")) ||
-              wu.Bot.Log.Any(x => x.Contains(":1 from floor")),
-              "logs where each target came from (structure / floor / capped)");
+        Check(w.Bot.Log.Any(x => x.Contains(":1 from ")) || wu.Bot.Log.Any(x => x.Contains(":1 from ")),
+              "logs where each target came from (reach / structure / floor / capped)");
+
+        // 5e. THE REACH TARGET. It must actually engage -- the first version of
+        // this feature was floored at MinRewardRisk, which clamped every
+        // calibrated target straight back to the old value and made the whole
+        // thing an expensive no-op that still logged as if it were working.
+        // These checks are what would have caught that.
+        Check(w.ReachTargets + wu.ReachTargets + wd.ReachTargets > 0,
+              string.Format("the reach-calibrated target ACTUALLY fires ({0} orders)",
+                            w.ReachTargets + wu.ReachTargets + wd.ReachTargets));
+        Check(w.Bot.Log.Any(x => x.Contains("percentile of what the last")),
+              "explains the target rule at start-up");
+        // and it must not simply pin to one value -- that is the no-op signature
+        var reachAll = w.ReachRatios.Concat(wu.ReachRatios).Concat(wd.ReachRatios).ToList();
+        var spread2 = reachAll.Count > 1 ? reachAll.Max() - reachAll.Min() : 0.0;
+        Check(spread2 > 0.05,
+              string.Format("target adapts rather than pinning to one ratio ({0} reach targets, range {1:F2}R)",
+                            reachAll.Count, spread2));
+        Check(reachAll.Count == 0 || reachAll.Min() >= w.Bot.ReachMinRR - 1e-6,
+              "no reach target ever lands under its own floor");
+        Check(!w.Violations.Any(v => v.Contains("out-pay")) &&
+              !wu.Violations.Any(v => v.Contains("out-pay")) &&
+              !wd.Violations.Any(v => v.Contains("out-pay")) &&
+              !wf.Violations.Any(v => v.Contains("out-pay")),
+              "every target out-pays a stop-out after costs (the owner's rule)");
 
         // 5c. positions open at start-up must be reported as unmanaged
         Series(1200, 77, out c, out h, out l);

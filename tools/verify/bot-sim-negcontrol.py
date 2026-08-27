@@ -67,6 +67,30 @@ FAULTS = [
      "            if (structural <= floor) { how = \"floor\"; return structural * 0.1; }",
      "reward"),
 
+    # ---- the reach-calibrated target. The first version of this feature was
+    # floored at MinRewardRisk, which silently clamped every calibrated target
+    # back to the old structural value: it logged as though it worked and
+    # changed nothing. Fault 1 below IS that bug, reintroduced deliberately.
+    ("reach target floored back to MinRewardRisk (the no-op bug)",
+     "                var lo2 = stopDist * ReachMinRR;",
+     "                var lo2 = stopDist * MinRewardRisk;",
+     "target adapts rather than pinning"),
+
+    ("reach target frozen to a constant (stops adapting)",
+     "            ratio = sorted[k];",
+     "            ratio = 3.0;",
+     "target adapts rather than pinning"),
+
+    ("reach learning never runs (target never calibrates)",
+     "            try { TrackReach(); ProtectPositions(); ManageTrailingStops(); }",
+     "            try { ProtectPositions(); ManageTrailingStops(); }",
+     "reach-calibrated target ACTUALLY fires"),
+
+    ("target set below what a stop-out costs (breaks the owner's rule)",
+     "                if (want <= lo2) { how = \"reach-floored\"; return lo2; }",
+     "                if (want <= lo2) { how = \"reach-floored\"; return stopDist * 0.9; }",
+     "out-pay"),
+
     ("max concurrent positions ignored",
      "            if (OwnPositions().Count() >= MaxConcurrentPositions)\n                return;",
      "            if (false)\n                return;",

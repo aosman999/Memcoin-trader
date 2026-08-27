@@ -2171,3 +2171,87 @@ expensive way to have it, not a way to avoid the cost.
 
 The order log now names the source of every target, so this is checkable live:
 `= 2.50:1 from floor` or `= 3.80:1 from structure` or `from capped`.
+
+## A target calibrated to what trades ACTUALLY reach (Aug 27)
+
+Owner: *"TP should be set because of the trade where it thinks it will hit
+everytime."* Fair — every earlier target rule derived the TP from the stop or
+from a chart level, never from evidence about how far trades of this kind
+actually get.
+
+So the bot now measures it. For every closed trade it records the **maximum
+favourable excursion** — how far price ran in our favour, in stop-units, before
+the trade ended. The next target is placed at the Pth percentile of the last
+100. By construction roughly P% of trades reach it, and it re-calibrates itself:
+tighter when the market stops running, wider when it starts.
+
+40 virgin mixed-regime tapes, $3,000, m5, floor 1.0x:
+
+| target rule | median RR | win rate | hits target | avg win | avg loss | median account |
+|---|---|---|---|---|---|---|
+| 40th pct of reach | 1.00 | 61.0% | **41.9%** | $25.33 | $29.71 | $3,639 |
+| 50th pct | 1.00 | 61.0% | 41.5% | $25.35 | $29.71 | $3,639 |
+| 60th pct | 1.03 | 61.0% | 39.6% | $25.85 | $29.75 | $3,610 |
+| 70th pct | 1.18 | 61.0% | 34.5% | $27.63 | $29.88 | $3,664 |
+| 80th pct | 1.45 | 60.9% | 27.0% | $30.06 | $30.06 | $3,813 |
+| **90th pct (shipped)** | **1.90** | **60.7%** | **18.1%** | **$33.38** | **$30.25** | **$4,132** |
+| structure, floor 2.5 (previous) | 3.00 | 60.5% | 7.9% | $36.49 | $30.86 | $4,308 |
+
+**The win-rate column is the finding.** It does not move — 60.5% to 61.0% across
+the whole range. Hitting the target five times more often does not win more
+often, because the trailing stop was already closing those trades in profit. The
+only thing that changes is what each win is worth: $36.49 down to $25.33. Every
+extra "target hit" is a trail exit that got cut short.
+
+Shipped at the 90th percentile: target hits go 7.9% → **18.1%**, more than
+double, for about $176 — roughly 4% of the gain. `ReachPercentile` is the dial
+and the table above is the exchange rate. This is the **sixth** independent test
+of "make the target easier to reach" in this file, and it agrees with the other
+five.
+
+### Two bugs caught before this shipped
+
+The first implementation floored the reach target at `MinRewardRisk` (2.5).
+Since the calibrated target is ~1.9x, that clamped nearly every one straight
+back to the old value — **the feature would have logged as though it worked and
+changed almost nothing.** Measured:
+
+| reach floor | target used | hits target | median account |
+|---|---|---|---|
+| 1.0x | 1.90 | 18.1% | $4,132 |
+| **1.3x (shipped)** | **1.90** | **18.0%** | **$4,132** |
+| 1.5x | 1.90 | 17.6% | $4,132 |
+| 2.0x | 2.11 | 14.4% | $4,247 |
+| 2.5x (the bug) | 2.50 | **10.2%** | $4,300 |
+
+1.0–1.5 is a flat plateau, so 1.3 is not a fitted value. It is chosen from
+within the plateau because it also guarantees the owner's own rule on the
+narrowest stop the bot can take: a win must **pay** more than a loss **costs**.
+Break-even is `1 + 2*(spread+commission)/stop`; at the 0.4% minimum stop that is
+1.10x, so 1.3 clears it with margin on every single order.
+
+The second: MFE tracking and harvesting lived inside `ManageTrailingStops()`,
+which returns immediately when the trail is off — and `OnTick` returned before
+even calling it. With `UseTrailingStop = false` the target would never have
+learned anything and would have sat on its default forever, silently. Reach
+tracking is now its own pass that always runs.
+
+Both bugs are now negative controls (`bot-sim-negcontrol.py`), so neither can
+come back: reintroducing either makes the behaviour simulation fail.
+
+### Does the target eat its own training data?
+
+A trade that closes AT the target records an MFE of exactly the target ratio —
+price might have run further, but the trade was gone. So the training set is
+censored at whatever the target currently is, which could ratchet downward
+forever. Measured over 20 tapes × 90 days:
+
+| | Q1 | Q2 | Q3 | Q4 |
+|---|---|---|---|---|
+| censored (shipped) | 1.97 | 1.83 | 1.80 | 1.83 |
+| uncensored (target hits teach nothing) | 1.34 | 1.30 | 1.30 | 1.30 |
+
+Real but self-limiting: −0.14R, and flat after Q2 — only ~18% of trades close at
+the target, so 82% of the training data is uncoupled. The obvious "fix" of
+ignoring target hits is **worse**, settling at 1.30R, because it throws away the
+biggest runs. Shipped censored, as measured.
