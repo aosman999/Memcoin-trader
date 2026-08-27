@@ -710,6 +710,58 @@ namespace cAlgo.Robots
         //     still — near-misses become hits but every full winner shrinks
         //   plain breakeven at +0.7R        equal money, but win rate 41% and
         //     no better drawdown than trailing. Strictly dominated.
+// TARGET FROM MARKET STRUCTURE, not purely as a multiple of the stop.
+        // The owner asked for this repeatedly: "it just sets it depending on the
+        // sl ... FIX IT SO THAT IT SETS A GOOD TP AND SL BOTH".
+        //
+        // The target is now the price of the {0}-bar extreme -- a level price has
+        // actually reached -- floored at MinRewardRisk x the stop so a win still
+        // beats a loss, and capped at TargetMaxRR x the stop so it cannot chase
+        // something absurd.
+        //
+        // Four target anchors were measured, SL identical in every case
+        // (30 virgin tapes, $3,000, m5):
+        //   rule                       median RR  hits target  median account
+        //   pure ratio 2.5-3.5x SL        3.00        8.1%        $4,528
+        //   1.5-4.0x ATR(14)              1.00       46.7%        $3,618
+        //   30/60/120-bar swing           1.00       33-36%       $3,677-3,765
+        //   S/R level, 2-3 touches        1.00       41-43%       $3,222-3,302
+        // Every raw structural target lands CLOSER than the stop -- median RR
+        // pinned at 1.00 by the floor -- because the stop is clamped to a
+        // minimum of 0.4% of price, which is wide relative to m5 structure.
+        // Taken raw they all cost $760-$1,300.
+        //
+        // Combining the two fixes that: aim at the 120-bar extreme, but never
+        // closer than a floor. Sweeping the floor (40 virgin tapes):
+        //   floor   median RR   hits target   median account   losing
+        //   1.0x       1.00        32.5%          $3,708        6/40
+        //   1.5x       1.50        22.4%          $4,033        4/40
+        //   2.0x       2.00        15.7%          $4,262        4/40
+        //   2.5x       2.50        10.5%          $4,350        3/40
+        //   3.0x       3.00         7.4%          $4,350        2/40
+        //
+        // Shipped at floor 2.5. Confirmed on an independent block plus both
+        // models, against the pure-ratio version it replaces:
+        //   market     ratio                  structure floor 2.5
+        //   mixed A    $4,349  hit 7.6%       $4,306  hit  9.6%
+        //   mixed B    $4,308  hit 7.9%       $4,350  hit 10.5%
+        //   M1         $5,840  hit 8.4%       $5,506  hit 12.7%
+        //   M2         $6,113  hit 8.3%       $6,006  hit 13.0%
+        //
+        // STATED PLAINLY: this is worse on three of the four markets. Targets
+        // are hit about 50% more often and the win rate is flat to slightly
+        // better, at a cost of roughly 4% of the gain. It was adopted because
+        // the owner asked for it with that cost known, not because it measured
+        // better. Set this to false to return to the pure ratio.
+        [Parameter("Target from market structure (else pure ratio to the stop)", DefaultValue = true, Group = "Exits")]
+        public bool UseStructureTarget { get; set; }
+
+        [Parameter("Structure target: bars to look back for the level", DefaultValue = 120, MinValue = 10, MaxValue = 500, Group = "Exits")]
+        public int TargetSwingBars { get; set; }
+
+        [Parameter("Structure target: never further than this x the stop", DefaultValue = 8.0, MinValue = 1.0, MaxValue = 20.0, Group = "Exits")]
+        public double TargetMaxRR { get; set; }
+
         [Parameter("Trailing stop (locks in a near-miss instead of losing it)", DefaultValue = true, Group = "Exits")]
         public bool UseTrailingStop { get; set; }
 
@@ -1684,6 +1736,43 @@ namespace cAlgo.Robots
         // looking bullish inside it. Deliberately reads CLOSES, not wicks — a
         // wick through a level is the thing the same course warns is a
         // rejection, not a break.
+        // Distance from here to the furthest close in the lookback, in the
+        // direction of the trade — a level price has demonstrably reached.
+        private double StructureTargetDistance(int direction, double price)
+        {
+            var c = Bars.ClosePrices;
+            var n = Math.Min(TargetSwingBars, c.Count - 1);
+            if (n < 2) return 0.0;
+            var ext = c.Last(0);
+            for (var k = 1; k <= n; k++)
+            {
+                var v = c.Last(k);
+                if (direction > 0) { if (v > ext) ext = v; }
+                else { if (v < ext) ext = v; }
+            }
+            return Math.Abs(ext - price);
+        }
+
+        // The target actually used: structure where it is further out, the
+        // reward floor where structure is nearer than the stop, capped so a
+        // freak level cannot produce an unreachable target.
+        private double TargetDistance(int direction, double price, double stopDist,
+                                      double ratioIfNotStructural, out string how)
+        {
+            if (!UseStructureTarget)
+            {
+                how = "ratio";
+                return stopDist * ratioIfNotStructural;
+            }
+            var structural = StructureTargetDistance(direction, price);
+            var floor = stopDist * MinRewardRisk;
+            var cap = stopDist * TargetMaxRR;
+            if (structural <= floor) { how = "floor"; return floor; }
+            if (structural >= cap) { how = "capped"; return cap; }
+            how = "structure";
+            return structural;
+        }
+
         private bool BrokeStructure(int direction)
         {
             if (!RequireBreakOfStructure) return true;
@@ -1817,7 +1906,9 @@ namespace cAlgo.Robots
             var stopDist = Math.Max(loClamp, Math.Min(hiClamp,
                                     SwingStopDistance(direction, price)));
             if (stopDist <= 0) return;
-            var tpDist = stopDist * FadeRewardRisk;
+            string how;
+            var tpDist = TargetDistance(direction, price, stopDist, FadeRewardRisk, out how);
+            var rrUsed = tpDist / stopDist;
 
             var riskUsd = Account.Equity * (RiskPercent / 100.0);
             var units = Symbol.NormalizeVolumeInUnits(riskUsd / stopDist, RoundingMode.Down);
@@ -1837,9 +1928,9 @@ namespace cAlgo.Robots
             {
                 _tradesToday++;
                 Print("FADE {0} {1} units @ {2:F2} | stop {3:F2} (-{4:F2}) | target {5:F2} (+{6:F2}) " +
-                      "= {7:F2}:1 | RISKS {8:F2} = {9:F2}% of equity | RSI {10:F0}, quality {11:F2} (choppy)",
+                      "= {7:F2}:1 from {8} | RISKS {9:F2} = {10:F2}% of equity | RSI {11:F0}, quality {12:F2} (choppy)",
                       side, units, price, price - direction * stopDist, stopDist,
-                      price + direction * tpDist, tpDist, FadeRewardRisk,
+                      price + direction * tpDist, tpDist, rrUsed, how,
                       units * stopDist, units * stopDist / Account.Equity * 100.0,
                       rsi, quality);
             }
@@ -1884,7 +1975,9 @@ namespace cAlgo.Robots
                 var conviction = Clamp01(0.5 * adxScore + 0.5 * qualScore);
                 rrUsed = MinRewardRisk + conviction * (MaxRewardRisk - MinRewardRisk);
             }
-            var tpDist = stopDist * rrUsed;
+            string how;
+            var tpDist = TargetDistance(direction, price, stopDist, rrUsed, out how);
+            rrUsed = tpDist / stopDist;
 
             var riskUsd = Account.Equity * (RiskPercent / 100.0);
             var units = Symbol.NormalizeVolumeInUnits(riskUsd / stopDist, RoundingMode.Down);
@@ -1905,9 +1998,9 @@ namespace cAlgo.Robots
                 _tradesToday++;
             if (result.IsSuccessful)
                 Print("OPEN {0} {1} units @ {2:F2} | stop {3:F2} (-{4:F2}) | target {5:F2} (+{6:F2}) " +
-                      "= {7:F2}:1 | RISKS {8:F2} = {9:F2}% of equity | {10} votes, ADX {11:F0}, quality {12:F2}",
+                      "= {7:F2}:1 from {8} | RISKS {9:F2} = {10:F2}% of equity | {11} votes, ADX {12:F0}, quality {13:F2}",
                       side, units, price, price - direction * stopDist, stopDist,
-                      price + direction * tpDist, tpDist, rrUsed,
+                      price + direction * tpDist, tpDist, rrUsed, how,
                       units * stopDist, units * stopDist / Account.Equity * 100.0,
                       votes, adx, quality);
             else

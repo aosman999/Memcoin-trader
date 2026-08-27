@@ -62,6 +62,11 @@ FAULTS = [
      "                if (r < 9999.0)\n                    continue;",
      "trailing stop actually moves stops"),
 
+    ("reward floor removed from the structural target",
+     "            if (structural <= floor) { how = \"floor\"; return floor; }",
+     "            if (structural <= floor) { how = \"floor\"; return structural * 0.1; }",
+     "reward"),
+
     ("max concurrent positions ignored",
      "            if (OwnPositions().Count() >= MaxConcurrentPositions)\n                return;",
      "            if (false)\n                return;",

@@ -2107,3 +2107,67 @@ position found already open is reported with its age and P&L, flagged if it has
 outlived the max hold, and accompanied by the measured cost of downtime. The
 failure was invisible before — the bot simply started up and said nothing about
 the trade that had been sitting unmanaged for hours.
+
+---
+
+## Target set from market structure — ADOPTED at the owner's direction, and it costs money
+
+*26 Aug 2026. Requested four times, most recently: "it just sets it depending on
+the sl ... FIX IT SO THAT IT SETS A GOOD TP AND SL BOTH".*
+
+Until now the target was purely `stop distance x reward ratio`. It is now the
+price of the **120-bar extreme** — a level price has actually reached — floored
+at `MinRewardRisk x stop` so a win still beats a loss, and capped at `8 x stop`.
+
+### Every raw structural anchor lands CLOSER than the stop
+
+30 virgin tapes, $3,000, m5, SL identical in every row:
+
+| target rule | median RR | hits target | median account |
+|---|---|---|---|
+| pure ratio 2.5-3.5x SL | 3.00 | 8.1% | **$4,528** |
+| 1.5-4.0x ATR(14) | 1.00 | 46.7% | $3,618 |
+| 30 / 60 / 120-bar swing | 1.00 | 33-36% | $3,677-3,765 |
+| S/R level, 2-3 touches | 1.00 | 41-43% | $3,222-3,302 |
+
+The ATR rows are identical at 1.5x through 4.0x because **all of them clamp to
+the floor**. The stop is held to a minimum of 0.4% of price, which is wide
+relative to m5 structure, so every structural target is nearer than the stop.
+Taken raw they cost $760-$1,300 — and they reintroduce exactly the 1:1 the owner
+objected to two days earlier.
+
+### Floor sweep — the combination that satisfies both requirements
+
+Target = the further of (120-bar extreme) and (floor x stop). 40 virgin tapes:
+
+| floor | median RR | hits target | median account | losing |
+|---|---|---|---|---|
+| 1.0x | 1.00 | 32.5% | $3,708 | 6/40 |
+| 1.5x | 1.50 | 22.4% | $4,033 | 4/40 |
+| 2.0x | 2.00 | 15.7% | $4,262 | 4/40 |
+| **2.5x** | **2.50** | **10.5%** | **$4,350** | 3/40 |
+| 3.0x | 3.00 | 7.4% | $4,350 | 2/40 |
+
+### Independent confirmation, and the honest verdict
+
+| market | pure ratio | structure, floor 2.5 |
+|---|---|---|
+| mixed A | $4,349 · hit 7.6% | $4,306 · hit **9.6%** |
+| mixed B | $4,308 · hit 7.9% | **$4,350** · hit **10.5%** |
+| M1 | **$5,840** · hit 8.4% | $5,506 · hit **12.7%** |
+| M2 | **$6,113** · hit 8.3% | $6,006 · hit **13.0%** |
+
+**This is worse on three of the four markets.** Targets are hit about 50% more
+often and the win rate is flat to marginally better, at a cost of roughly 4% of
+the gain. It is shipped because the owner asked for it with that cost stated,
+not because it measured better. `UseStructureTarget = false` restores the pure
+ratio exactly.
+
+This is the fifth independent test of "make the target easier to reach" in this
+file — fixed targets with the trail off, the reward sweep, the uptime split, the
+raw structural anchors, and now the floored version. Every one of them agrees:
+a target that is hit more often costs money. The floored version is the least
+expensive way to have it, not a way to avoid the cost.
+
+The order log now names the source of every target, so this is checkable live:
+`= 2.50:1 from floor` or `= 3.80:1 from structure` or `from capped`.

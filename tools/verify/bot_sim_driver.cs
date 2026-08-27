@@ -151,6 +151,10 @@ public static class BotSim
             if (pct < bot.MinStopPercent - 1e-9 || pct > bot.MaxStopPercent + 1e-9)
                 w.Violations.Add(string.Format("stop {0:F3}% outside the configured {1}-{2}% clamp",
                                                pct, bot.MinStopPercent, bot.MaxStopPercent));
+            var rewardRatio = Math.Abs(tp - price) / stopDist;
+            if (rewardRatio < bot.MinRewardRisk - 1e-6)
+                w.Violations.Add(string.Format(
+                    "reward {0:F2}:1 is below the {1:F2} floor", rewardRatio, bot.MinRewardRisk));
             var riskFrac = units * stopDist / w.Acc.Equity;
             if (riskFrac > w.MaxRiskFraction) w.MaxRiskFraction = riskFrac;
             var p = new Position
@@ -348,6 +352,15 @@ public static class BotSim
                             wu.Trails + w.Trails));
         Check(wu.Bot.Log.Any(x => x.StartsWith("TRAIL ")) || w.Bot.Log.Any(x => x.StartsWith("TRAIL ")),
               "logs each trail with the R locked in");
+
+        // 5d. the structural target must never be nearer than the reward floor
+        Check(w.Violations.Count == 0 || !w.Violations.Any(v => v.Contains("reward")),
+              "target never lands inside the reward floor");
+        Check(w.Bot.Log.Any(x => x.Contains(":1 from structure")) ||
+              w.Bot.Log.Any(x => x.Contains(":1 from floor")) ||
+              wu.Bot.Log.Any(x => x.Contains(":1 from structure")) ||
+              wu.Bot.Log.Any(x => x.Contains(":1 from floor")),
+              "logs where each target came from (structure / floor / capped)");
 
         // 5c. positions open at start-up must be reported as unmanaged
         Series(1200, 77, out c, out h, out l);
