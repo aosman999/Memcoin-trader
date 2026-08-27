@@ -349,6 +349,24 @@ public static class BotSim
         Check(wu.Bot.Log.Any(x => x.StartsWith("TRAIL ")) || w.Bot.Log.Any(x => x.StartsWith("TRAIL ")),
               "logs each trail with the R locked in");
 
+        // 5c. positions open at start-up must be reported as unmanaged
+        Series(1200, 77, out c, out h, out l);
+        var wp = Build(c, h, l, TimeFrame.Minute5, false);
+        wp.S.Cursor = 250;
+        wp.Sym.Ask = c[250] + 0.25; wp.Sym.Bid = c[250] - 0.25;
+        wp.Bot.Positions.Items.Add(new Position
+        {
+            Id = 999, Label = "GoldEdgeNews", SymbolName = "XAUUSD",
+            TradeType = TradeType.Buy, EntryPrice = c[250] - 20, VolumeInUnits = 1,
+            StopLoss = c[250] - 40, TakeProfit = c[250] + 50,
+            EntryTime = wp.Srv.TimeInUtc.AddMinutes(-900),
+        });
+        wp.Bot.DriveStart();
+        Check(wp.Bot.Log.Any(x => x.Contains("ALREADY OPEN")),
+              "reports positions that were open while the bot was down");
+        Check(wp.Bot.Log.Any(x => x.Contains("PAST the max hold")),
+              "flags a stale position that outlived the max hold");
+
         // 6. the setup check must actually fire on the two settings that keep
         //    being wrong live, and must stay quiet when they are right.
         Series(1200, 66, out c, out h, out l);

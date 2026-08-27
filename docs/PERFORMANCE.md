@@ -2047,3 +2047,63 @@ when the minimum trade is 60-200% of the intended risk. A cent account, where
 contract sizes are 100x smaller, is the only real fix — the same conclusion the
 deployment notes already reached, now confirmed against measured results rather
 than argued from arithmetic.
+
+---
+
+## Uptime is worth more than every parameter in this file
+
+*26 Aug 2026. Owner: "it hit sl one trade today, laptop was off whole day."*
+
+Every result in this document assumed the bot runs continuously. It does not —
+it runs on a laptop. **The trailing stop, the time stop and the news protection
+are all bot-side.** While the machine is off, a position has nothing but the
+stop and target it was given at entry. Since the trail now handles ~53% of all
+exits and the target only ~8%, running offline is not a degraded version of the
+strategy — it is a different and much worse one.
+
+Simulated with an ONLINE WINDOW: the bot manages positions and takes entries
+only during those hours; outside it, open trades run unattended. 40 virgin
+tapes, $3,000, m5, target 2.5-3.5:
+
+| bot online | win% | hits target | exits on trail | hits stop | median account | losing |
+|---|---|---|---|---|---|---|
+| **24 hours** | 60.5 | 8.1% | 52.6% | 35.5% | **$4,528** | 1/30 |
+| 14 hours | 57.8 | 9.4% | 47.1% | 38.5% | $3,622 | 4/30 |
+| 8 hours | 52.3 | 10.3% | 41.7% | 44.2% | $3,224 | 10/30 |
+| 4 hours | 49.8 | 13.0% | 34.8% | 47.1% | $3,147 | 11/30 |
+
+**Going from 24-hour to 8-hour uptime costs about $1,300 of a $1,528 gain, and
+takes losing runs from 1/30 to 10/30.** No parameter change measured in this
+file comes close to that. A VPS is not a nicety, it is the single largest
+available improvement.
+
+### Does the best TARGET change when the bot is offline? No.
+
+The obvious hypothesis: if the trail cannot run, a closer target should do the
+exiting instead. Tested on 40 virgin tapes at both uptimes:
+
+| target | hits target | median (24h online) | median (8h online) |
+|---|---|---|---|
+| 1.0-1.5 | 39.7% / 40.3% | $3,788 | $3,146 |
+| 1.5-2.0 | 24.4% / 26.1% | $4,141 | $3,151 |
+| 2.0-2.5 | 15.0% / 17.7% | $4,273 | $3,216 |
+| **2.5-3.5 (shipped)** | 7.9% / 10.8% | **$4,308** | **$3,269** |
+| 3.5-4.5 | 3.8% / 5.8% | $4,414 | $3,296 |
+
+**The ordering is identical in both columns.** A tighter target is worse
+whether the bot is watching or not — it does not become the right answer when
+the trail is unavailable. At 1.0-1.5 the target is hit on 40% of trades, which
+is what "a TP that actually hits" looks like, and it costs $500-600 in both
+scenarios.
+
+This is the third distinct test of the same question (fixed targets with trail
+off, the reward sweep, and now the uptime split) and all three agree: making
+the target easier to reach is how the account loses money.
+
+### Shipped in response
+
+Nothing in the strategy. `AuditExistingPositions()` now runs at start-up: any
+position found already open is reported with its age and P&L, flagged if it has
+outlived the max hold, and accompanied by the measured cost of downtime. The
+failure was invisible before — the bot simply started up and said nothing about
+the trade that had been sitting unmanaged for hours.
