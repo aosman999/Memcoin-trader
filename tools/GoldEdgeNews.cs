@@ -654,7 +654,7 @@ namespace cAlgo.Robots
         // which changes position size and trade count at the same time, so the
         // gain cannot be attributed to the ordering. Worth re-testing properly,
         // not worth shipping on this evidence.
-                [Parameter("Adaptive target (conviction-scaled)", DefaultValue = true, Group = "Exits")]
+        [Parameter("Adaptive target (conviction-scaled)", DefaultValue = true, Group = "Exits")]
         public bool AdaptiveTarget { get; set; }
 
         [Parameter("Adaptive target: MIN reward:risk", DefaultValue = 2.5, MinValue = 0.5, MaxValue = 10.0, Group = "Exits")]
@@ -756,7 +756,7 @@ namespace cAlgo.Robots
         [Parameter("Target from market structure (else pure ratio to the stop)", DefaultValue = true, Group = "Exits")]
         public bool UseStructureTarget { get; set; }
 
-// TARGET CALIBRATED TO WHAT TRADES ACTUALLY REACH.
+        // TARGET CALIBRATED TO WHAT TRADES ACTUALLY REACH.
         // The owner: "TP should be set because of the trade where it thinks it
         // will hit everytime."
         //
