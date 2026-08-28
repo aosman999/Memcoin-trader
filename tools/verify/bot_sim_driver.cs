@@ -158,14 +158,13 @@ public static class BotSim
             if (rewardRatio < floorInForce - 1e-6)
                 w.Violations.Add(string.Format(
                     "reward {0:F2}:1 is below the {1:F2} floor", rewardRatio, floorInForce));
-            // The owner's rule, checked on EVERY order regardless of settings:
-            // hitting the target must pay more than hitting the stop costs.
-            // Break-even after round-trip costs is 1 + 2*(spread+commission)/stop.
-            var costR = 2.0 * (0.50 + 0.42) / stopDist;
-            if (rewardRatio <= 1.0 + costR)
+            // A target inside the round-trip cost is a guaranteed loss dressed
+            // up as a win. This holds whatever the reward setting is.
+            var costR = (0.50 + 0.42) / stopDist;
+            if (rewardRatio <= costR)
                 w.Violations.Add(string.Format(
-                    "reward {0:F2}:1 does not out-pay a stop-out (needs > {1:F2})",
-                    rewardRatio, 1.0 + costR));
+                    "reward {0:F2}:1 does not even cover costs (needs > {1:F2})",
+                    rewardRatio, costR));
             if (rewardRatio > w.MaxReward) w.MaxReward = rewardRatio;
             if (rewardRatio < w.MinReward) w.MinReward = rewardRatio;
             var riskFrac = units * stopDist / w.Acc.Equity;
@@ -242,10 +241,15 @@ public static class BotSim
     }
 
     static World Run(List<double> c, List<double> h, List<double> l, TimeFrame tf,
-                     bool isLive = false, int startBar = 250, double risk = -1)
+                     bool isLive = false, int startBar = 250, double risk = -1,
+                     bool reach = true)
     {
         var w = Build(c, h, l, tf, isLive);
         if (risk > 0) w.Bot.RiskPercent = risk;
+        // The reach target now overrides the structural one, so with it ON the
+        // structural path is unreachable and any fault injected there is
+        // invisible. Keep a run with it OFF so that path stays covered.
+        w.Bot.UseReachTarget = reach;
         w.S.Cursor = startBar;
         w.Sym.Ask = c[startBar] + 0.25; w.Sym.Bid = c[startBar] - 0.25;
         w.Bot.DriveStart();
@@ -376,7 +380,18 @@ public static class BotSim
         Check(wu.Bot.Log.Any(x => x.StartsWith("TRAIL ")) || w.Bot.Log.Any(x => x.StartsWith("TRAIL ")),
               "logs each trail with the R locked in");
 
-        // 5d. the structural target must never be nearer than the reward floor
+        // 5d. COVERAGE for the structural target, which the reach rule now
+        // overrides by default. Without this run its code is never executed and
+        // its negative control cannot fail.
+        var wstruct = Run(c, h, l, TimeFrame.Minute5, reach: false);
+        Check(wstruct.Violations.Count == 0,
+              "no order/risk violations with the reach target OFF: " +
+              (wstruct.Violations.Count == 0 ? "none"
+               : string.Join("; ", wstruct.Violations.Distinct().Take(4))));
+        Check(wstruct.Bot.Log.Any(x => x.Contains("from structure") || x.Contains("from floor")),
+              "still uses the structural target when the reach target is switched off");
+
+        // the structural target must never be nearer than the reward floor
         Check(w.Violations.Count == 0 || !w.Violations.Any(v => v.Contains("reward")),
               "target never lands inside the reward floor");
         Check(w.Bot.Log.Any(x => x.Contains(":1 from ")) || wu.Bot.Log.Any(x => x.Contains(":1 from ")),
@@ -400,11 +415,22 @@ public static class BotSim
                             reachAll.Count, spread2));
         Check(reachAll.Count == 0 || reachAll.Min() >= w.Bot.ReachMinRR - 1e-6,
               "no reach target ever lands under its own floor");
-        Check(!w.Violations.Any(v => v.Contains("out-pay")) &&
-              !wu.Violations.Any(v => v.Contains("out-pay")) &&
-              !wd.Violations.Any(v => v.Contains("out-pay")) &&
-              !wf.Violations.Any(v => v.Contains("out-pay")),
-              "every target out-pays a stop-out after costs (the owner's rule)");
+        Check(!w.Violations.Any(v => v.Contains("cover costs")) &&
+              !wu.Violations.Any(v => v.Contains("cover costs")) &&
+              !wd.Violations.Any(v => v.Contains("cover costs")) &&
+              !wf.Violations.Any(v => v.Contains("cover costs")),
+              "every target clears the round-trip cost");
+
+        // The warm-up target must NOT be the 2.5x structural one: before the
+        // reach rule has enough history it used to fall back to exactly the
+        // target it exists to replace, so the first trades of every run got an
+        // unrealistic TP. These orders must be logged as "warm-up".
+        Check(w.Bot.Log.Any(x => x.Contains("from warm-up")) ||
+              wu.Bot.Log.Any(x => x.Contains("from warm-up")),
+              "uses the warm-up target before it has learned, not the 2.5x structural one");
+        Check(!w.Bot.Log.Any(x => x.Contains("from structure")) &&
+              !wu.Bot.Log.Any(x => x.Contains("from structure")),
+              "never falls back to the structural target while the reach rule is on");
 
         // 5c. positions open at start-up must be reported as unmanaged
         Series(1200, 77, out c, out h, out l);

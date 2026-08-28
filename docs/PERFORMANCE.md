@@ -2255,3 +2255,75 @@ Real but self-limiting: −0.14R, and flat after Q2 — only ~18% of trades clos
 the target, so 82% of the training data is uncoupled. The obvious "fix" of
 ignoring target hits is **worse**, settling at 1.30R, because it throws away the
 biggest runs. Shipped censored, as measured.
+
+## Making the target realistic, at the owner's direction (Aug 28)
+
+Owner: *"the bot still sets unrealistic tps fix the TP problem idc if its less
+than sl just should be realistic."* This **reverses** the rule they set on Aug
+27 ("i want when it hits tp it makes more than when it hits sl"), so the 1.3x
+floor that guaranteed it comes off. Recorded as a deliberate reversal.
+
+### The real bug: the warm-up target
+
+The reach rule needs 30 closed trades before it has an opinion. Until then the
+bot fell back to the **structural target, floored at 2.5x the stop** — the very
+target the reach rule exists to replace, hit 7.9% of the time. So the first 30
+trades of every run got exactly the unrealistic TP that was complained about,
+and on a fresh instance that is all the owner ever sees. 40 virgin tapes, p60:
+
+| warm-up fallback | hits target | median account |
+|---|---|---|
+| 2.5x structural (the bug) | 39.6% | $3,610 |
+| 2.0x | 40.5% | $3,629 |
+| **1.5x (shipped)** | **41.8%** | **$3,649** |
+| 1.2x | 43.6% | $3,630 |
+| 1.0x | 45.7% | $3,560 |
+
+1.5x is best on money and near the top on hit rate, so this one is not a
+trade-off — it is strictly better than what was there. Orders now log
+`from warm-up`, and the bot never falls back to the structural target while the
+reach rule is on.
+
+### The percentile, with the floor removed
+
+| target rule | median RR | win | hits target | avg win | avg loss | median | losing |
+|---|---|---|---|---|---|---|---|
+| p90, floor 1.3 (previous) | 1.90 | 60.7% | 18.0% | $33.41 | $30.27 | **$4,132** | **3/40** |
+| p80, floor 1.0 | 1.45 | 60.9% | 27.0% | $30.92 | $29.59 | $3,813 | 4/40 |
+| p70, floor 1.0 | 1.18 | 61.0% | 34.5% | $28.38 | $29.12 | $3,664 | 6/40 |
+| **p60, floor 1.0 (shipped)** | **1.03** | **61.0%** | **41.8%** | **$25.38** | **$27.96** | **$3,649** | 8/40 |
+| p50, floor 1.0 | 1.00 | 61.0% | 41.5% | $25.58 | $28.14 | $3,639 | 6/40 |
+| p30, floor 1.0 | 1.00 | 61.0% | 42.0% | $25.29 | $28.03 | $3,639 | 6/40 |
+
+Hit rate plateaus around p50-p60 — below that the 1.0x floor binds and buying
+more hits is no longer possible. p60 is the top of that plateau.
+
+**The cost, stated plainly:** target hits go 18.0% -> 41.8%, and the median
+account goes $4,132 -> $3,649, about 12%. Losing runs go 3/40 -> 8/40, which is
+the larger risk: the win rate is unchanged (60.7% -> 61.0%) but each win is
+smaller ($33.41 -> $25.38) while each loss is barely smaller ($30.27 ->
+$27.96), so there is less cushion. This is the **seventh** independent
+measurement in this file of "make the target easier to reach", and it agrees
+with the other six. Shipped because the owner asked for it with the cost
+stated. `ReachPercentile` back to 90 restores the previous behaviour exactly.
+
+### Three take-profits, measured and not adopted
+
+Owner asked for scaling out at 3 targets. Re-measured on the current build
+rather than trusting the old rejection (which predates the trailing stop and
+the reach target). Identical total risk per signal:
+
+| exit shape | win | hits target | median | mean |
+|---|---|---|---|---|
+| 1 TP (shipped) | 60.7% | 18.0% | **$4,132** | **$5,050** |
+| 3 TPs 0.5/1.0/1.5x | 50.0% | 20.5% | $4,089 | $4,771 |
+| 3 TPs 0.4/0.8/1.2x | 56.0% | 27.8% | $3,937 | $4,557 |
+| 3 TPs 0.6/1.0/1.4x | 45.7% | 18.3% | $4,010 | $4,911 |
+
+Median is close to a tie; mean and win rate are clearly worse, because the far
+third is usually stopped after the near thirds have banked. A first run showed
+a much larger gap and was wrong: the 6-position cap counted *parts*, so a
+3-part ladder got 2 signals where the single TP got 6. Fixed, and a
+1.0/1.0/1.0 control now reproduces the single-TP result exactly before any
+ladder is scored. Not adopted — and it needs 0.03 lots per signal, roughly a
+$5,500+ account, to be placeable at all.

@@ -792,7 +792,7 @@ namespace cAlgo.Robots
         [Parameter("Target from what trades actually reach (overrides structure)", DefaultValue = true, Group = "Exits")]
         public bool UseReachTarget { get; set; }
 
-        [Parameter("Aim at this percentile of what trades reached (lower = hits more, earns less)", DefaultValue = 90.0, MinValue = 10.0, MaxValue = 99.0, Group = "Exits")]
+        [Parameter("Aim at this percentile of what trades reached (lower = hits more, earns less)", DefaultValue = 60.0, MinValue = 10.0, MaxValue = 99.0, Group = "Exits")]
         public double ReachPercentile { get; set; }
 
         [Parameter("Trades to learn from before using it", DefaultValue = 30, MinValue = 10, MaxValue = 500, Group = "Exits")]
@@ -813,8 +813,24 @@ namespace cAlgo.Robots
         // narrowest possible stop: a win must PAY more than a loss COSTS.
         // Break-even is 1 + 2*(spread+commission)/stop; at the 0.4% minimum
         // stop that is 1.10x, so 1.3 clears it with margin on every trade.
-        [Parameter("Reach target never closer than this multiple of the stop", DefaultValue = 1.3, MinValue = 1.15, MaxValue = 5.0, Group = "Exits")]
+        [Parameter("Reach target never closer than this multiple of the stop", DefaultValue = 1.0, MinValue = 0.5, MaxValue = 5.0, Group = "Exits")]
         public double ReachMinRR { get; set; }
+
+        // THE WARM-UP TARGET, and this was the real complaint. The reach rule
+        // needs ReachMinTrades closed trades before it has an opinion. Until
+        // then the bot fell back to the STRUCTURAL target, floored at
+        // MinRewardRisk = 2.5x the stop -- which is hit 7.9% of the time. So
+        // the first 30 trades of every run got exactly the unrealistic target
+        // the reach rule exists to replace. Measured, 40 virgin tapes, at p60:
+        //   fallback 2.5x (the bug)  hit 39.6%   $3,610
+        //   fallback 2.0x            hit 40.5%   $3,629
+        //   fallback 1.5x (shipped)  hit 41.8%   $3,649
+        //   fallback 1.2x            hit 43.6%   $3,630
+        //   fallback 1.0x            hit 45.7%   $3,560
+        // 1.5 is the best of them on money AND near the top on hit rate, so it
+        // is not a trade-off pick -- it is simply better than what was there.
+        [Parameter("Target before it has learned (x the stop)", DefaultValue = 1.5, MinValue = 0.5, MaxValue = 5.0, Group = "Exits")]
+        public double ReachWarmupRR { get; set; }
 
         [Parameter("Structure target: bars to look back for the level", DefaultValue = 120, MinValue = 10, MaxValue = 500, Group = "Exits")]
         public int TargetSwingBars { get; set; }
@@ -1899,6 +1915,14 @@ namespace cAlgo.Robots
                 if (want >= hi2) { how = "reach-capped"; return hi2; }
                 how = "reach";
                 return want;
+            }
+            // Still learning. Do NOT drop back to the structural target here --
+            // that is the 2.5x target the reach rule exists to replace, and it
+            // would apply to every trade until the history fills.
+            if (UseReachTarget)
+            {
+                how = "warm-up";
+                return stopDist * ReachWarmupRR;
             }
             if (!UseStructureTarget)
             {

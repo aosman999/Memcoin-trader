@@ -65,7 +65,7 @@ FAULTS = [
     ("reward floor removed from the structural target",
      "            if (structural <= floor) { how = \"floor\"; return floor; }",
      "            if (structural <= floor) { how = \"floor\"; return structural * 0.1; }",
-     "reward"),
+     "reach target OFF"),
 
     # ---- the reach-calibrated target. The first version of this feature was
     # floored at MinRewardRisk, which silently clamped every calibrated target
@@ -86,10 +86,15 @@ FAULTS = [
      "            try { ProtectPositions(); ManageTrailingStops(); }",
      "reach-calibrated target ACTUALLY fires"),
 
-    ("target set below what a stop-out costs (breaks the owner's rule)",
+    ("target set inside the round-trip cost (a guaranteed loss)",
      "                if (want <= lo2) { how = \"reach-floored\"; return lo2; }",
-     "                if (want <= lo2) { how = \"reach-floored\"; return stopDist * 0.9; }",
-     "out-pay"),
+     "                if (want <= lo2) { how = \"reach-floored\"; return stopDist * 0.0001; }",
+     "cover costs"),
+
+    ("warm-up falls back to the 2.5x structural target (the unrealistic TP)",
+     "            if (UseReachTarget)\n            {\n                how = \"warm-up\";",
+     "            if (UseReachTarget && false)\n            {\n                how = \"warm-up\";",
+     "warm-up target"),
 
     ("max concurrent positions ignored",
      "            if (OwnPositions().Count() >= MaxConcurrentPositions)\n                return;",
