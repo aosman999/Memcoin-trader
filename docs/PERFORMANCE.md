@@ -2371,3 +2371,50 @@ Each rung needs its own broker minimum (0.01 lots = 1 oz), so three targets
 need roughly a **$5,500+** account before they fit. Below that the bot opens as
 many rungs as it can afford and prints which and why; it never silently drops
 to one.
+
+## "Move the SL to breakeven once a TP hits" — already done, by the trail (Aug 28)
+
+Owner asked for the TP tower (one entry, TP1/TP2/TP3) plus moving the stop to
+breakeven or slight profit once a target fills. The tower shipped in the
+previous section. The breakeven rule was built in the harness and measured:
+
+| exit shape | win | median | mean | losing |
+|---|---|---|---|---|
+| 3 TPs + trail (ships), no breakeven rule | 50.0% | **$4,089** | **$4,771** | 4/40 |
+| 3 TPs + trail, breakeven after TP1 | 50.0% | **$4,089** | **$4,771** | 4/40 |
+
+**Identical to the cent** — and the rule was firing 4,049 times, so this is a
+real no-op rather than a broken test. The reason is arithmetic: the trailing
+stop arms at +0.70R and sits 0.70R behind, which *is* breakeven at the moment
+it arms, and better after. Measured, targets fill at a 10th percentile of
+1.02R and a median of 1.46R — **99.9% of take profits fill above the 0.70R arm
+point**, so the stop is already at or beyond breakeven before any target can
+fill. There is nothing left for an explicit rule to do.
+
+As a *replacement* for the trail it is worse, which is the classic cost of the
+"risk-free trade" habit — it stops out trades that would have recovered:
+
+| exit shape (trail OFF) | win | median | mean | losing |
+|---|---|---|---|---|
+| no breakeven rule | 40.0% | **$3,881** | $4,631 | 6/40 |
+| breakeven after TP1 | 37.7% | $3,809 | $4,649 | 7/40 |
+| +0.25R after TP1 | 45.6% | $3,835 | $4,674 | 6/40 |
+
+And the trail itself earns its place: $4,089 with it against $3,881 without.
+
+The trail settings were re-swept on the ladder build and the shipped values are
+already the joint best; the arm point barely matters because the give-back
+distance is what binds:
+
+| arms at | gives back | median | | arms at | gives back | median |
+|---|---|---|---|---|---|---|
+| 0.3 | 0.7 | $4,089 | | 0.3 | 0.5 | $4,067 |
+| 0.5 | 0.7 | $4,089 | | 0.5 | 0.5 | $4,067 |
+| **0.7** | **0.7 (shipped)** | **$4,089** | | 0.7 | 0.5 | $4,067 |
+| 1.0 | 0.7 | $4,080 | | 1.0 | 0.5 | $4,061 |
+
+**REJECTED: explicit "move stop to breakeven after TP1".** No code shipped — a
+parameter that provably does nothing is worse than no parameter. The behaviour
+the owner asked for is already in the bot; `TrailActivateR` / `TrailDistanceR`
+are the dials, and each move is already logged as
+`TRAIL <id>: +1.20R reached, stop -> 4591.30 (locks in 0.50R)`.
