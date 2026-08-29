@@ -832,6 +832,34 @@ namespace cAlgo.Robots
         [Parameter("Target before it has learned (x the stop)", DefaultValue = 1.5, MinValue = 0.5, MaxValue = 5.0, Group = "Exits")]
         public double ReachWarmupRR { get; set; }
 
+        // SCALING OUT AT SEVERAL TARGETS, at the owner's direction after asking
+        // twice. Each signal is split into this many positions sharing one
+        // stop, each with its own take profit.
+        //
+        // Measured on the current build, 40 virgin tapes, identical total risk
+        // per signal:
+        //   exit shape                 win     hits TP   median    mean
+        //   1 TP                      60.7%     18.0%    $4,132   $5,050
+        //   3 TPs 0.5/1.0/1.5x        50.0%     20.5%    $4,089   $4,771
+        //   3 TPs 0.4/0.8/1.2x        56.0%     27.8%    $3,937   $4,557
+        //   3 TPs 0.6/1.0/1.4x        45.7%     18.3%    $4,010   $4,911
+        // Median is close to a tie, mean and win rate are worse: the far third
+        // is usually stopped after the near thirds have banked. 0.5/1.0/1.5 is
+        // the best of the ladders, so that is the default spacing.
+        //
+        // Set TakeProfitCount = 1 for the single-target behaviour that measured
+        // best. Each part needs its own broker minimum (0.01 lots = 1 oz), so
+        // three targets need roughly a $5,500+ account before they will fit;
+        // below that the bot opens as many parts as it can afford and says so.
+        [Parameter("Number of take profits to scale out at", DefaultValue = 3, MinValue = 1, MaxValue = 3, Group = "Exits")]
+        public int TakeProfitCount { get; set; }
+
+        [Parameter("Nearest TP as a fraction of the full target", DefaultValue = 0.5, MinValue = 0.2, MaxValue = 1.0, Group = "Exits")]
+        public double LadderNearFraction { get; set; }
+
+        [Parameter("Furthest TP as a multiple of the full target", DefaultValue = 1.5, MinValue = 1.0, MaxValue = 3.0, Group = "Exits")]
+        public double LadderFarMultiple { get; set; }
+
         [Parameter("Structure target: bars to look back for the level", DefaultValue = 120, MinValue = 10, MaxValue = 500, Group = "Exits")]
         public int TargetSwingBars { get; set; }
 
@@ -959,6 +987,9 @@ namespace cAlgo.Robots
         // record of what closed trades achieved
         private readonly Dictionary<int, double> _peakR = new Dictionary<int, double>();
         private readonly List<double> _reachHistory = new List<double>();
+        // ids of the FURTHEST part of each signal — the only ones allowed to
+        // teach the reach rule how far a trade gets. See PlaceLadder.
+        private readonly HashSet<int> _reachEligible = new HashSet<int>();
 
         // ---- news agent state (written by a background task) --------------
         private readonly object _newsLock = new object();
@@ -1225,7 +1256,11 @@ namespace cAlgo.Robots
 
             // Room for another position? Holding several at once is what
             // lifts trade count without touching entry quality.
-            if (OwnPositions().Count() >= MaxConcurrentPositions)
+            // Room for a WHOLE signal, not just one more position. Checking
+            // ">= cap" before opening lets a 3-part signal overshoot the cap by
+            // two, which is how 20 positions appeared against an 18 ceiling.
+            var partsPerSignal = Math.Max(1, Math.Min(3, TakeProfitCount));
+            if (OwnPositions().Count() > (MaxConcurrentPositions - 1) * partsPerSignal)
                 return;
 
             // Dead hours around the daily close are thin and choppy — the one
@@ -1373,13 +1408,14 @@ namespace cAlgo.Robots
             foreach (var id in _peakR.Keys.Where(k => !live.Contains(k)).ToList())
             {
                 var reached = _peakR[id];
-                if (reached > 0)
+                if (reached > 0 && (TakeProfitCount <= 1 || _reachEligible.Contains(id)))
                 {
                     _reachHistory.Add(reached);
                     if (_reachHistory.Count > 100)
                         _reachHistory.RemoveAt(0);
                 }
                 _peakR.Remove(id);
+                _reachEligible.Remove(id);
                 _initialStopDistance.Remove(id);
             }
             foreach (var id in _initialStopDistance.Keys.Where(k => !live.Contains(k)).ToList())
@@ -1400,6 +1436,72 @@ namespace cAlgo.Robots
             if (k > sorted.Count - 1) k = sorted.Count - 1;
             ratio = sorted[k];
             return ratio > 0;
+        }
+
+        // Opens one signal as TakeProfitCount positions sharing a single stop,
+        // each with its own take profit spaced from LadderNearFraction to
+        // LadderFarMultiple of the full target distance. Total risk is exactly
+        // what one undivided position would have risked -- the split changes
+        // the exit shape, never the size.
+        private int PlaceLadder(int direction, double price, double stopDist,
+                                double tpDist, string how, string tag, string detail)
+        {
+            var side = direction > 0 ? TradeType.Buy : TradeType.Sell;
+            var riskUsd = Account.Equity * (RiskPercent / 100.0);
+            var totalUnits = Symbol.NormalizeVolumeInUnits(riskUsd / stopDist, RoundingMode.Down);
+            if (totalUnits < Symbol.VolumeInUnitsMin)
+                totalUnits = Symbol.VolumeInUnitsMin;
+
+            var wanted = Math.Max(1, Math.Min(3, TakeProfitCount));
+            var affordable = (int)Math.Floor(totalUnits / Symbol.VolumeInUnitsMin);
+            var parts = Math.Max(1, Math.Min(wanted, affordable));
+            if (parts < wanted)
+                Print("{0}: only {1} of {2} take profits fit — the whole position is {3} units " +
+                      "and the broker minimum is {4}. Scaling out at {2} targets needs a " +
+                      "bigger account; running {1} for now.",
+                      tag, parts, wanted, totalUnits, Symbol.VolumeInUnitsMin);
+
+            var each = Symbol.NormalizeVolumeInUnits(totalUnits / parts, RoundingMode.Down);
+            if (each < Symbol.VolumeInUnitsMin)
+                each = Symbol.VolumeInUnitsMin;
+
+            var opened = 0;
+            for (var k = 0; k < parts; k++)
+            {
+                var frac = parts == 1
+                    ? 1.0
+                    : LadderNearFraction +
+                      (LadderFarMultiple - LadderNearFraction) * k / (parts - 1.0);
+                var dist = tpDist * frac;
+                var units = k == parts - 1 ? totalUnits - each * (parts - 1) : each;
+                if (units < Symbol.VolumeInUnitsMin)
+                    units = Symbol.VolumeInUnitsMin;
+
+                var res = ExecuteMarketOrder(side, SymbolName, units, Label,
+                                             stopDist / Symbol.PipSize, dist / Symbol.PipSize);
+                if (!res.IsSuccessful)
+                {
+                    Print("{0} ORDER FAILED (target {1} of {2}): {3}", tag, k + 1, parts, res.Error);
+                    continue;
+                }
+                opened++;
+                // Only the FURTHEST part is allowed to teach the reach rule. The
+                // near parts are closed early on purpose, so letting them into
+                // the history would pull the target down every time it is used
+                // — the target would eat its own training data.
+                if (k == parts - 1 && res.Position != null)
+                    _reachEligible.Add(res.Position.Id);
+
+                Print("{0} {1} {2} units @ {3:F2} | TP {4}/{5} at {6:F2} (+{7:F2}) = {8:F2}:1 from {9} " +
+                      "| stop {10:F2} (-{11:F2}) | RISKS {12:F2} = {13:F2}% of equity | {14}",
+                      tag, side, units, price, k + 1, parts,
+                      price + direction * dist, dist, dist / stopDist, how,
+                      price - direction * stopDist, stopDist,
+                      units * stopDist, units * stopDist / Account.Equity * 100.0, detail);
+            }
+            if (opened > 0)
+                _tradesToday++;
+            return opened;
         }
 
         private double InitialStopDistance(Position pos)
@@ -2073,10 +2175,8 @@ namespace cAlgo.Robots
             if (stopDist <= 0) return;
             string how;
             var tpDist = TargetDistance(direction, price, stopDist, FadeRewardRisk, out how);
-            var rrUsed = tpDist / stopDist;
 
             var riskUsd = Account.Equity * (RiskPercent / 100.0);
-            var units = Symbol.NormalizeVolumeInUnits(riskUsd / stopDist, RoundingMode.Down);
             var minRisk = Symbol.VolumeInUnitsMin * stopDist;
             if (minRisk > riskUsd * 2.0)
             {
@@ -2084,22 +2184,9 @@ namespace cAlgo.Robots
                       minRisk, riskUsd);
                 return;
             }
-            if (units < Symbol.VolumeInUnitsMin) units = Symbol.VolumeInUnitsMin;
 
-            var side = direction > 0 ? TradeType.Buy : TradeType.Sell;
-            var result = ExecuteMarketOrder(side, SymbolName, units, Label,
-                                            stopDist / Symbol.PipSize, tpDist / Symbol.PipSize);
-            if (result.IsSuccessful)
-            {
-                _tradesToday++;
-                Print("FADE {0} {1} units @ {2:F2} | stop {3:F2} (-{4:F2}) | target {5:F2} (+{6:F2}) " +
-                      "= {7:F2}:1 from {8} | RISKS {9:F2} = {10:F2}% of equity | RSI {11:F0}, quality {12:F2} (choppy)",
-                      side, units, price, price - direction * stopDist, stopDist,
-                      price + direction * tpDist, tpDist, rrUsed, how,
-                      units * stopDist, units * stopDist / Account.Equity * 100.0,
-                      rsi, quality);
-            }
-            else Print("FADE ORDER FAILED: {0}", result.Error);
+            PlaceLadder(direction, price, stopDist, tpDist, how, "FADE",
+                        string.Format("RSI {0:F0}, quality {1:F2} (choppy)", rsi, quality));
         }
 
         private void OpenTrade(int direction, int votes, double adx, double quality)
@@ -2142,34 +2229,17 @@ namespace cAlgo.Robots
             }
             string how;
             var tpDist = TargetDistance(direction, price, stopDist, rrUsed, out how);
-            rrUsed = tpDist / stopDist;
 
             var riskUsd = Account.Equity * (RiskPercent / 100.0);
-            var units = Symbol.NormalizeVolumeInUnits(riskUsd / stopDist, RoundingMode.Down);
-
             var minRisk = Symbol.VolumeInUnitsMin * stopDist;
             if (minRisk > riskUsd * 2.0)
             {
                 Print("SKIP: account too small — smallest trade risks {0:F2}, budget {1:F2}.", minRisk, riskUsd);
                 return;
             }
-            if (units < Symbol.VolumeInUnitsMin)
-                units = Symbol.VolumeInUnitsMin;
 
-            var side = direction > 0 ? TradeType.Buy : TradeType.Sell;
-            var result = ExecuteMarketOrder(side, SymbolName, units, Label,
-                                            stopDist / Symbol.PipSize, tpDist / Symbol.PipSize);
-            if (result.IsSuccessful)
-                _tradesToday++;
-            if (result.IsSuccessful)
-                Print("OPEN {0} {1} units @ {2:F2} | stop {3:F2} (-{4:F2}) | target {5:F2} (+{6:F2}) " +
-                      "= {7:F2}:1 from {8} | RISKS {9:F2} = {10:F2}% of equity | {11} votes, ADX {12:F0}, quality {13:F2}",
-                      side, units, price, price - direction * stopDist, stopDist,
-                      price + direction * tpDist, tpDist, rrUsed, how,
-                      units * stopDist, units * stopDist / Account.Equity * 100.0,
-                      votes, adx, quality);
-            else
-                Print("ORDER FAILED: {0}", result.Error);
+            PlaceLadder(direction, price, stopDist, tpDist, how, "OPEN",
+                        string.Format("{0} votes, ADX {1:F0}, quality {2:F2}", votes, adx, quality));
         }
 
         private void RollDailyDiagnostics()

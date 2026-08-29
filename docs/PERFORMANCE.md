@@ -2327,3 +2327,47 @@ a much larger gap and was wrong: the 6-position cap counted *parts*, so a
 1.0/1.0/1.0 control now reproduces the single-TP result exactly before any
 ladder is scored. Not adopted — and it needs 0.03 lots per signal, roughly a
 $5,500+ account, to be placeable at all.
+
+## Three take-profits, built at the owner's direction (Aug 28)
+
+The owner asked twice, so it is built and ON by default (`TakeProfitCount = 3`,
+rungs at 0.5x / 1.0x / 1.5x of the full target). The measurement in the section
+above has not changed and is not flattering: median is close to a tie, mean and
+win rate are worse. `TakeProfitCount = 1` restores the single-target behaviour
+that measured best. Shipped because it was asked for with the cost stated.
+
+Each signal becomes N positions sharing one stop, each with its own target, at
+**exactly the same total risk** as one undivided position — the split changes
+the exit shape, never the size. Verified: worst whole signal risked 1.00%
+against a configured 1.00%.
+
+### Four things this surfaced, all now guarded
+
+1. **The position cap counted parts, not signals.** A 6-position cap with 3
+   rungs allowed 2 signals instead of 6 — the ladder was being starved rather
+   than tested. This appeared first in the backtest harness, where it made the
+   ladder look far worse than it is, and would have appeared again live.
+2. **The cap could still be overshot.** Checking `>= cap` before opening let a
+   3-part signal finish at 20 positions against an 18 ceiling. The check is now
+   for room for a *whole* signal.
+3. **The near rungs polluted what the reach rule learns.** A rung closed
+   deliberately early records a small excursion; feeding those back taught the
+   bot that trades never get far, and the target collapsed onto its floor —
+   measured, the share of targets pinned to the floor goes 17.0% -> 69.4%. Only
+   the furthest rung of each signal now teaches the reach rule.
+4. **Three negative controls had gone stale.** The refactor into `PlaceLadder`
+   moved the code that the wrong-side-stop, 50x-sizing and position-cap faults
+   patched, so those controls silently protected nothing while still printing
+   as if they ran. Re-anchored.
+
+New assertions evaluate one SIGNAL at a time rather than pooling orders:
+whole-signal risk, that the rungs are genuinely different distances, that a
+shortfall is explained, and that the reach target is not pinned to its floor.
+17 injected faults, all caught.
+
+### Account size is the real limit
+
+Each rung needs its own broker minimum (0.01 lots = 1 oz), so three targets
+need roughly a **$5,500+** account before they fit. Below that the bot opens as
+many rungs as it can afford and prints which and why; it never silently drops
+to one.

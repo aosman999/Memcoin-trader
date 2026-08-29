@@ -15,6 +15,8 @@ using cAlgo.Robots;
 
 public static class BotSim
 {
+    class Rung { public int K, Of; public double Ratio, RiskPc; }
+
     static int _fail;
     static void Check(bool ok, string what)
     {
@@ -91,6 +93,9 @@ public static class BotSim
         public int TrendEntries, FadeEntries, Trails, ReachTargets;
         public double MaxReward = 0.0, MinReward = 1e9;
         public readonly List<double> ReachRatios = new List<double>();
+        public readonly List<int> LadderParts = new List<int>();
+        public int FarParts, CollapsedLadders, ReachFloored;
+        public double MaxSignalRiskPc;
         public double MaxRiskFraction;
     }
 
@@ -155,6 +160,8 @@ public static class BotSim
                                                pct, bot.MinStopPercent, bot.MaxStopPercent));
             var rewardRatio = Math.Abs(tp - price) / stopDist;
             var floorInForce = bot.UseReachTarget ? bot.ReachMinRR : bot.MinRewardRisk;
+            if (bot.TakeProfitCount > 1)
+                floorInForce *= bot.LadderNearFraction;   // nearest rung, by design
             if (rewardRatio < floorInForce - 1e-6)
                 w.Violations.Add(string.Format(
                     "reward {0:F2}:1 is below the {1:F2} floor", rewardRatio, floorInForce));
@@ -242,10 +249,11 @@ public static class BotSim
 
     static World Run(List<double> c, List<double> h, List<double> l, TimeFrame tf,
                      bool isLive = false, int startBar = 250, double risk = -1,
-                     bool reach = true)
+                     bool reach = true, int parts = -1)
     {
         var w = Build(c, h, l, tf, isLive);
         if (risk > 0) w.Bot.RiskPercent = risk;
+        if (parts > 0) w.Bot.TakeProfitCount = parts;
         // The reach target now overrides the structural one, so with it ON the
         // structural path is unreachable and any fault injected there is
         // invisible. Keep a run with it OFF so that path stays covered.
@@ -271,25 +279,59 @@ public static class BotSim
             var open = w.Bot.Positions.Items.Sum(p =>
                 (w.C[i] - p.EntryPrice) * (p.TradeType == TradeType.Buy ? 1 : -1) * p.VolumeInUnits);
             w.Acc.Equity = w.Acc.Balance + open;
-            if (w.Bot.Positions.Items.Count > w.Bot.MaxConcurrentPositions)
-                w.Violations.Add("more open positions than MaxConcurrentPositions");
+            // Each signal becomes TakeProfitCount positions, so the ceiling is
+            // the signal cap times the parts per signal.
+            var posCap = w.Bot.MaxConcurrentPositions * Math.Max(1, w.Bot.TakeProfitCount);
+            if (w.Bot.Positions.Items.Count > posCap)
+                w.Violations.Add(string.Format(
+                    "more open positions ({0}) than the {1} cap allows", w.Bot.Positions.Items.Count, posCap));
             var before = w.Bot.Log.Count;
+            var signal = new List<Rung>();
             w.Bot.DriveBar();
             w.Bot.DriveTick();
             for (var k = before; k < w.Bot.Log.Count; k++)
             {
                 if (w.Bot.Log[k].StartsWith("OPEN ")) w.TrendEntries++;
                 else if (w.Bot.Log[k].StartsWith("FADE ")) w.FadeEntries++;
-                if (w.Bot.Log[k].Contains("from reach"))
+                        var line = w.Bot.Log[k];
+                if (line.StartsWith("OPEN ") || line.StartsWith("FADE "))
                 {
-                    w.ReachTargets++;
-                    // "= 2.31:1 from reach" -> 2.31, so the adaptivity check
-                    // sees ONLY the calibrated targets.
-                    var m = System.Text.RegularExpressions.Regex.Match(
-                        w.Bot.Log[k], @"= *([0-9.]+):1 from reach");
-                    if (m.Success)
-                        w.ReachRatios.Add(double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture));
+                    var mt = System.Text.RegularExpressions.Regex.Match(line,
+                        @"TP (\d+)/(\d+) at [0-9.]+ \(\+[0-9.]+\) = ([0-9.]+):1 from ([a-z-]+)");
+                    var mr = System.Text.RegularExpressions.Regex.Match(line,
+                        @"RISKS [0-9.]+ = ([0-9.]+)% of equity");
+                    if (mt.Success)
+                    {
+                        var rung = int.Parse(mt.Groups[1].Value);
+                        var of = int.Parse(mt.Groups[2].Value);
+                        var ratio = double.Parse(mt.Groups[3].Value, CultureInfo.InvariantCulture);
+                        var src = mt.Groups[4].Value;
+                        var riskPc = mr.Success
+                            ? double.Parse(mr.Groups[1].Value, CultureInfo.InvariantCulture) : 0.0;
+                        w.LadderParts.Add(of);
+                        if (rung == of) w.FarParts++;
+                        signal.Add(new Rung { K = rung, Of = of, Ratio = ratio, RiskPc = riskPc });
+                        if (src.StartsWith("reach"))
+                        {
+                            w.ReachTargets++;
+                            if (src == "reach-floored") w.ReachFloored++;
+                            // Undo the ladder spacing so the adaptivity check sees
+                            // the BASE reach ratio, not the rung fraction.
+                            if (rung == of)
+                                w.ReachRatios.Add(of > 1 ? ratio / w.Bot.LadderFarMultiple : ratio);
+                        }
+                    }
                 }
+            }
+            if (signal.Count > 0)
+            {
+                // total risk this ONE signal committed
+                var totalPc = signal.Sum(x => x.RiskPc);
+                if (totalPc > w.MaxSignalRiskPc) w.MaxSignalRiskPc = totalPc;
+                // a multi-rung signal must use genuinely different distances
+                if (signal.Count > 1 &&
+                    Math.Abs(signal.Max(x => x.Ratio) - signal.Min(x => x.Ratio)) < 1e-6)
+                    w.CollapsedLadders++;
             }
         }
         w.Bot.DriveStop();
@@ -413,8 +455,11 @@ public static class BotSim
         Check(spread2 > 0.05,
               string.Format("target adapts rather than pinning to one ratio ({0} reach targets, range {1:F2}R)",
                             reachAll.Count, spread2));
-        Check(reachAll.Count == 0 || reachAll.Min() >= w.Bot.ReachMinRR - 1e-6,
-              "no reach target ever lands under its own floor");
+        var reachFloor = w.Bot.ReachMinRR *
+                         (w.Bot.TakeProfitCount > 1 ? w.Bot.LadderNearFraction : 1.0);
+        Check(reachAll.Count == 0 || reachAll.Min() >= reachFloor - 1e-6,
+              string.Format("no reach target lands under its floor (nearest {0:F2} >= {1:F2})",
+                            reachAll.Count == 0 ? 0 : reachAll.Min(), reachFloor));
         Check(!w.Violations.Any(v => v.Contains("cover costs")) &&
               !wu.Violations.Any(v => v.Contains("cover costs")) &&
               !wd.Violations.Any(v => v.Contains("cover costs")) &&
@@ -431,6 +476,52 @@ public static class BotSim
         Check(!w.Bot.Log.Any(x => x.Contains("from structure")) &&
               !wu.Bot.Log.Any(x => x.Contains("from structure")),
               "never falls back to the structural target while the reach rule is on");
+
+        // 5f. THE TAKE-PROFIT LADDER. Each signal must actually become three
+        // positions with three different targets, the total risk must not grow
+        // because of the split, and the 6-position cap must still allow six
+        // SIGNALS rather than two (counting parts against the cap starves the
+        // ladder — that exact mistake made the backtest look far worse).
+        var ladderAll = w.LadderParts.Concat(wu.LadderParts).ToList();
+        Check(ladderAll.Count > 0 &&
+              ladderAll.Max() == w.Bot.TakeProfitCount &&
+              ladderAll.All(n => n >= 1 && n <= w.Bot.TakeProfitCount),
+              string.Format("signals open up to {0} targets and never more ({1} orders, sizes seen: {2})",
+                            w.Bot.TakeProfitCount, ladderAll.Count,
+                            string.Join("/", ladderAll.Distinct().OrderBy(x => x).Select(x => x.ToString()))));
+        // a shortfall must be explained, never silent
+        var shortfall = ladderAll.Any(n => n < w.Bot.TakeProfitCount);
+        Check(!shortfall ||
+              w.Bot.Log.Any(x => x.Contains("take profits fit")) ||
+              wu.Bot.Log.Any(x => x.Contains("take profits fit")),
+              "says so when the account cannot afford every take profit");
+        Check(w.FarParts + wu.FarParts > 0,
+              string.Format("the furthest target is placed ({0} of them)", w.FarParts + wu.FarParts));
+        Check(w.MaxSignalRiskPc <= w.Bot.RiskPercent * 1.35 + 1e-9 &&
+              wu.MaxSignalRiskPc <= wu.Bot.RiskPercent * 1.35 + 1e-9,
+              string.Format("splitting into {0} targets does not inflate risk " +
+                            "(worst WHOLE signal risked {1:F2}%, configured {2:F2}%)",
+                            w.Bot.TakeProfitCount,
+                            Math.Max(w.MaxSignalRiskPc, wu.MaxSignalRiskPc), w.Bot.RiskPercent));
+        // Letting the NEAR rungs into the reach history teaches the bot that
+        // trades only get as far as the near target — the percentile then
+        // collapses onto its floor and stays there. A high floored share is the
+        // signature of that pollution.
+        var reachN = w.ReachTargets + wu.ReachTargets + wd.ReachTargets;
+        var flooredN = w.ReachFloored + wu.ReachFloored + wd.ReachFloored;
+        var flooredPc = reachN > 0 ? 100.0 * flooredN / reachN : 0.0;
+        Check(reachN > 0 && flooredPc < 40.0,
+              string.Format("the reach target is not pinned to its floor ({0:F1}% floored, {1} reach orders)",
+                            flooredPc, reachN));
+        Check(w.CollapsedLadders == 0 && wu.CollapsedLadders == 0,
+              string.Format("the targets in a signal are genuinely different distances " +
+                            "({0} collapsed to a single distance)",
+                            w.CollapsedLadders + wu.CollapsedLadders));
+        var wsingle = Run(c, h, l, TimeFrame.Minute5, parts: 1);
+        Check(wsingle.Violations.Count == 0 && wsingle.Opened > 0,
+              string.Format("still clean with a single take profit ({0} orders)", wsingle.Opened));
+        Check(wsingle.LadderParts.All(n => n == 1),
+              "one take profit means one position per signal");
 
         // 5c. positions open at start-up must be reported as unmanaged
         Series(1200, 77, out c, out h, out l);

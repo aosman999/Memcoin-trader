@@ -22,10 +22,8 @@ DRV = os.path.join(REPO, "tools", "verify", "bot_sim_driver.cs")
 
 FAULTS = [
     ("stop placed on the WRONG SIDE of entry",
-     "                                            stopDist / Symbol.PipSize, tpDist / Symbol.PipSize);\n"
-     "            if (result.IsSuccessful)\n                _tradesToday++;",
-     "                                            -stopDist / Symbol.PipSize, tpDist / Symbol.PipSize);\n"
-     "            if (result.IsSuccessful)\n                _tradesToday++;",
+     "                                             stopDist / Symbol.PipSize, dist / Symbol.PipSize);",
+     "                                             -stopDist / Symbol.PipSize, dist / Symbol.PipSize);",
      "no order/risk violations"),
 
     ("stop clamp ignored (10x too wide)",
@@ -39,13 +37,9 @@ FAULTS = [
      "REFUSES a live account"),
 
     ("position sizing 50x oversized",
-     "            var riskUsd = Account.Equity * (RiskPercent / 100.0);\n"
-     "            var units = Symbol.NormalizeVolumeInUnits(riskUsd / stopDist, RoundingMode.Down);\n\n"
-     "            var minRisk",
-     "            var riskUsd = Account.Equity * (RiskPercent / 100.0) * 50.0;\n"
-     "            var units = Symbol.NormalizeVolumeInUnits(riskUsd / stopDist, RoundingMode.Down);\n\n"
-     "            var minRisk",
-     "single-trade risk"),
+     "            var totalUnits = Symbol.NormalizeVolumeInUnits(riskUsd / stopDist, RoundingMode.Down);",
+     "            var totalUnits = Symbol.NormalizeVolumeInUnits(riskUsd / stopDist, RoundingMode.Down) * 50.0;",
+     "inflate risk"),
 
     ("both entry gates made unreachable (the silent no-trade failure)",
      "            if (trendAllowed && quality >= EfficiencyMin)",
@@ -96,10 +90,31 @@ FAULTS = [
      "            if (UseReachTarget && false)\n            {\n                how = \"warm-up\";",
      "warm-up target"),
 
+    # ---- the take-profit ladder
+    ("ladder collapses to one target (scaling out silently off)",
+     "                var frac = parts == 1\n                    ? 1.0",
+     "                var frac = parts == 1 || true\n                    ? 1.0",
+     "up to 3 targets"),
+
+    ("ladder triples the risk instead of splitting it",
+     "                var units = k == parts - 1 ? totalUnits - each * (parts - 1) : each;",
+     "                var units = totalUnits;",
+     "does not inflate risk"),
+
+    ("position cap overshoots because a whole signal is not checked",
+     "            if (OwnPositions().Count() > (MaxConcurrentPositions - 1) * partsPerSignal)",
+     "            if (OwnPositions().Count() >= MaxConcurrentPositions * partsPerSignal)",
+     "cap allows"),
+
+    ("near rungs pollute what the reach rule learns",
+     "                if (reached > 0 && (TakeProfitCount <= 1 || _reachEligible.Contains(id)))",
+     "                if (reached > 0)",
+     "adapts rather than pinning"),
+
     ("max concurrent positions ignored",
-     "            if (OwnPositions().Count() >= MaxConcurrentPositions)\n                return;",
+     "            if (OwnPositions().Count() > (MaxConcurrentPositions - 1) * partsPerSignal)\n                return;",
      "            if (false)\n                return;",
-     "more open positions"),
+     "cap allows"),
 ]
 
 
