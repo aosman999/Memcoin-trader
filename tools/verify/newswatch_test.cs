@@ -122,6 +122,39 @@ public static class NewsTest
               "the gold-moving stories on those wires DO clear the alert bar" +
               (missed.Count == 0 ? "" : " — missed: " + string.Join(" | ", missed)));
 
+        // ---- Telegram. The token is a credential; the failure path is the one
+        // that leaks it, because exception messages quote the whole URL.
+        const string tok = "8123456789:AAFtestTOKENvalue";
+        var url = GoldNewsWatch.TelegramUrl(tok, "-1001234567890", "gold up 2%\nentry - BUY 4585.14 & run");
+        Check(url.StartsWith("https://api.telegram.org/bot") && url.Contains("/sendMessage?"),
+              "builds the Telegram sendMessage endpoint");
+        Check(url.Contains("chat_id=-1001234567890"), "passes the chat id, negative ids included");
+        Check(!url.Contains(" ") && !url.Contains("\n") && url.Contains("%0A") && url.Contains("%26"),
+              "percent-encodes spaces, newlines and ampersands in the message");
+        var longMsg = new string('x', 9000);
+        var longUrl = GoldNewsWatch.TelegramUrl(tok, "1", longMsg);
+        Check(longUrl.Length < 8000 && longUrl.Contains("truncated"),
+              "truncates a message Telegram would reject outright (" + longUrl.Length + " chars)");
+        // A real WebException quotes the request URI, where the token's colon is
+        // percent-encoded, and some stacks also echo the raw string. The first
+        // version of this test only used the URL form, so the RAW token never
+        // appeared in it and the "no raw token" assertion passed vacuously --
+        // it stayed green even with redaction removed entirely.
+        var leak = "The remote server returned an error: " + url + " (token " + tok + ")";
+        Check(leak.Contains(tok) && leak.Contains(Uri.EscapeDataString(tok)),
+              "the leak fixture really does contain both forms of the token");
+        Check(!GoldNewsWatch.Redact(leak, tok).Contains(tok) &&
+              !GoldNewsWatch.Redact(leak, tok).Contains(Uri.EscapeDataString(tok)),
+              "the bot token is stripped from an error message before it is logged");
+        Check(GoldNewsWatch.Redact(leak, tok).Contains("<token>"), "and is replaced, not just dropped");
+        Check(GoldNewsWatch.Redact(null, tok) == null && GoldNewsWatch.Redact(leak, "") == leak,
+              "redaction handles empty input without throwing");
+        // the actual line the bot logs on a failed send
+        var logged = GoldNewsWatch.TelegramErrorLine("WebException", leak, tok);
+        Check(!logged.Contains(tok) && !logged.Contains(Uri.EscapeDataString(tok)) &&
+              logged.Contains("telegram failed"),
+              "the failure line the bot actually logs carries no token, in either form");
+
         // ---- the calendar
         var cal = GoldNewsWatch.ParseCalendarPublic(
             "[{\"title\":\"FOMC Statement\",\"country\":\"USD\",\"date\":\"2026-08-28T18:00:00Z\",\"impact\":\"High\"}," +

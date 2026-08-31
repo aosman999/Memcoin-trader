@@ -49,8 +49,19 @@
 //   m1 are both fine). Needs AccessRights.FullAccess for the feeds.
 //
 //   Alerts arrive in the cTrader log. Set AlertEmailTo (and AlertEmailFrom)
-//   and each alert is also emailed — that is how you get it on your phone,
-//   via your mail app's push.
+//   and each alert is also emailed.
+//
+//   TELEGRAM (better — instant, and it pushes to your phone):
+//     1. In Telegram, message @BotFather, send /newbot, pick a name. It
+//        replies with a token like 8123456789:AAF...  That token IS a
+//        credential; do not paste it into a chat or a screenshot.
+//     2. Send any message to your new bot (it cannot message you first).
+//     3. Open in a browser:
+//          https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates
+//        Find  "chat":{"id":123456789  — that number is your chat id.
+//     4. Put the token in TelegramBotToken and the number in TelegramChatId.
+//     Alerts and signal blocks then arrive as Telegram messages. The token is
+//     stripped from anything this bot prints, so the log stays safe to share.
 //
 // Zero dependencies beyond cAlgo.API and .NET.
 using System;
@@ -136,6 +147,19 @@ namespace cAlgo.Robots
 
         [Parameter("Minutes to suppress repeat signals", DefaultValue = 20, MinValue = 0, MaxValue = 240, Group = "Alerts")]
         public int SignalCooldownMinutes { get; set; }
+
+        // TELEGRAM. Much better than email for this: it is instant, it pushes to
+        // your phone, and you can read a signal block without opening a mail
+        // app. Setup is in the header comment at the top of this file.
+        //
+        // The token is a CREDENTIAL. It is typed into cTrader's parameter box,
+        // never into a file in this repo, and it is stripped from every log
+        // line this bot writes -- see Redact().
+        [Parameter("Telegram bot token (blank = off)", DefaultValue = "", Group = "Telegram")]
+        public string TelegramBotToken { get; set; }
+
+        [Parameter("Telegram chat id", DefaultValue = "", Group = "Telegram")]
+        public string TelegramChatId { get; set; }
 
         [Parameter("Email alerts to (blank = log only)", DefaultValue = "", Group = "Alerts")]
         public string AlertEmailTo { get; set; }
@@ -716,10 +740,63 @@ namespace cAlgo.Robots
 
         private void Email(string subject, string body)
         {
-            if (string.IsNullOrEmpty(AlertEmailTo) || string.IsNullOrEmpty(AlertEmailFrom))
+            if (!string.IsNullOrEmpty(AlertEmailTo) && !string.IsNullOrEmpty(AlertEmailFrom))
+            {
+                try { Notifications.SendEmail(AlertEmailFrom, AlertEmailTo, "GOLD: " + subject, body); }
+                catch (Exception ex) { Print("email failed: {0}", ex.Message); }
+            }
+            Telegram(body);
+        }
+
+        // Telegram's sendMessage endpoint. Built as a static so it can be
+        // tested without a network.
+        public static string TelegramUrl(string token, string chatId, string text)
+        {
+            // Telegram rejects anything over 4096 characters outright.
+            if (text != null && text.Length > 3800)
+                text = text.Substring(0, 3800) + "\n...(truncated)";
+            return "https://api.telegram.org/bot" + Uri.EscapeDataString(token ?? "") +
+                   "/sendMessage?chat_id=" + Uri.EscapeDataString(chatId ?? "") +
+                   "&disable_web_page_preview=true" +
+                   "&text=" + Uri.EscapeDataString(text ?? "");
+        }
+
+        // A bot token is a credential: anyone holding it can post as you. It
+        // must never reach the cTrader log, which gets pasted into chats and
+        // screenshots.
+        public static string Redact(string s, string token)
+        {
+            if (string.IsNullOrEmpty(s) || string.IsNullOrEmpty(token)) return s;
+            return s.Replace(token, "<token>")
+                    .Replace(Uri.EscapeDataString(token), "<token>");
+        }
+
+        // The ONLY way this bot reports a Telegram failure. Redaction lives
+        // inside it rather than at the call site, so there is one place to get
+        // right and it is directly testable without a network.
+        public static string TelegramErrorLine(string exType, string exMessage, string token)
+        {
+            return "telegram failed: " + exType + " — " + Redact(exMessage, token);
+        }
+
+        private void Telegram(string text)
+        {
+            if (string.IsNullOrEmpty(TelegramBotToken) || string.IsNullOrEmpty(TelegramChatId))
                 return;
-            try { Notifications.SendEmail(AlertEmailFrom, AlertEmailTo, "GOLD: " + subject, body); }
-            catch (Exception ex) { Print("email failed: {0}", ex.Message); }
+            var url = TelegramUrl(TelegramBotToken, TelegramChatId, text);
+            var token = TelegramBotToken;
+            // off the trading thread; a slow phone network must never stall the bot
+            Task.Run(() =>
+            {
+                try { Download(url); }
+                catch (Exception ex)
+                {
+                    // One function builds this line and it always redacts, so
+                    // the failure path cannot log a token by accident.
+                    var line = TelegramErrorLine(ex.GetType().Name, ex.Message, token);
+                    BeginInvokeOnMainThread(() => Print(line));
+                }
+            });
         }
 
         // ---- scheduled events ----------------------------------------------

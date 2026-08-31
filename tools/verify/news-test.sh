@@ -46,6 +46,11 @@ run_fault "CDATA left unwrapped" \
           's.Replace("<![CDATA[", "").Replace("]]>", "")' "s"
 run_fault "calendar keeps every event, including ones gold ignores" \
           "else continue;" "else tier = 3;"
+run_fault "bot token left in the log on failure" \
+          "+ Redact(exMessage, token);" "+ exMessage;"
+run_fault "Telegram message not URL-encoded" \
+          '"&text=" + Uri.EscapeDataString(text ?? "")' '"&text=" + (text ?? "")'
+
 run_fault "the Fed shorthand dropped again" \
           '" FED ",' ""
 

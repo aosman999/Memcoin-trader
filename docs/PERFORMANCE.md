@@ -2559,3 +2559,64 @@ that neither shows a measurable edge on the only markets this project can test,
 and a certified strategy is not replaced by an uncertified one. Testing the
 claim properly needs tick data with real liquidity events, which this project
 does not have.
+
+## ICT vs CRT — what the practitioner literature says (Aug 28)
+
+Owner asked for the YouTube/podcast/book consensus rather than only my own
+measurement. The consensus is clear and it is not "one beats the other":
+
+**CRT is a subset of ICT, not a rival.** It is ICT's Power of Three
+(Accumulation / Manipulation / Distribution) applied to a single candle's
+range, built from the same pieces — liquidity sweep, session highs and lows.
+Practitioners recommend it as the *entry point* to ICT because it is the piece
+that is simple to identify and consistently actionable.
+
+**Both restate Wyckoff.** A Wyckoff Spring is a sell-side liquidity sweep and a
+Wyckoff Upthrust is a buy-side one — published in the 1930s. A pattern with a
+ninety-year lineage under three names is more likely to be real than a fad, and
+that is a point in its favour that this project's own measurement could not
+have found.
+
+**The honest gap is evidence, not popularity.** There is no audited track
+record and no peer-reviewed validation of the mechanics. Self-published
+backtests report 50-65% win rates with profit factor above 1.5, but they vary
+by market and timeframe, and ICT's discretion — which liquidity level counts,
+which FVG is valid, which timeframe wins a conflict — means two people
+"backtesting ICT" are rarely testing the same rules. Academic order-flow work
+*does* document stop clustering at obvious levels, so the mechanism is real
+even where the framework is unproven.
+
+**Verdict for a bot: CRT.** Not because it wins more in the literature, but
+because it has the fewest free parameters, which is the only property that
+makes a rule mechanisable and testable at all. That matches the measurement in
+the previous section: CRT was codeable and scored better than ICT on the honest
+tape (34.5% vs 25.8% win; +0.000 vs -0.283 expectancy), while ICT's extra
+conditions produced 172 trades against CRT's 23,219 — too few to certify.
+
+Neither is adopted, for the reasons in the previous section. `GoldDataDump.cs`
+exists to settle it on real gold.
+
+## GoldNewsWatch — Telegram delivery (Aug 28)
+
+Alerts and signal blocks now push to Telegram, which is instant and reaches a
+phone without a mail app. Setup is documented in the file header.
+
+The bot token is a credential. It is entered in cTrader's parameter box, never
+into a tracked file, and it is stripped from anything the bot prints — the
+cTrader log gets pasted into chats and screenshots. All failure reporting goes
+through one function, `TelegramErrorLine`, which redacts internally, so the
+call site cannot leak by omission.
+
+Three defects were caught while testing this:
+
+1. **A vacuous test.** The leak fixture built its fake error message from the
+   request URL, where the token's colon is percent-encoded — so the RAW token
+   never appeared in it, and the "no raw token" assertion passed even with
+   redaction removed entirely. The fixture now asserts it contains *both* forms
+   before testing that neither survives.
+2. **Redaction at the call site could not be tested.** Removing it was
+   invisible to a unit test because nothing exercises the network path. The
+   line is now built by a static that always redacts and is called directly by
+   the tests.
+3. Messages over Telegram's 4096-character limit are rejected outright, so long
+   alerts are truncated rather than silently dropped.
