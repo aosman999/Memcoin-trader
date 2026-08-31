@@ -2418,3 +2418,63 @@ parameter that provably does nothing is worse than no parameter. The behaviour
 the owner asked for is already in the bot; `TrailActivateR` / `TrailDistanceR`
 are the dials, and each move is already logged as
 `TRAIL <id>: +1.20R reached, stop -> 4591.30 (locks in 0.50R)`.
+
+## GoldNewsWatch — a news-only agent (Aug 28)
+
+Owner asked for a separate bot that watches gold news and sends buy/sell
+signals, prompted by the Iran/US situation. `tools/GoldNewsWatch.cs` is a
+standalone cBot that **never places an order**.
+
+Sources: the Forex Factory calendar (tiered for gold), plus Google News RSS
+searches for gold/XAU, Iran/Israel/Hormuz, Trump/US policy, and the
+Fed/inflation/dollar — free, no API key, each search its own feed so one
+failure cannot silence the rest. Any extra RSS/Atom URL can be added.
+
+### What it honestly cannot do
+
+- **It cannot read X/Twitter.** Real-time tweet polling needs a paid X API key;
+  there is no free, reliable, terms-compliant route. It reads the newswires,
+  which carry anything market-moving within minutes, and accepts any RSS
+  bridge the owner supplies via `ExtraFeedUrls`.
+- **Coverage is the listed searches, not "all world news."**
+- **The direction call is NOT backtested, and this is a real gap.** Every
+  number for GoldEdgeNews came from 40+ unseen tapes. That is impossible here:
+  there is no historical corpus of timestamped headlines in this project to
+  test against, so there is **no measured edge** behind BUY vs SELL. The
+  keyword model is a documented convention (escalation and easing lift gold;
+  de-escalation and tightening sink it), stated as a prior, not as evidence.
+  Every signal block says so in its own output.
+- **The levels are arithmetic, not a forecast** — stop 1.5x ATR(14) clamped to
+  0.4-1.4% of price (GoldEdgeNews geometry), targets at 1x/2x/3x that stop.
+
+### What IS verified
+
+25 behaviour tests plus 6 negative controls (`tools/verify/news-test.sh`, now
+step 5 of `all.sh`), driving the real parsing and scoring against the shapes
+these feeds actually produce: CDATA, HTML entities, embedded markup, truncated
+documents, empty and malformed input. Two real bugs were caught by them:
+
+1. **"Fed" was not recognised.** The relevance list had "FEDERAL RESERVE" but
+   not the everyday shorthand, so *"Fed signals higher for longer as dollar
+   surges"* scored **zero** and would never have alerted.
+2. **Fixing that introduced a false positive.** As a whole word, " FED "
+   matches *"Voters are fed up with the war on drugs"*, which then scored
+   bullish on "war". Phrases like this are neutralised before matching, rather
+   than dropping the token and losing every real Fed headline.
+
+A third defect was in the harness: `build-check.sh` injected its compiler
+negative control by anchoring on `private bool _stopped;`, a field unique to
+GoldEdgeNews. On any other bot the sed changed nothing, the untouched file
+compiled, and the control reported a pass while protecting nothing. It now
+anchors on `OnStart()` and **fails loudly if the injection does not apply**.
+
+### Take-profit ladder — no change
+
+The owner re-described the ladder as "one entry, money divided, exits a certain
+amount at each TP". That is what shipped: one entry price, one shared stop,
+volume split N ways, a partial exit at each target. The only difference from a
+single-row display is that cTrader needs one position per broker-side target —
+which is also why it keeps working when the machine is asleep. A single-row
+version using partial closes would put TP1 and TP2 under the bot's control
+instead of the broker's, and would therefore stop working whenever the laptop
+is off, which has already cost this account money.

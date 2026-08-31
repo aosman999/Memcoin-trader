@@ -29,8 +29,16 @@ fi
 
 # A build that cannot fail proves nothing. Confirm the check has teeth by
 # introducing a deliberate error and requiring the compiler to reject it.
-sed 's/private bool _stopped;/private bool _stopped; private double _x = "not a double";/' \
+# Anchor on something EVERY cBot has. The previous anchor was a field unique to
+# GoldEdgeNews, so on any other bot sed changed nothing, the untouched file
+# compiled, and the control reported a pass while protecting nothing.
+sed 's/protected override void OnStart()/private double _negctl = "not a double";\n        protected override void OnStart()/' \
     "$BOT" > "$OUT/neg.cs"
+if cmp -s "$BOT" "$OUT/neg.cs"; then
+    echo "NEGATIVE CONTROL IS STALE — could not inject a fault into $BOT."
+    echo "The compile above proves nothing. Fix the anchor in build-check.sh."
+    exit 1
+fi
 if mcs -target:library -out:"$OUT/neg.dll" "$DIR/calgo_stubs.cs" "$OUT/neg.cs" 2>/dev/null; then
     echo "WARNING: negative control PASSED — the stubs are too loose to trust."
     exit 1

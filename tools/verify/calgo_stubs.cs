@@ -166,8 +166,14 @@ namespace cAlgo.API
         public cAlgo.API.Indicators.AverageTrueRange AverageTrueRange(int p, MovingAverageType t) { return new cAlgo.API.Indicators.AverageTrueRange(); }
     }
 
+    public class Notifications
+    {
+        public void SendEmail(string from, string to, string subject, string body) { }
+    }
+
     public abstract class Robot
     {
+        public Notifications Notifications { get; set; }
         public Bars Bars { get; set; }
         public cAlgo.API.Internals.Symbol Symbol { get; set; }
         public cAlgo.API.Internals.Account Account { get; set; }
