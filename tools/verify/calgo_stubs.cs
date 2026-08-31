@@ -64,6 +64,16 @@ namespace cAlgo.API
         public override string ToString() { return _n; }
     }
 
+    public class TimeSeries
+    {
+        private readonly System.Collections.Generic.List<DateTime> _v =
+            new System.Collections.Generic.List<DateTime>();
+        public int Count { get { return _v.Count; } }
+        public DateTime Last(int i) { return _v[_v.Count - 1 - i]; }
+        public DateTime this[int i] { get { return _v[i]; } }
+        public void Push(DateTime t) { _v.Add(t); }
+    }
+
     public class DataSeries
     {
         public double Last(int index) { return 0.0; }
@@ -76,6 +86,7 @@ namespace cAlgo.API
         public DataSeries ClosePrices { get; set; }
         public DataSeries HighPrices { get; set; }
         public DataSeries LowPrices { get; set; }
+        public TimeSeries OpenTimes { get; set; }
         public DataSeries OpenPrices { get; set; }
         public DataSeries TickVolumes { get; set; }
         public TimeFrame TimeFrame { get; set; }
