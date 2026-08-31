@@ -82,6 +82,35 @@ namespace cAlgo.Robots
         [Parameter("Watch the Fed / inflation / rates / dollar", DefaultValue = true, Group = "Feeds")]
         public bool FeedFed { get; set; }
 
+        // NAMED WIRE FEEDS. These are the outlets' own RSS, so they publish
+        // within a minute or two of filing — faster than a Google News search,
+        // which batches. They are broad world feeds, most of which has nothing
+        // to do with gold; the relevance gate in Score() is what stops that
+        // becoming noise, and there is a test for exactly that.
+        [Parameter("Al Jazeera", DefaultValue = true, Group = "Wires")]
+        public bool WireAlJazeera { get; set; }
+
+        [Parameter("Al Arabiya", DefaultValue = true, Group = "Wires")]
+        public bool WireAlArabiya { get; set; }
+
+        [Parameter("CNN world", DefaultValue = true, Group = "Wires")]
+        public bool WireCnn { get; set; }
+
+        [Parameter("CNN money / markets", DefaultValue = true, Group = "Wires")]
+        public bool WireCnnMoney { get; set; }
+
+        [Parameter("BBC world", DefaultValue = true, Group = "Wires")]
+        public bool WireBbc { get; set; }
+
+        [Parameter("CNBC markets", DefaultValue = true, Group = "Wires")]
+        public bool WireCnbc { get; set; }
+
+        // Fastest legitimate route to what Trump actually said. A dedicated
+        // hourly news search returns wire copy within minutes of a post; the
+        // post itself needs a paid X API key, which no free feed replaces.
+        [Parameter("Trump / statements fast lane", DefaultValue = true, Group = "Wires")]
+        public bool WireTrumpFast { get; set; }
+
         [Parameter("Extra RSS/Atom feed URLs (comma separated)", DefaultValue = "", Group = "Feeds")]
         public string ExtraFeedUrls { get; set; }
 
@@ -244,6 +273,38 @@ namespace cAlgo.Robots
             new KeyValuePair<string, double>("HOT INFLATION", -1.5),
             new KeyValuePair<string, double>("STRONG JOBS", -1.5),
             new KeyValuePair<string, double>("BEATS EXPECTATIONS", -1.0),
+            // --- added at the owner's direction: "anything that can make gold
+            // dump or pump". These are the other well-known gold drivers.
+            new KeyValuePair<string, double>("ASSASSINAT", 3.0),
+            new KeyValuePair<string, double>("COUP", 2.5),
+            new KeyValuePair<string, double>("TERROR", 2.0),
+            new KeyValuePair<string, double>("MARTIAL LAW", 2.5),
+            new KeyValuePair<string, double>("DEBT CEILING", 2.0),
+            new KeyValuePair<string, double>("CREDIT RATING", 1.5),
+            new KeyValuePair<string, double>("DOWNGRADE", 1.5),
+            new KeyValuePair<string, double>("BANK RUN", 2.5),
+            new KeyValuePair<string, double>("BANK COLLAPSE", 2.5),
+            new KeyValuePair<string, double>("BAILOUT", 1.5),
+            new KeyValuePair<string, double>("TARIFF", 2.0),
+            new KeyValuePair<string, double>("TRADE WAR", 2.5),
+            new KeyValuePair<string, double>("CENTRAL BANKS BUY", 2.5),
+            new KeyValuePair<string, double>("GOLD RESERVES", 1.5),
+            new KeyValuePair<string, double>("DE-DOLLAR", 2.0),
+            new KeyValuePair<string, double>("BRICS", 1.0),
+            new KeyValuePair<string, double>("BLOCKADE", 2.5),
+            new KeyValuePair<string, double>("OIL SPIKE", 1.5),
+            new KeyValuePair<string, double>("OIL SURGES", 1.5),
+            new KeyValuePair<string, double>("PROXY", 1.0),
+            new KeyValuePair<string, double>("UKRAINE", 1.0),
+            new KeyValuePair<string, double>("TAIWAN", 1.5),
+            // and the other side of them
+            new KeyValuePair<string, double>("TARIFFS LIFTED", -2.0),
+            new KeyValuePair<string, double>("TRADE DEAL", -1.5),
+            new KeyValuePair<string, double>("RISK APPETITE", -1.5),
+            new KeyValuePair<string, double>("STOCKS RALLY", -1.0),
+            new KeyValuePair<string, double>("PROFIT-TAKING", -1.0),
+            new KeyValuePair<string, double>("ETF OUTFLOW", -2.0),
+            new KeyValuePair<string, double>("ETF INFLOW", 2.0),
         };
 
         // Words that only matter because they say the story is ABOUT gold or
@@ -262,7 +323,12 @@ namespace cAlgo.Robots
             // the everyday shorthand for the central bank was not on this list
             // and neither was the dollar.
             " FED ", " FED'S ", "DOLLAR", "INTEREST RATE", "MONETARY",
-            "NUCLEAR", "SANCTION", "HORMUZ"
+            "NUCLEAR", "SANCTION", "HORMUZ",
+            // widened with the lexicon above, so those terms can actually fire
+            "RUSSIA", "UKRAINE", "CHINA", "TAIWAN", "HAMAS", "HEZBOLLAH",
+            "HOUTHI", "NETANYAHU", "KHAMENEI", "PUTIN", "TARIFF", "DEBT CEILING",
+            "CREDIT RATING", "BRICS", "OIL", "YIELD", "BULLION", "PRECIOUS METAL",
+            "CHINESE", "GOLD COUNCIL", "BULLION BANK"
         };
 
         private static readonly string[] FalseFriends =
@@ -362,6 +428,14 @@ namespace cAlgo.Robots
                    "&hl=en-US&gl=US&ceid=US:en";
         }
 
+        // Same search, one-hour window: far fewer, far fresher items. Used for
+        // the things where being late is the whole problem.
+        private static string FastQuery(string q)
+        {
+            return "https://news.google.com/rss/search?q=" + Uri.EscapeDataString(q + " when:1h") +
+                   "&hl=en-US&gl=US&ceid=US:en";
+        }
+
         private List<string> FeedList()
         {
             var urls = new List<string>();
@@ -369,6 +443,14 @@ namespace cAlgo.Robots
             if (FeedMideast) urls.Add(NewsQuery("Iran OR Israel OR \"Middle East\" OR Hormuz"));
             if (FeedTrump) urls.Add(NewsQuery("Trump OR \"White House\" statement OR sanctions"));
             if (FeedFed) urls.Add(NewsQuery("Federal Reserve OR inflation OR interest rates OR dollar"));
+            // the wires themselves — fastest, and each is independent
+            if (WireAlJazeera) urls.Add("https://www.aljazeera.com/xml/rss/all.xml");
+            if (WireAlArabiya) urls.Add("https://english.alarabiya.net/.mrss/en.xml");
+            if (WireCnn) urls.Add("http://rss.cnn.com/rss/edition_world.rss");
+            if (WireCnnMoney) urls.Add("http://rss.cnn.com/rss/money_news_international.rss");
+            if (WireBbc) urls.Add("https://feeds.bbci.co.uk/news/world/rss.xml");
+            if (WireCnbc) urls.Add("https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=20910258");
+            if (WireTrumpFast) urls.Add(FastQuery("Trump OR \"White House\" OR Netanyahu OR Khamenei"));
             urls.AddRange(SplitCsv(ExtraFeedUrls));
             return urls;
         }
@@ -441,8 +523,15 @@ namespace cAlgo.Robots
 
         private static string ShortSource(string url)
         {
+            if (url.Contains("aljazeera")) return "Al Jazeera";
+            if (url.Contains("alarabiya")) return "Al Arabiya";
+            if (url.Contains("money_news")) return "CNN money";
+            if (url.Contains("cnn.com")) return "CNN";
+            if (url.Contains("bbci.co.uk")) return "BBC";
+            if (url.Contains("cnbc.com")) return "CNBC";
             if (url.Contains("news.google.com"))
             {
+                if (url.Contains("Khamenei")) return "Trump/statements";
                 if (url.Contains("bullion")) return "gold wire";
                 if (url.Contains("Hormuz")) return "mideast wire";
                 if (url.Contains("Trump")) return "US policy wire";

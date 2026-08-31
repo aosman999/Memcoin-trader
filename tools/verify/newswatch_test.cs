@@ -92,6 +92,36 @@ public static class NewsTest
         // stronger news must outrank weaker news, since alerts are sorted by it
         Check(war.Impact > vague.Impact, "a strike outranks a quiet-session headline");
 
+        // ---- the broad wires are mostly NOT about gold. The relevance gate is
+        // the only thing keeping CNN's and Al Jazeera's full world feeds from
+        // burying the real alerts, so test it with their actual subject matter.
+        string[] noise =
+        {
+            "Taylor Swift announces record-breaking world tour",
+            "Hurricane warning issued for the Gulf coast",
+            "Champions League: late strike seals dramatic win",
+            "New study links coffee to longer life",
+            "Airline cancels flights after computer crisis",
+            "Film festival opens with a war drama",
+        };
+        var noisy = noise.Where(h => GoldNewsWatch.Score(h).Impact >= 3.0).ToList();
+        Check(noisy.Count == 0,
+              "a broad world feed's off-topic stories all score below the alert bar" +
+              (noisy.Count == 0 ? "" : " — leaked: " + string.Join(" | ", noisy)));
+
+        // ...while the gold-moving ones on those same wires do fire
+        string[] real =
+        {
+            "Iran threatens to close Strait of Hormuz after new sanctions",
+            "Trump announces sweeping tariffs on Chinese goods",
+            "US credit rating downgrade sends Treasury yields higher",
+            "Central banks buy gold at record pace, says World Gold Council",
+        };
+        var missed = real.Where(h => GoldNewsWatch.Score(h).Impact < 3.0).ToList();
+        Check(missed.Count == 0,
+              "the gold-moving stories on those wires DO clear the alert bar" +
+              (missed.Count == 0 ? "" : " — missed: " + string.Join(" | ", missed)));
+
         // ---- the calendar
         var cal = GoldNewsWatch.ParseCalendarPublic(
             "[{\"title\":\"FOMC Statement\",\"country\":\"USD\",\"date\":\"2026-08-28T18:00:00Z\",\"impact\":\"High\"}," +

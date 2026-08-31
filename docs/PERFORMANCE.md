@@ -2478,3 +2478,84 @@ which is also why it keeps working when the machine is asleep. A single-row
 version using partial closes would put TP1 and TP2 under the bot's control
 instead of the broker's, and would therefore stop working whenever the laptop
 is off, which has already cost this account money.
+
+## ICT vs CRT, researched and measured (Aug 28)
+
+Owner asked to master both and adopt whichever has the higher win rate.
+
+**Encodings** (from the published rules, not memory). ICT: higher-timeframe
+bias -> liquidity pool -> **sweep** of that pool -> market-structure shift ->
+entry on the retrace into the **OTE, 0.62-0.79** of the sweep leg, stop beyond
+the sweep, target opposing liquidity, limited to the London and New York
+killzones. CRT: candle 1 sets a range, candle 2 **takes one side's liquidity
+and closes back inside**, candle 3 runs to the opposite extreme — "when a
+candle liquidates another and price returns inside its range, intent points to
+the opposite extreme." Both are discretionary; these are one faithful
+mechanical reading of each.
+
+### Two harness bugs found first
+
+1. **The sweep detector could never fire.** It tested
+   `min(px[i-1], px[i]) < min(px[i-look:i])`, but `px[i-1]` is *inside* that
+   window, so the condition was arithmetically impossible — both strategies
+   took zero trades. A sweep is also a **wick** through a level with the close
+   back inside, which close-only data cannot see at all; per-bar highs and lows
+   are now built from the minute series.
+2. **Entering at the sweep bar's close.** Neither method does this; both wait
+   for a retracement. Chasing showed: ICT won **13.7%**, far *below* a coin
+   flip. With the OTE entry it rose to 27.3%. Take 1's coin-flip control also
+   used a different stop rule, so it was never a fair reference; controls now
+   push a random direction through identical entry, stop and target machinery.
+
+### The result, 30-40 unseen tapes, expectancy in stop-units
+
+| market | CRT as written | CRT flipped | random direction |
+|---|---|---|---|
+| random walk H=0.50 | +0.067 (36.2%) | +0.123 (38.2%) | +0.098 (37.3%) |
+| **mean-reverting H=0.40** | **+0.176 (43.8%)** | −0.134 (32.7%) | +0.034 (38.7%) |
+| **trending H=0.62** | **−0.118 (29.4%)** | +0.457 (48.6%) | +0.159 (38.7%) |
+| mixed (the honest one) | +0.000 (34.5%) | +0.239 (42.5%) | +0.109 (38.1%) |
+
+| market | ICT as written | ICT flipped | random direction |
+|---|---|---|---|
+| random walk H=0.50 | +0.111 (38.3%) | +0.169 (40.4%) | +0.444 (48.7%) |
+| **mean-reverting H=0.40** | **+0.225 (47.7%)** | −0.111 (31.6%) | +0.215 (44.6%) |
+| **trending H=0.62** | +0.000 (33.3%) | +0.567 (52.2%) | +0.280 (42.7%) |
+| mixed (the honest one) | −0.283 (25.8%) | +0.322 (47.3%) | +0.040 (36.1%) |
+
+**Both are mean-reversion strategies wearing different names.** They earn on a
+mean-reverting tape and lose on a trending one; reversing them inverts that
+exactly. The "flip wins" result on the mixed tape is therefore NOT a finding
+about gold — it is the tape's own autocorrelation, and it vanishes on a random
+walk where nothing can predict anything (+0.123 flipped vs +0.098 random).
+
+**Neither is adopted.** On the honest mixed tape both lose against a matched
+random control (CRT +0.000 vs +0.109; ICT −0.283 vs +0.040), and the shipped
+strategy wins 61.0% with a positive expectancy. Answering the question as
+asked: of the two, CRT has the higher win rate on the mixed tape (34.5% vs
+25.8%) and ICT on the mean-reverting one (47.7% vs 43.8%) — the ranking flips
+with the regime, and either would be a large downgrade on the shipped bot.
+
+### The one integration worth testing, also rejected
+
+A sweep-reversal *is* a fade rule, and the bot already has a fade side gated by
+the regime switch. So: does a CRT sweep beat RSI as that trigger?
+
+| fade trigger | trades | win | hits TP | median | losing |
+|---|---|---|---|---|---|
+| **RSI 35/65 (ships)** | 10,247 | **61.0%** | 39.6% | **$3,610** | **7/40** |
+| CRT sweep | 17,608 | 51.4% | 34.4% | $2,111 | 30/40 |
+| CRT sweep AND RSI | 7,616 | 61.2% | 38.1% | $3,624 | 10/40 |
+
+CRT alone is far worse. CRT+RSI is inside noise on money, worse on losing runs,
+and costs 26% of the trades — not adopted.
+
+### The caveat that matters most
+
+These tapes are fractional Brownian motion. **They contain no order flow, no
+resting stops and no stop-hunting** — which is the exact mechanism ICT and CRT
+claim to exploit. So this is not proof that either fails on real gold; it is
+that neither shows a measurable edge on the only markets this project can test,
+and a certified strategy is not replaced by an uncertified one. Testing the
+claim properly needs tick data with real liquidity events, which this project
+does not have.
