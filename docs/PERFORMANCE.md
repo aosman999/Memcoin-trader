@@ -2620,3 +2620,37 @@ Three defects were caught while testing this:
    the tests.
 3. Messages over Telegram's 4096-character limit are rejected outright, so long
    alerts are truncated rather than silently dropped.
+
+## CRT tested the way it is actually taught (Sep 2)
+
+The earlier CRT test used a 12-bar m5 range. That is not the method. The
+literature is explicit that the range should be a HIGHER timeframe — "1-hour or
+4-hour CRT for bias, then 5-minute or 15-minute charts for tighter entries".
+So: candle 1 is a completed h1/h4 candle whose high and low are the CRT levels,
+candle 2 sweeps one level and reclaims it, and the target is the opposite level.
+Entry on the m5 close that reclaims, stop beyond the sweep wick.
+
+A harness bug came first: the range candle was indexed one position behind the
+live candle, so the "still inside candle 2" test was false by construction and
+the model took **zero trades**. Both were fixed before any number below.
+
+40 unseen mixed-regime tapes, $3,000, 1% risk:
+
+| model | trades | win | expectancy | hits target | median | losing |
+|---|---|---|---|---|---|---|
+| **h1 range, m5 entry** | 12,443 | **51.6%** | +0.019 | 51.3% | $2,783 | 25/40 |
+| h1, RANDOM direction | 12,377 | **51.0%** | +0.014 | 50.8% | $2,780 | 28/40 |
+| **h4 range, m5 entry** | 3,919 | **35.2%** | +0.055 | 28.9% | $2,995 | 21/40 |
+| h4, RANDOM direction | 3,921 | **35.2%** | +0.073 | 28.9% | $3,000 | 20/40 |
+
+**The direction call adds nothing.** A coin flip pushed through the identical
+entry, stop and target machinery scores the same win rate to within half a
+point, the same expectancy, and the same median account — on h4 the coin flip
+is marginally *ahead*. The 51.6% win rate is not skill: it is trade geometry.
+The target is the opposite side of an h1 range, which is close, so any
+direction hits it about half the time.
+
+This is the fair version of the test and it agrees with the earlier one. Still
+not adopted, and still with the same caveat: fBm tapes contain no resting stops
+to hunt, which is the mechanism CRT claims. `GoldDataDump.cs` exists to settle
+it on real gold.
