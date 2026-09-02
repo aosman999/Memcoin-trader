@@ -2712,3 +2712,45 @@ same rules, and this project was one of them.
   specified than either model above.
 - **Holdout certification** on virgin seeds, then the m5/m15 timeframe check,
   before any of this goes near the shipped bot.
+
+## Liquidity Void / Vacuum Block — the third model that passes (Sep 2)
+
+From pages 71-91. A **liquidity void** is a one-sided range where displacement
+left a gap; a **vacuum block** is the same thing created by a volatility EVENT,
+and the notes name **NFP explicitly**. Price returns to fill it — "perfect
+delivery of price" — and the diagrams show the fill as the entry.
+
+Encoded as: a displacement bar leaves a three-bar gap (bar i-2's extreme does
+not overlap bar i's), price returns into it, entry in the direction of the
+displacement, stop beyond the void's far edge, target the opposing external
+liquidity. 30 unseen mixed tapes:
+
+| model | trades | win | expectancy | median | losing |
+|---|---|---|---|---|---|
+| **void fill, displacement >1.5x ATR** | 2,502 | **55.2%** | **+0.111** | $3,072 | 10/30 |
+| its matched random control | 2,941 | 38.1% | −0.166 | $2,589 | 27/30 |
+| void fill, any gap | 33,469 | **59.6%** | +0.068 | **$3,292** | 12/30 |
+| its matched random control | 31,430 | 49.6% | −0.001 | $1,934 | 25/30 |
+
+**+0.277R of separation from its control** — the widest of any model tested in
+this project. The displacement filter is what earns it: without it the edge
+falls to +0.069, though the far higher trade count makes more money overall.
+
+### Three models now clear the gate
+
+| model | mixed | M1 | M2 | vs control |
+|---|---|---|---|---|
+| MSS + mitigation | +0.111 (63.0%) | +0.129 (66.0%) | +0.124 (65.7%) | ~+0.10R |
+| Liquidity void (displacement) | +0.111 (55.2%) | — | — | **+0.277R** |
+| Orderblock | +0.095 (32.2%) | +0.056 | +0.033 | +0.10 / +0.11 / +0.11 |
+
+### The news bot is not a separate product any more
+
+The notes say NFP creates a vacuum block. GoldNewsWatch already knows when NFP,
+CPI and FOMC land. So the integration is motivated by the source rather than
+bolted on: the news agent supplies the event, and the void created by that
+event is the setup. That is the shape the combined bot should take.
+
+Still outstanding: the breaker block (pages 51-56, the most precisely specified
+of all), holdout certification on virgin seeds, and the Action Plan's Interest
+Rate Triad / USDX confirmation, which needs the correlated exports.
