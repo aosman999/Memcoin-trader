@@ -2654,3 +2654,61 @@ This is the fair version of the test and it agrees with the earlier one. Still
 not adopted, and still with the same caveat: fBm tapes contain no resting stops
 to hunt, which is the mechanism CRT claims. `GoldDataDump.cs` exists to settle
 it on real gold.
+
+## ICT Month 4, encoded from the owner's own notes — THE FIRST THING THAT PASSES (Sep 2)
+
+Everything before this was ICT and CRT as described by secondary sources. The
+owner supplied the actual mentorship notes, and encoding the rules *as written*
+changes the answer completely. (The notes are the owner's licensed copy and are
+marked not for distribution; only the mechanical rules are implemented here, no
+text or images are reproduced in this repo.)
+
+Two models were built and both were run against matched random controls that
+push a random direction through identical entry, stop and target machinery.
+
+**Model A — Orderblock.** Definition: the lowest DOWN-close candle with the
+largest open-to-close body near support. Validation: its high is traded through
+by a later candle. Entry: price RETURNS to that candle's high. Risk: the
+orderblock's low.
+
+**Model B — Market Structure Shift + mitigation block.** High A, a low, then a
+LOWER high B; price closes below the low between them (the structure shift);
+attention moves to that specific low; entry is the retest of it from beneath;
+stop beyond B; target the opposing external liquidity.
+
+### The worst-model gate — expectancy per trade, and win rate
+
+| market | MSS + mitigation | its random control | Orderblock | its random control |
+|---|---|---|---|---|
+| mixed regime | **+0.111 (63.0%)** | +0.017 (58.2%) | +0.095 (32.2%) | −0.008 (35.1%) |
+| model M1 | **+0.129 (66.0%)** | +0.014 (58.2%) | +0.056 (32.8%) | −0.050 (35.6%) |
+| model M2 | **+0.124 (65.7%)** | +0.026 (58.2%) | +0.033 (35.8%) | −0.073 (36.3%) |
+
+**MSS + mitigation beats its control on all three markets by about +0.10R, at a
+63-66% win rate.** That is the first construct in this entire investigation to
+clear the worst-model rule. Orderblock also clears it on all three but by less,
+and its edge shrinks as the market trends harder (+0.095 mixed, +0.033 on M2).
+
+Median account on the mixed tapes: MSS $3,291 with 5/30 losing runs, against
+$2,815 for its control. Orderblock $3,450 with 9/30, against $1,692.
+
+### Why this differs from every earlier ICT/CRT result here
+
+The earlier tests measured *my reading* of ICT and CRT from public write-ups,
+and they measured at or below random. These measure the documented rules, and
+they measure above it. The difference is not the market model — it is the
+same tapes. It is the encoding. That is a direct lesson about the discretion
+problem noted earlier: two people "backtesting ICT" are usually not testing the
+same rules, and this project was one of them.
+
+### Not yet done
+
+- **The confirmation step is missing.** The Action Plan is explicit: check the
+  Interest Rate Triad and USDX, and if there is no sign of large funds moving,
+  PASS the trade. That needs correlated instruments; `GoldDataDump.cs` now
+  exports them so this can be tested on real data.
+- **Breaker Block and Rejection Block (Turtle Soup)** are defined later in the
+  notes and are not yet encoded. The breaker in particular is more precisely
+  specified than either model above.
+- **Holdout certification** on virgin seeds, then the m5/m15 timeframe check,
+  before any of this goes near the shipped bot.

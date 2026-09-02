@@ -182,8 +182,21 @@ namespace cAlgo.API
         public void SendEmail(string from, string to, string subject, string body) { }
     }
 
+    public class MarketDataStub
+    {
+        public Bars GetBars(TimeFrame tf, string symbolName) { return null; }
+    }
+
+    public class SymbolsStub
+    {
+        public System.Collections.Generic.IEnumerable<string> Keys
+        { get { return new System.Collections.Generic.List<string>(); } }
+    }
+
     public abstract class Robot
     {
+        public MarketDataStub MarketData { get; set; }
+        public SymbolsStub Symbols { get; set; }
         public Notifications Notifications { get; set; }
         public Bars Bars { get; set; }
         public cAlgo.API.Internals.Symbol Symbol { get; set; }

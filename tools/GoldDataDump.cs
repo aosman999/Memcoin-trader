@@ -41,6 +41,96 @@ namespace cAlgo.Robots
         [Parameter("Most recent bars to write (0 = everything loaded)", DefaultValue = 0, MinValue = 0, Group = "Output")]
         public int MaxBars { get; set; }
 
+        // CORRELATED INSTRUMENTS, for SMT divergence.
+        //
+        // ICT's Month 4 material is intermarket: the signal is not a pattern in
+        // one chart, it is two correlated markets DISAGREEING at a swing. In the
+        // notes the interest-rate triad fails to confirm — the T-Bond prints a
+        // lower high while the 10-year and 5-year print higher highs — and the
+        // dollar moves immediately after.
+        //
+        // That is a genuinely different kind of signal from anything tested here
+        // so far, because it uses information from OUTSIDE the series being
+        // traded. Every pattern measured to date (CRT, sweeps, order blocks) is
+        // a re-reading of gold's own price, and a re-reading cannot add
+        // information that the price does not already contain. A second
+        // correlated market can.
+        //
+        // It also cannot be tested on this project's tapes at all: they are
+        // single-instrument. Hence this — export gold alongside its correlated
+        // markets, time-aligned, so the divergence can be measured on real data.
+        //
+        // Useful partners for gold: XAGUSD (silver, the classic precious-metals
+        // SMT pair) and a dollar proxy such as EURUSD or USDJPY. Bond futures
+        // are the notes' own example but retail FX brokers rarely carry them.
+        [Parameter("Also export these symbols (comma separated)", DefaultValue = "XAGUSD,EURUSD", Group = "Correlated")]
+        public string ExtraSymbols { get; set; }
+
+        // One file per correlated symbol, same timeframe, named alongside the
+        // main one. They are time-stamped, so alignment happens at analysis time
+        // rather than being baked in here where a bug would be invisible.
+        private void ExportCorrelated()
+        {
+            if (string.IsNullOrEmpty(ExtraSymbols)) return;
+            var names = ExtraSymbols.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var raw in names)
+            {
+                var name = raw.Trim();
+                if (name.Length == 0 || name == SymbolName) continue;
+                Bars b = null;
+                try { b = MarketData.GetBars(Bars.TimeFrame, name); }
+                catch (Exception ex)
+                {
+                    Print("{0}: could not load ({1}). Check the symbol name in your broker's list.",
+                          name, ex.GetType().Name);
+                    continue;
+                }
+                if (b == null || b.ClosePrices == null || b.ClosePrices.Count < 2)
+                {
+                    Print("{0}: no history available. Open a {0} chart once so cTrader downloads it, then re-run.", name);
+                    continue;
+                }
+                var path = SidecarPath(OutputPath, name);
+                var sb2 = new StringBuilder();
+                sb2.Append("time_utc,open,high,low,close,volume\n");
+                var cnt = 0;
+                for (var back = b.ClosePrices.Count - 1; back >= 0; back--)
+                {
+                    var h = b.HighPrices.Last(back);
+                    var l = b.LowPrices.Last(back);
+                    var c = b.ClosePrices.Last(back);
+                    var o = b.OpenPrices.Last(back);
+                    if (h < l || c > h || c < l || o > h || o < l) continue;
+                    sb2.Append(b.OpenTimes.Last(back).ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)).Append(',')
+                       .Append(o.ToString("R", CultureInfo.InvariantCulture)).Append(',')
+                       .Append(h.ToString("R", CultureInfo.InvariantCulture)).Append(',')
+                       .Append(l.ToString("R", CultureInfo.InvariantCulture)).Append(',')
+                       .Append(c.ToString("R", CultureInfo.InvariantCulture)).Append(',')
+                       .Append(b.TickVolumes.Last(back).ToString("R", CultureInfo.InvariantCulture)).Append('\n');
+                    cnt++;
+                }
+                try
+                {
+                    System.IO.File.WriteAllText(path, sb2.ToString());
+                    Print("Wrote {0} bars of {1} to {2}", cnt, name, path);
+                }
+                catch (Exception ex)
+                {
+                    Print("{0}: could not write {1} ({2}).", name, path, ex.GetType().Name);
+                }
+            }
+        }
+
+        // "…/xauusd_bars.csv" + "XAGUSD" -> "…/xauusd_bars_XAGUSD.csv"
+        public static string SidecarPath(string basePath, string symbol)
+        {
+            if (string.IsNullOrEmpty(basePath)) return symbol + ".csv";
+            var dot = basePath.LastIndexOf('.');
+            var slash = Math.Max(basePath.LastIndexOf('/'), basePath.LastIndexOf('\\'));
+            if (dot <= slash) return basePath + "_" + symbol + ".csv";
+            return basePath.Substring(0, dot) + "_" + symbol + basePath.Substring(dot);
+        }
+
         protected override void OnStart()
         {
             var n = Bars.ClosePrices.Count;
@@ -93,6 +183,7 @@ namespace cAlgo.Robots
             }
 
             Print("Wrote {0} bars of {1} {2} to {3}", written, SymbolName, Bars.TimeFrame, OutputPath);
+            ExportCorrelated();
             Print("Range: {0:yyyy-MM-dd HH:mm} to {1:yyyy-MM-dd HH:mm} UTC",
                   Bars.OpenTimes.Last(n - 1 - from), Bars.OpenTimes.Last(0));
             if (badHighLow > 0)
