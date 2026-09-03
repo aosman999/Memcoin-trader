@@ -28,9 +28,10 @@ else
     echo "SKIPPED — set PORT_TEST_LAB to the Strategy Lab scratch dir to run it."
 fi
 
-step "5/6  GoldNewsWatch: compile + behaviour tests + negative controls"
+step "5/6  GoldNewsWatch + GoldICT + GoldDataDump: compile + behaviour tests + negative controls"
 ./tools/verify/build-check.sh tools/GoldNewsWatch.cs || fail=1
 ./tools/verify/build-check.sh tools/GoldDataDump.cs || fail=1
+./tools/verify/build-check.sh tools/GoldICT.cs || fail=1
 ./tools/verify/news-test.sh || fail=1
 
 step "6/6  python unit tests"

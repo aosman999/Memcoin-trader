@@ -2754,3 +2754,104 @@ event is the setup. That is the shape the combined bot should take.
 Still outstanding: the breaker block (pages 51-56, the most precisely specified
 of all), holdout certification on virgin seeds, and the Action Plan's Interest
 Rate Triad / USDX confirmation, which needs the correlated exports.
+
+## ICT Month 4 — the breaker block, the liquidity pool raid, and a harness fault
+
+### A harness fault found first, which changes how the earlier rows read
+
+`lab.bars_for` chose its market model with `GoldSim if model_name == "M1" else
+GoldSim2`. Any name that was not *exactly* the string `M1` — a lowercase `m1`, a
+typo, or the `mixA` tag the mixed-tape installer writes into a different cache —
+silently returned **M2**. So a run labelled "m1 vs m2" could be M2 measured
+twice, and the mixed column could be M2 a third time.
+
+`bars_for` now raises on an unknown name. Every ICT model below was re-measured
+on correctly named tapes; the numbers moved, the conclusions did not.
+
+### The two remaining models from the notes
+
+**Breaker block** (pages 51-56). Low A, rally to swing high X, a decline that
+violates A, then price closes back above X. The up-close candle at X is the
+breaker; the return to it is the entry, stop beyond its far edge.
+
+| tape | trades | win | mean R | median equity | losing runs |
+|---|---|---|---|---|---|
+| breaker, mixed | 4,361 | 53.0% | **+0.130** | $3,181 | 7/30 |
+| its matched random control | 4,655 | 49.0% | +0.006 | $2,827 | 21/30 |
+| breaker, M1 | 4,371 | 53.5% | **+0.110** | $3,173 | 8/30 |
+| its matched random control | 4,635 | 49.9% | +0.024 | $2,877 | 21/30 |
+| breaker, M2 | 4,299 | 54.3% | **+0.094** | $3,111 | 12/30 |
+| its matched random control | 4,616 | 50.8% | +0.007 | $2,852 | 22/30 |
+
+Clears the worst-model gate on all three, and it is the steadiest of the four:
+no market takes it below +0.09R.
+
+**Liquidity pool raid** (pages 96-98) — buy limit at or just below the recent
+low, fixed 30-50 pip stop. **REJECTED.**
+
+| tape | trades | win | mean R | median equity | losing runs |
+|---|---|---|---|---|---|
+| pool raid, mixed | 16,002 | 36.7% | +0.020 | $2,609 | 25/30 |
+| its matched random control | 21,375 | 41.1% | +0.017 | $2,342 | 24/30 |
+| pool raid, M1 | 16,255 | 35.9% | **−0.044** | $2,068 | 28/30 |
+| its matched random control | 21,698 | 42.0% | +0.045 | $2,513 | 20/30 |
+| pool raid, M2 | 15,525 | 37.8% | **−0.041** | $2,067 | 30/30 |
+| its matched random control | 20,607 | 43.3% | +0.055 | $2,596 | 19/30 |
+
+Its own random control beats it on both single models. A stop sweep from 0.10%
+to 0.80% of price does not save it: at 0.10% the mean R is +0.137 but 26 of 30
+runs still finish red — the classic positive-R, negative-money signature. The
+reason is cost, not the idea. 30-50 pips is 0.3-0.5% on the pairs the notes
+trade and $3-$5 on gold; against $0.92 of round-trip spread and commission that
+gives away a fifth of the risk on every trade. This is a porting failure, not a
+refutation of the model on the instrument it was taught for.
+
+### The orderblock, re-measured
+
+| tape | trades | win | mean R | median equity | losing runs |
+|---|---|---|---|---|---|
+| orderblock, mixed | 19,476 | 32.5% | +0.107 | $3,597 | 7/30 |
+| orderblock, M1 | 19,772 | 32.6% | +0.045 | $2,829 | 16/30 |
+| orderblock, M2 | 18,265 | 35.4% | +0.024 | **$2,705** | **22/30** |
+
+Positive mean R on every tape and **negative money on M2**, where 22 of 30 runs
+finish below the $3,000 start. Fails the worst-model rule. Demoted from "clears
+the gate" to REJECTED as a shipping default.
+
+### The three that ship, run together through the shipped exits
+
+The models were measured one at a time. A bot running three is a different
+thing — they compete for the same position slots — so the combination was
+measured on its own, through the exits the bot actually runs (3 take profits
+sharing one stop, trail arming at +0.7R and following 0.7R behind, and the
+reach target learning only from the furthest rung).
+
+| tape | trades | win | mean R | median equity | losing runs |
+|---|---|---|---|---|---|
+| MSS + breaker + void, mixed | 25,770 | 61.6% | **+0.107** | $3,770 | 8/30 |
+| its matched random control | 9,162 | 53.6% | −0.039 | $2,562 | 30/30 |
+| MSS + breaker + void, M1 | 29,307 | 63.8% | **+0.183** | $4,989 | 1/30 |
+| its matched random control | 16,521 | 54.5% | +0.009 | $2,476 | 27/30 |
+| MSS + breaker + void, M2 | 27,738 | 64.0% | **+0.201** | $5,320 | 1/30 |
+| its matched random control | 16,857 | 55.1% | +0.009 | $2,535 | 27/30 |
+| all four (+ orderblock), mixed | 36,414 | 61.4% | +0.100 | $3,741 | 10/30 |
+| all four, M1 | 35,271 | 60.9% | +0.104 | $4,059 | 9/30 |
+| all four, M2 | 33,564 | 61.4% | +0.129 | $4,600 | 4/30 |
+
+The three together beat every one of them alone on every market. Adding the
+orderblock makes it worse on all three — it fires 30,000+ setups against the
+others' 5,000-10,000 and crowds them out of the position slots. It stays off.
+
+**ADOPTED:** `tools/GoldICT.cs` — MSS + mitigation, breaker, and liquidity void,
+through the ladder/trail/reach exits, with the news agent inside it.
+
+### What is still missing, and it is not small
+
+None of this includes the notes' Action Plan confirmation step: check the
+Interest Rate Triad (ZB/ZN/ZF) and USDX, and PASS when there is no obvious
+indication. A single-instrument tape cannot carry it. Everything above is the
+ENTRY MODEL ONLY, and the notes are explicit that the entry model without the
+confirmation is not the method. These are floors, not verdicts.
+
+Holdout certification on virgin seeds is also still outstanding — every number
+here is from seeds 1-30, which have now been used for selection.
