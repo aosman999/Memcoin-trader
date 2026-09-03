@@ -513,10 +513,15 @@ namespace cAlgo.Robots
 
             Print("GoldICT started | {0} {1} | account {2} (DEMO) | equity {3:F2}",
                   SymbolName, Bars.TimeFrame, Account.Number, Account.Equity);
-            Print("Models: MSS {0} | breaker {1} | void {2} | orderblock {3}",
-                  UseMss ? "ON" : "off", UseBreaker ? "ON" : "off",
-                  UseVoid ? "ON" : "off",
-                  UseOrderblock ? "ON (REJECTED — it loses money on the worse market model)" : "off");
+            if (UseTopDown)
+                Print("Entry model: TOP-DOWN only. The single-chart models (MSS, breaker, void) " +
+                      "are NOT running — top-down replaces them rather than adding to them.");
+            else
+                Print("Models: MSS {0} | breaker {1} | void {2} | orderblock {3}",
+                      UseMss ? "ON" : "off", UseBreaker ? "ON" : "off",
+                      UseVoid ? "ON" : "off",
+                      UseOrderblock ? "ON (REJECTED — it loses money on the worse market model)" : "off");
+            if (!UseTopDown)
             Print("Measured together on 30 seeds x 3 markets, through these exits: " +
                   "+0.107 / +0.183 / +0.201 R on mixed / M1 / M2, 62-64% win, " +
                   "8 / 1 / 1 of 30 runs red. Matched random controls through the SAME " +
@@ -533,6 +538,15 @@ namespace cAlgo.Robots
                                     "(needs {1}, uses {2:F1}x until then), floored {3:F1}x capped {4:F1}x",
                                     ReachPercentile, ReachMinTrades, ReachWarmupRR, ReachMinRR, TargetMaxRR)
                     : string.Format("fixed {0:F1}x the stop", ReachWarmupRR));
+            if (Math.Abs(RiskPercent - 1.0) > 0.001)
+                Print("WARNING: risk is {0:F2}% per signal. EVERY measured number in this bot was " +
+                      "produced at 1.00%. With {1} concurrent signals that is {2:F1}% of equity at " +
+                      "risk at once, the day guard trips after {3} losses, and the certified " +
+                      "results do not describe what this will do. cTrader keeps the parameters " +
+                      "saved on an existing instance, so this is usually a value carried over " +
+                      "from a previous bot rather than a choice.",
+                      RiskPercent, MaxConcurrentSignals, RiskPercent * MaxConcurrentSignals,
+                      Math.Max(1, (int)Math.Ceiling(DayGuardPercent / Math.Max(0.01, RiskPercent))));
             Print("Risk: {0:F2}% per signal | max {1} signals ({2} positions) | day guard -{3:F0}% | " +
                   "session {4:00}:00-{5:00}:00 UTC",
                   RiskPercent, MaxConcurrentSignals, MaxConcurrentSignals * TakeProfitCount,
@@ -540,6 +554,7 @@ namespace cAlgo.Robots
             Print("NOT MODELLED: the notes' Interest Rate Triad / USDX confirmation step. " +
                   "This is the entry model only, and the notes say the entry model without " +
                   "the confirmation is not the method. Treat the numbers as a floor.");
+            if (!UseTopDown)
             Print("SINGLE TIMEFRAME on purpose. Higher-timeframe bias filtering was built and " +
                   "measured (H1 and H4, with and without premium/discount) against this exact " +
                   "configuration: mean R went +0.440 -> +0.462 while trade count fell 71%. " +
