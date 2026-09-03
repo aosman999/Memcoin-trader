@@ -3164,3 +3164,53 @@ with no slippage, no size ceiling and no market impact. The top-down model's
 ~4% per 150 days at 1% risk is a figure a real account could produce. Where the
 two disagree, rank by mean R and by whether the trade frequency is livable —
 never by the equity column.
+
+## The zone count was throttling the model (owner caught this)
+
+The owner pushed back that ICT trades once or twice a DAY, not once every ten.
+He was right, and it was an encoding fault, not a property of the method.
+
+**Fault 1 — one zone instead of many.** The Month 4 notes define the bullish
+orderblock as "the LOWEST candle with a down close that has the most range
+between open and close". Taken literally that is exactly ONE zone per direction
+on the entire chart. In practice a chart carries several arrays at once — every
+down-close candle whose high is later traded through — so price is near one many
+times a day rather than occasionally.
+
+**Fault 2 — everything demanded on one bar.** Price had to CLOSE inside the zone
+on the very bar that also showed the displacement and the structure shift. But
+the displacement IS the reaction away from the zone; by the time it prints, the
+close is usually already outside. That combination barely exists.
+
+| configuration | signals/day (mixed / M2) | mean R | median equity |
+|---|---|---|---|
+| 1 zone, same bar (notes-literal) | 0.03 / 0.09 | +0.790 / +0.799 | $3,106 / $3,279 |
+| **8 zones, 16-bar window** | **0.13 / 0.37** | +0.688 / +0.723 | **$3,453 / $4,504** |
+| 8 zones, no structure shift | 0.22 / 0.60 | +0.627 / +0.685 | $3,679 / $5,336 |
+| 16 zones, 4 slots, short gap | 0.14 / 0.41 | +0.698 / +0.703 | $3,459 / $4,566 |
+| matched random (8 zones) | 0.17 / 0.35 | −0.183 / −0.002 | $2,624 / $2,786 |
+
+Four times the trades and MORE money for −0.08 R, with zero losing runs either
+way. Raising opportunity without materially lowering quality is the signature of
+a throttle rather than a filter. **ADOPTED: MaxZones 8, ZoneTouchBars 16.**
+MaxZones=1 restores the notes' literal reading.
+
+### Holdout, seeds 401-430, never used for anything
+
+| tape | signals/day | trades | win | mean R | losing |
+|---|---|---|---|---|---|
+| mixed | 0.13 | 1,803 | 76.0% | **+0.637** | 1/30 |
+| its matched random | 0.15 | 2,037 | 36.7% | −0.188 | 25/30 |
+| M1 | 0.25 | 3,360 | 77.8% | **+0.658** | 0/30 |
+| its matched random | 0.26 | 3,453 | 43.7% | −0.077 | 25/30 |
+| M2 | 0.41 | 5,598 | 79.2% | **+0.704** | 0/30 |
+| its matched random | 0.39 | 5,325 | 48.2% | +0.040 | 21/30 |
+
+**CERTIFIED.** Note the control trades at the SAME rate and loses — the edge is
+in the direction, not in the number of opportunities taken.
+
+It **saturates**: beyond 8 zones nothing changes, and even fully loosened this
+tops out near one signal every 2-3 days rather than 1-2 a day. The binding
+constraint is the displacement filter, not the zones. So the frequency gap was
+real and mostly my fault, but not entirely — closing it the rest of the way
+would mean relaxing displacement, which does cost quality.

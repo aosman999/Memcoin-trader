@@ -243,6 +243,7 @@ public static class BridgeSim
         b.UseTopDown = false; b.ZoneTimeFrame = "Hour4"; b.ZoneLookback = 24;
         b.ZoneValidWithin = 12; b.ZoneMaxAge = 40; b.RequireShift = true;
         b.RequireFvg = false; b.KillzonesOnly = false;
+        b.MaxZones = 8; b.ZoneTouchBars = 16;
         b.Label = "GoldICT"; b.Verbose = false;
         b.FeedHeartbeatMinutes = 0;              // heartbeats are not the subject
         b.PollMinutes = 3; b.AlertThreshold = 3.0;

@@ -165,6 +165,24 @@ namespace cAlgo.Robots
         [Parameter("Forget a zone after (higher-chart bars)", DefaultValue = 40, MinValue = 2, MaxValue = 500, Group = "Top-down")]
         public int ZoneMaxAge { get; set; }
 
+        // The owner's notes define the bullish orderblock as "the LOWEST candle
+        // with a down close that has the most range between open and close".
+        // Taken literally that is ONE zone per direction on the whole chart,
+        // and it is why the first build of this model traded once a fortnight.
+        // In practice a chart carries several arrays at once -- every down-close
+        // candle whose high is later traded through -- and price is near one
+        // several times a day. Marking 8 instead of 1 quadrupled the trades at
+        // the same edge, which is the tell that the count was throttling
+        // OPPORTUNITY and not filtering for QUALITY.
+        [Parameter("How many zones to mark (1 = the notes' literal reading)", DefaultValue = 8, MinValue = 1, MaxValue = 32, Group = "Top-down")]
+        public int MaxZones { get; set; }
+
+        // The displacement IS the reaction away from the zone, so by the time
+        // it prints the close is usually already outside it. Requiring both on
+        // one bar demanded a combination that barely exists.
+        [Parameter("Zone stays live for N bars after price leaves it", DefaultValue = 16, MinValue = 0, MaxValue = 200, Group = "Top-down")]
+        public int ZoneTouchBars { get; set; }
+
         [Parameter("Require a structure shift inside the zone", DefaultValue = true, Group = "Top-down")]
         public bool RequireShift { get; set; }
 
@@ -405,6 +423,7 @@ namespace cAlgo.Robots
             public double High;
             public int BornIndex;
             public double Liquidity;
+            public int LastTouch;
         }
 
         private AverageTrueRange _atr;
@@ -815,41 +834,51 @@ namespace cAlgo.Robots
                                   (z.Direction > 0 ? _zoneBars.ClosePrices[j] < z.Low
                                                    : _zoneBars.ClosePrices[j] > z.High));
 
-            var k = ZoneOrderblock(j, 1);
-            if (k >= 0 && ZoneValidated(k, j, 1) && !_zones.Any(z => z.Direction > 0 && z.BornIndex == k))
-                _zones.Add(new Zone
+            foreach (var direction in new[] { 1, -1 })
+                foreach (var k in ZoneOrderblocks(j, direction))
                 {
-                    Direction = 1, Low = _zoneBars.LowPrices[k], High = _zoneBars.HighPrices[k],
-                    BornIndex = k, Liquidity = ZoneExtreme(j, true),
-                });
-            k = ZoneOrderblock(j, -1);
-            if (k >= 0 && ZoneValidated(k, j, -1) && !_zones.Any(z => z.Direction < 0 && z.BornIndex == k))
-                _zones.Add(new Zone
-                {
-                    Direction = -1, Low = _zoneBars.LowPrices[k], High = _zoneBars.HighPrices[k],
-                    BornIndex = k, Liquidity = ZoneExtreme(j, false),
-                });
+                    if (_zones.Any(z => z.Direction == direction && z.BornIndex == k))
+                        continue;
+                    _zones.Add(new Zone
+                    {
+                        Direction = direction,
+                        Low = _zoneBars.LowPrices[k],
+                        High = _zoneBars.HighPrices[k],
+                        BornIndex = k,
+                        Liquidity = ZoneExtreme(j, direction > 0),
+                        LastTouch = int.MinValue,
+                    });
+                }
         }
 
-        private int ZoneOrderblock(int j, int direction)
+        // Every candle in the lookback that qualifies as a PD array: the right
+        // close direction, and its edge later traded through. With MaxZones at 1
+        // this collapses to the notes' literal single "lowest" candle, so the
+        // stricter reading stays one parameter away.
+        private List<int> ZoneOrderblocks(int j, int direction)
         {
-            var best = -1;
-            var bestEdge = direction > 0 ? double.MaxValue : double.MinValue;
-            var bestBody = -1.0;
+            var found = new List<int>();
             for (var k = Math.Max(0, j - ZoneLookback); k < j; k++)
             {
                 var up = _zoneBars.ClosePrices[k] > _zoneBars.OpenPrices[k];
                 if (direction > 0 ? up : !up)
-                    continue;                      // bullish zone wants a DOWN close
-                var body = Math.Abs(_zoneBars.ClosePrices[k] - _zoneBars.OpenPrices[k]);
-                var edge = direction > 0 ? _zoneBars.LowPrices[k] : _zoneBars.HighPrices[k];
-                var better = direction > 0 ? edge < bestEdge : edge > bestEdge;
-                if (better || (edge == bestEdge && body > bestBody))
-                {
-                    bestEdge = edge; bestBody = body; best = k;
-                }
+                    continue;                      // a bullish zone wants a DOWN close
+                if (ZoneValidated(k, j, direction))
+                    found.Add(k);
             }
-            return best;
+            if (found.Count == 0)
+                return found;
+            if (MaxZones <= 1)
+            {
+                var edge = direction > 0
+                    ? found.Min(k => _zoneBars.LowPrices[k])
+                    : found.Max(k => _zoneBars.HighPrices[k]);
+                var tied = found.Where(k => (direction > 0 ? _zoneBars.LowPrices[k]
+                                                           : _zoneBars.HighPrices[k]) == edge);
+                return new List<int> { tied.OrderByDescending(
+                    k => Math.Abs(_zoneBars.OpenPrices[k] - _zoneBars.ClosePrices[k])).First() };
+            }
+            return found.Skip(Math.Max(0, found.Count - MaxZones)).ToList();
         }
 
         private bool ZoneValidated(int k, int j, int direction)
@@ -897,8 +926,12 @@ namespace cAlgo.Robots
 
             foreach (var z in _zones.ToList())
             {
-                if (close < z.Low || close > z.High)
-                    continue;                                  // not in the zone
+                var inside = close >= z.Low && close <= z.High;
+                if (inside)
+                    z.LastTouch = i;
+                if (!inside && (ZoneTouchBars <= 0 || z.LastTouch == int.MinValue ||
+                                i - z.LastTouch > ZoneTouchBars))
+                    continue;                                  // not at the zone
                 var d = z.Direction;
 
                 if (RequireShift)
