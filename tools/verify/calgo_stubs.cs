@@ -109,9 +109,14 @@ namespace cAlgo.API
 
     public class HistoricalTrade
     {
+        public int PositionId { get; set; }
         public string Label { get; set; }
         public string SymbolName { get; set; }
+        public TradeType TradeType { get; set; }
+        public DateTime EntryTime { get; set; }
         public DateTime ClosingTime { get; set; }
+        public double EntryPrice { get; set; }
+        public double ClosingPrice { get; set; }
         public double NetProfit { get; set; }
     }
 
@@ -152,6 +157,7 @@ namespace cAlgo.API
             public double Ask { get; set; }
             public double Bid { get; set; }
             public double PipSize { get; set; }
+            public double TickSize { get; set; }
             public double VolumeInUnitsMin { get; set; }
             public double NormalizeVolumeInUnits(double v, RoundingMode m) { return v; }
         }

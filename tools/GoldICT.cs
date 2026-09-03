@@ -312,6 +312,25 @@ namespace cAlgo.Robots
         [Parameter("Telegram: alert on every trade too", DefaultValue = true, Group = "Telegram")]
         public bool TelegramTrades { get; set; }
 
+        // ======================= SIGNAL FEED ===============================
+        // Every setup, entry, take profit and stop this bot acts on is appended
+        // to a file as one JSON object per line. tools/goldsignals.py tails that
+        // file and posts it to a Telegram channel.
+        //
+        // The channel is therefore fed BY THIS BOT, not by a second copy of the
+        // strategy running somewhere else. There is exactly one place the rules
+        // live. If the channel and cTrader ever disagree, it is a bug in the
+        // transport, not two engines that drifted apart — which is the whole
+        // reason it is built this way.
+        [Parameter("Write the signal feed", DefaultValue = true, Group = "Signal feed")]
+        public bool EmitSignalFeed { get; set; }
+
+        [Parameter("Signal feed file (blank = ~/GoldICT/signals.jsonl)", DefaultValue = "", Group = "Signal feed")]
+        public string SignalFeedPath { get; set; }
+
+        [Parameter("Heartbeat into the feed every N minutes (0 = off)", DefaultValue = 60, MinValue = 0, MaxValue = 1440, Group = "Signal feed")]
+        public int FeedHeartbeatMinutes { get; set; }
+
         [Parameter("Log label", DefaultValue = "GoldICT", Group = "Diagnostics")]
         public string Label { get; set; }
 
@@ -339,6 +358,25 @@ namespace cAlgo.Robots
         private readonly HashSet<int> _reachEligible = new HashSet<int>();
         private readonly List<double> _reachHistory = new List<double>();
         private readonly Dictionary<int, DateTime> _lastEntry = new Dictionary<int, DateTime>();
+        // one row per OPEN position: which signal it belongs to and which rung
+        private sealed class Rung
+        {
+            public long SignalId;
+            public int Index;              // 1-based: TP1, TP2, TP3
+            public int Count;
+            public double TakeProfit;
+            public double StopLoss;
+            public double Entry;
+            public int Direction;
+            public string Model;
+        }
+
+        private readonly Dictionary<int, Rung> _rungs = new Dictionary<int, Rung>();
+        private long _signalSeq;
+        private string _feedPath;
+        private DateTime _lastFeedBeat = DateTime.MinValue;
+        private bool _feedBroken;
+
         private DateTime _dayStart = DateTime.MinValue;
         private double _dayStartEquity;
         private bool _dayBlocked;
@@ -404,6 +442,13 @@ namespace cAlgo.Robots
                       "The structure lookbacks are in BARS, so they mean a different span here.",
                       Bars.TimeFrame);
 
+            OpenFeed();
+            Emit("start", "equity", N(Account.Equity),
+                 "models", Q(string.Format("{0}{1}{2}{3}",
+                     UseMss ? "MSS " : "", UseBreaker ? "BREAKER " : "",
+                     UseVoid ? "VOID " : "", UseOrderblock ? "OB " : "").Trim()),
+                 "timeframe", Q(Bars.TimeFrame.ToString()));
+
             AuditExistingPositions();
 
             if (UseNews)
@@ -462,6 +507,7 @@ namespace cAlgo.Robots
                     PollNewsIfDue();
                 }
                 FillPendingSetups();
+                FeedHeartbeat();
             }
             catch (Exception ex)
             {
@@ -515,6 +561,8 @@ namespace cAlgo.Robots
                                         "their stops.", down, _dayStartEquity, Account.Equity);
                 Print(msg);
                 Telegram("⛔ " + msg);
+                Emit("guard", "equity", N(Account.Equity),
+                     "start_equity", N(_dayStartEquity), "detail", Q(msg));
             }
             return true;
         }
@@ -870,6 +918,17 @@ namespace cAlgo.Robots
             if (Verbose)
                 Print("SETUP {0} {1} — wait for {2:F2}, stop {3:F2} away | {4}",
                       model, direction > 0 ? "BUY" : "SELL", entry, sd, detail);
+
+            string projected;
+            var tpGuess = TargetDistance(sd, out projected);
+            Emit("setup",
+                 "model", Q(model),
+                 "side", Q(direction > 0 ? "BUY" : "SELL"),
+                 "level", N(entry),
+                 "price", N(price),
+                 "stop", N(entry - direction * sd),
+                 "projected_tp", N(entry + direction * tpGuess * LadderFarMultiple),
+                 "detail", Q(detail));
         }
 
         private int BarMinutes()
@@ -953,6 +1012,10 @@ namespace cAlgo.Robots
 
             var opened = 0;
             var levels = new List<string>();
+            var tpPrices = new List<double>();
+            var ids = new List<int>();
+            var signalId = ++_signalSeq;
+            var stopPrice = price - s.Direction * stopDist;
             for (var k = 0; k < parts; k++)
             {
                 var frac = parts == 1
@@ -979,6 +1042,24 @@ namespace cAlgo.Robots
                 if (k == parts - 1 && res.Position != null)
                     _reachEligible.Add(res.Position.Id);
 
+                var tpPrice = price + s.Direction * dist;
+                tpPrices.Add(tpPrice);
+                if (res.Position != null)
+                {
+                    ids.Add(res.Position.Id);
+                    _rungs[res.Position.Id] = new Rung
+                    {
+                        SignalId = signalId,
+                        Index = k + 1,
+                        Count = parts,
+                        TakeProfit = tpPrice,
+                        StopLoss = stopPrice,
+                        Entry = price,
+                        Direction = s.Direction,
+                        Model = s.Model
+                    };
+                }
+
                 levels.Add(string.Format("TP{0} {1:F2}", k + 1, price + s.Direction * dist));
                 Print("{0} {1} {2} units @ {3:F2} | TP {4}/{5} at {6:F2} (+{7:F2} = {8:F2}:1, {9}) | " +
                       "stop {10:F2} (-{11:F2}) | risks {12:F2} = {13:F2}% of equity | {14}",
@@ -991,6 +1072,20 @@ namespace cAlgo.Robots
             if (opened > 0)
             {
                 _tradesToday++;
+                var tpJson = "[" + string.Join(",", tpPrices.Select(N).ToArray()) + "]";
+                var idJson = "[" + string.Join(",", ids.Select(x => x.ToString()).ToArray()) + "]";
+                Emit("entry",
+                     "signal", signalId.ToString(),
+                     "model", Q(s.Model),
+                     "side", Q(s.Direction > 0 ? "BUY" : "SELL"),
+                     "entry", N(price),
+                     "level", N(s.Entry),
+                     "stop", N(stopPrice),
+                     "tps", tpJson,
+                     "ids", idJson,
+                     "target_from", Q(how),
+                     "risk_pct", RiskPercent.ToString("F2", System.Globalization.CultureInfo.InvariantCulture),
+                     "detail", Q(s.Detail));
                 if (TelegramTrades)
                     Telegram(string.Format(
                         "{0} {1} XAUUSD @ {2:F2}\n{3}\nstop {4:F2}\n{5}\n({6})",
@@ -1069,6 +1164,17 @@ namespace cAlgo.Robots
         private void HarvestClosedTrades()
         {
             var live = new HashSet<int>(OwnPositions().Select(p => p.Id));
+
+            // Report the close BEFORE the reach bookkeeping drops the row, and
+            // from the same "id we were tracking is gone" signal the reach rule
+            // uses — so the channel and the learning can never disagree about
+            // which trades closed.
+            foreach (var id in _rungs.Keys.Where(k => !live.Contains(k)).ToList())
+            {
+                EmitClose(id, _rungs[id]);
+                _rungs.Remove(id);
+            }
+
             foreach (var id in _peakR.Keys.Where(k => !live.Contains(k)).ToList())
             {
                 var reached = _peakR[id];
@@ -1672,6 +1778,9 @@ namespace cAlgo.Robots
                     ? "no clear direction"
                     : (s.Direction > 0 ? "leans gold UP" : "leans gold DOWN");
                 Print("NEWS [{0}] {1:F1} — {2} | {3}", s.Source, s.Impact, s.Title, lean);
+                Emit("news", "source", Q(s.Source), "headline", Q(s.Title),
+                     "impact", s.Impact.ToString("F1", System.Globalization.CultureInfo.InvariantCulture),
+                     "lean", Q(lean));
                 Telegram(string.Format("📰 {0}\n{1}\nimpact {2:F1}, {3}\n(headlines are NOT a " +
                                        "measured edge here — the bot will not trade this on its own)",
                                        s.Source, s.Title, s.Impact, lean));
@@ -1679,6 +1788,8 @@ namespace cAlgo.Robots
             if (UseVacuumWindow && loudest >= AlertThreshold)
             {
                 _vacuumUntil = now.AddMinutes(VacuumWindowMinutes);
+                Emit("vacuum", "until", Q(_vacuumUntil.ToString("yyyy-MM-ddTHH:mm:ssZ")),
+                     "needs_atr", VacuumDisplacementAtr.ToString("F1", System.Globalization.CultureInfo.InvariantCulture));
                 Print("VACUUM WINDOW armed until {0:HH:mm} UTC — a displacement bar now only " +
                       "needs {1:F1}x ATR to count as a void (normally {2:F1}x). The notes name " +
                       "events as what creates these.",
@@ -1753,6 +1864,145 @@ namespace cAlgo.Robots
             }
         }
 
+        // ======================= THE SIGNAL FEED ===========================
+        // One JSON object per line, appended, flushed, closed. Never buffered
+        // across ticks: if cTrader dies mid-session the channel must still have
+        // every event up to the last one, not the last few sitting in a buffer.
+        private void OpenFeed()
+        {
+            // The path is resolved even when the feed is switched off. Keeping
+            // the switch in exactly ONE place -- Emit() -- means the test that
+            // proves the switch works is actually testing the switch, and not a
+            // null path throwing by luck somewhere downstream.
+            try
+            {
+                _feedPath = SignalFeedPath;
+                if (string.IsNullOrEmpty(_feedPath))
+                {
+                    var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                    _feedPath = System.IO.Path.Combine(home, "GoldICT", "signals.jsonl");
+                }
+                var dir = System.IO.Path.GetDirectoryName(_feedPath);
+                if (!string.IsNullOrEmpty(dir) && !System.IO.Directory.Exists(dir))
+                    System.IO.Directory.CreateDirectory(dir);
+                if (EmitSignalFeed)
+                    Print("Signal feed: {0}", _feedPath);
+                else
+                    Print("Signal feed: OFF (nothing will be written to {0})", _feedPath);
+            }
+            catch (Exception ex)
+            {
+                _feedBroken = true;
+                Print("Signal feed DISABLED: cannot open {0} — {1}. Trading is unaffected.",
+                      _feedPath, ex.Message);
+            }
+        }
+
+        private static string Esc(string s)
+        {
+            if (s == null)
+                return "";
+            var sb = new System.Text.StringBuilder(s.Length + 8);
+            foreach (var ch in s)
+            {
+                if (ch == '"' || ch == '\\') { sb.Append('\\').Append(ch); }
+                else if (ch == '\n') sb.Append("\\n");
+                else if (ch == '\r') sb.Append("\\r");
+                else if (ch == '\t') sb.Append("\\t");
+                else if (ch < ' ') sb.AppendFormat("\\u{0:x4}", (int)ch);
+                else sb.Append(ch);
+            }
+            return sb.ToString();
+        }
+
+        // Values are pre-rendered by the caller: a string starts with a quote,
+        // a number or array does not. Keeps the emitter free of type guessing.
+        private void Emit(string type, params string[] kv)
+        {
+            if (!EmitSignalFeed || _feedBroken)
+                return;
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                sb.Append("{\"t\":\"").Append(Esc(type)).Append("\"");
+                sb.Append(",\"utc\":\"").Append(Server.TimeInUtc.ToString("yyyy-MM-ddTHH:mm:ssZ")).Append("\"");
+                sb.Append(",\"symbol\":\"").Append(Esc(SymbolName)).Append("\"");
+                sb.Append(",\"bot\":\"").Append(Esc(Label)).Append("\"");
+                sb.Append(",\"demo\":").Append(Account.IsLive ? "false" : "true");
+                for (var i = 0; i + 1 < kv.Length; i += 2)
+                    sb.Append(",\"").Append(kv[i]).Append("\":").Append(kv[i + 1]);
+                sb.Append("}");
+                System.IO.File.AppendAllText(_feedPath, sb.ToString() + "\n");
+            }
+            catch (Exception ex)
+            {
+                _feedBroken = true;
+                Print("Signal feed DISABLED after a write error: {0}. Trading is unaffected.",
+                      ex.Message);
+            }
+        }
+
+        private static string Q(string s) { return "\"" + Esc(s) + "\""; }
+        private static string N(double v) { return v.ToString("F2", System.Globalization.CultureInfo.InvariantCulture); }
+
+        private void FeedHeartbeat()
+        {
+            if (!EmitSignalFeed || FeedHeartbeatMinutes <= 0)
+                return;
+            var now = Server.TimeInUtc;
+            if ((now - _lastFeedBeat).TotalMinutes < FeedHeartbeatMinutes)
+                return;
+            _lastFeedBeat = now;
+            string evt;
+            var blocked = UseNews && BlockEntriesOnNews && InNewsWindow(now, out evt);
+            Emit("heartbeat",
+                 "price", N(Symbol.Bid),
+                 "open_signals", OpenSignals().ToString(),
+                 "waiting_setups", _pending.Count.ToString(),
+                 "trades_today", _tradesToday.ToString(),
+                 "learned", _reachHistory.Count.ToString(),
+                 "day_guard", _dayBlocked ? "true" : "false",
+                 "news_window", blocked ? "true" : "false",
+                 "vacuum_armed", (UseVacuumWindow && now <= _vacuumUntil) ? "true" : "false",
+                 "session_open", (now.Hour >= SessionFromHour && now.Hour < SessionToHour) ? "true" : "false");
+        }
+
+        // A position vanished. History says what price it actually closed at, so
+        // the feed can say WHICH take profit filled rather than guessing.
+        private void EmitClose(int id, Rung r)
+        {
+            double closePrice = 0.0;
+            double profit = 0.0;
+            var known = false;
+            foreach (var h in History)
+            {
+                if (h.PositionId != id)
+                    continue;
+                closePrice = h.ClosingPrice;
+                profit = h.NetProfit;
+                known = true;
+                break;
+            }
+            if (!known)
+                closePrice = r.Direction > 0 ? Symbol.Bid : Symbol.Ask;
+
+            // Reached the take profit level, in the direction of the trade.
+            var hitTp = r.Direction > 0 ? closePrice >= r.TakeProfit - Symbol.TickSize
+                                        : closePrice <= r.TakeProfit + Symbol.TickSize;
+            var reason = hitTp ? "tp" : (profit < 0 ? "sl" : "close");
+            Emit(reason,
+                 "signal", r.SignalId.ToString(),
+                 "model", Q(r.Model),
+                 "side", Q(r.Direction > 0 ? "BUY" : "SELL"),
+                 "rung", r.Index.ToString(),
+                 "of", r.Count.ToString(),
+                 "entry", N(r.Entry),
+                 "price", N(closePrice),
+                 "level", N(hitTp ? r.TakeProfit : r.StopLoss),
+                 "profit", N(profit),
+                 "known", known ? "true" : "false");
+        }
+
         protected override void OnStop()
         {
             if (_stopped)
@@ -1761,6 +2011,7 @@ namespace cAlgo.Robots
                   "reach rule has learned from {3} closed trades | news: {4}",
                   Account.Equity, _tradesToday, _pending.Count, _reachHistory.Count,
                   UseNews ? FeedStatus() : "off");
+            Emit("stop", "equity", N(Account.Equity), "trades_today", _tradesToday.ToString());
         }
     }
 }

@@ -214,7 +214,7 @@ public static class BotSim
             p.StopLoss = sl; p.TakeProfit = tp;
             return new TradeResult { IsSuccessful = true, Position = p };
         };
-        bot.OnClose = p => { Settle(w, p, w.C[w.S.Cursor]); };
+        bot.OnClose = p => { Settle(w, p, w.C[w.S.Cursor]); return new TradeResult { IsSuccessful = true, Position = p }; };
         return w;
     }
 
@@ -228,7 +228,9 @@ public static class BotSim
         w.Acc.Equity = w.Acc.Balance;
         w.Bot.History.Items.Add(new HistoricalTrade
         {
-            Label = p.Label, SymbolName = p.SymbolName,
+            PositionId = p.Id, Label = p.Label, SymbolName = p.SymbolName,
+            TradeType = p.TradeType, EntryTime = p.EntryTime,
+            EntryPrice = p.EntryPrice, ClosingPrice = px,
             ClosingTime = w.Srv.TimeInUtc, NetProfit = p.NetProfit,
         });
         w.Bot.Positions.Items.Remove(p);

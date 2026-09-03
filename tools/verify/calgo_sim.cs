@@ -113,9 +113,11 @@ namespace cAlgo.API
 
     public class HistoricalTrade
     {
+        public int PositionId;
         public string Label, SymbolName;
-        public DateTime ClosingTime;
-        public double NetProfit;
+        public TradeType TradeType;
+        public DateTime EntryTime, ClosingTime;
+        public double EntryPrice, ClosingPrice, NetProfit;
     }
 
     public class TradeResult
@@ -144,7 +146,8 @@ namespace cAlgo.API.Internals
 {
     public class Symbol
     {
-        public double Ask, Bid, PipSize = 0.01, VolumeInUnitsMin = 1.0, VolumeInUnitsStep = 1.0;
+        public double Ask, Bid, PipSize = 0.01, TickSize = 0.01,
+                      VolumeInUnitsMin = 1.0, VolumeInUnitsStep = 1.0;
         public double NormalizeVolumeInUnits(double units, RoundingMode m)
         {
             if (double.IsNaN(units) || double.IsInfinity(units)) return VolumeInUnitsMin;
@@ -202,7 +205,7 @@ namespace cAlgo.API
         public readonly List<string> Log = new List<string>();
         public Func<TradeType, string, double, string, double, double, TradeResult> OnOrder;
         public Func<Position, double?, double?, TradeResult> OnModify;
-        public Action<Position> OnClose;
+        public Func<Position, TradeResult> OnClose;
 
         protected virtual void OnStart() { }
         protected virtual void OnBar() { }
@@ -230,7 +233,7 @@ namespace cAlgo.API
             return OnOrder(side, sym, units, label, stopPips, tpPips);
         }
         public TradeResult ModifyPosition(Position p, double? sl, double? tp) { return OnModify(p, sl, tp); }
-        public void ClosePosition(Position p) { OnClose(p); }
-        public void ClosePosition(Position p, double volume) { OnClose(p); }
+        public TradeResult ClosePosition(Position p) { return OnClose(p); }
+        public TradeResult ClosePosition(Position p, double volume) { return OnClose(p); }
     }
 }

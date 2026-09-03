@@ -1,0 +1,206 @@
+"""Tests for the Telegram signal bot.
+
+The bot's whole job is to say what cTrader did, in one exact format, without
+ever leaking the bot token. So that is what these check: the shape of the
+message, that the feed is read exactly once, and that the credential cannot
+escape. tools/verify/signals-negcontrol.py breaks each of these on purpose and
+requires this file to notice.
+"""
+import json
+import os
+import sys
+import tempfile
+import unittest
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
+import goldsignals as gs  # noqa: E402
+
+
+ENTRY = {
+    "t": "entry", "symbol": "XAUUSD", "demo": True, "signal": 7,
+    "model": "BREAKER", "side": "BUY", "entry": 4301.85, "level": 4301.20,
+    "stop": 4289.55, "tps": [4308.02, 4314.19, 4320.36],
+    "target_from": "reach 1.67x", "risk_pct": 1.0, "detail": "breaker retest",
+}
+
+
+class TestSignalFormat(unittest.TestCase):
+    def test_entry_has_the_requested_shape(self):
+        text = gs.format_entry(ENTRY)
+        lines = text.split("\n")
+        self.assertEqual(lines[0], "Buy gold")
+        self.assertTrue(lines[1].startswith("Entry- "), lines[1])
+        self.assertEqual(lines[2], "Tp 1: 4308.02")
+        self.assertEqual(lines[3], "Tp2: 4314.19")
+        self.assertEqual(lines[4], "Tp3: 4320.36")
+        self.assertEqual(lines[5], "Sl \U0001f6d1: 4289.55")
+
+    def test_sell_says_sell(self):
+        ev = dict(ENTRY, side="SELL")
+        self.assertTrue(gs.format_entry(ev).startswith("Sell gold"))
+
+    def test_entry_zone_is_the_level_and_the_fill(self):
+        self.assertEqual(gs.entry_zone(ENTRY), "4301.20 - 4301.85")
+
+    def test_entry_zone_collapses_when_they_are_the_same(self):
+        # An invented range would be a lie: followers would place a limit that
+        # never fills, or one further from the model's level than the bot's own.
+        ev = dict(ENTRY, level=4301.85)
+        self.assertEqual(gs.entry_zone(ev), "4301.85")
+
+    def test_take_profit_count_follows_the_feed(self):
+        one = gs.format_entry(dict(ENTRY, tps=[4308.02]))
+        self.assertIn("Tp 1: 4308.02", one)
+        self.assertNotIn("Tp2:", one)
+
+    def test_a_live_account_is_labelled_as_one(self):
+        self.assertIn("LIVE ACCOUNT", gs.format_entry(dict(ENTRY, demo=False)))
+        self.assertIn("Demo account", gs.format_entry(ENTRY))
+
+    def test_tp_message_names_the_rung_and_the_state(self):
+        first = gs.format_tp({"side": "BUY", "rung": 1, "of": 3, "entry": 4301.85,
+                              "price": 4308.02, "profit": 6.12})
+        self.assertIn("TP1 HIT", first)
+        self.assertIn("Runners still open", first)
+        last = gs.format_tp({"side": "BUY", "rung": 3, "of": 3, "entry": 4301.85,
+                             "price": 4320.36, "profit": 18.5})
+        self.assertIn("TP3 HIT", last)
+        self.assertIn("Full position closed", last)
+
+    def test_stop_message_is_not_dressed_up(self):
+        text = gs.format_sl({"side": "SELL", "entry": 4301.85, "price": 4315.0,
+                             "profit": -30.4})
+        self.assertIn("SL hit", text)
+        self.assertIn("-30.40", text)
+
+    def test_a_trailed_exit_in_profit_is_not_called_a_loss(self):
+        text = gs.format_close({"side": "BUY", "entry": 4301.85, "price": 4310.2,
+                                "profit": 5.4})
+        self.assertIn("IN PROFIT", text)
+
+    def test_get_ready_says_nothing_is_open(self):
+        text = gs.format_setup({"side": "BUY", "model": "MSS", "level": 4301.2,
+                                "stop": 4288.9, "projected_tp": 4325.6})
+        self.assertIn("GET READY", text)
+        self.assertIn("Nothing is open yet", text)
+
+    def test_news_message_states_it_is_not_traded_on(self):
+        text = gs.format_news({"source": "cnn.com", "headline": "x",
+                               "impact": 5.0, "lean": "leans gold UP"})
+        self.assertIn("will not trade this", text)
+
+    def test_render_respects_the_filter(self):
+        self.assertIsNone(gs.render(ENTRY, {"tp"}))
+        self.assertIsNotNone(gs.render(ENTRY, {"entry"}))
+
+    def test_unknown_event_type_is_silent(self):
+        self.assertIsNone(gs.render({"t": "something_new"}, gs.ALL_EVENTS))
+
+    def test_a_malformed_event_does_not_crash_the_bot(self):
+        text = gs.render({"t": "tp"}, {"tp"})       # no fields at all
+        self.assertIsInstance(text, str)
+
+
+class TestTokenSafety(unittest.TestCase):
+    TOKEN = "8123456789:AAFtest_token_value_that_must_never_leak"
+
+    def test_token_is_stripped_from_error_text(self):
+        tg = gs.Telegram(self.TOKEN, "-100123")
+        leaked = "HTTPError: 401 at %s" % tg.url()
+        self.assertNotIn(self.TOKEN, tg.redact(leaked))
+
+    def test_the_numeric_half_alone_is_also_stripped(self):
+        tg = gs.Telegram(self.TOKEN, "-100123")
+        self.assertNotIn("8123456789", tg.redact("bot 8123456789 failed"))
+
+    def test_the_SECRET_half_is_stripped_on_its_own(self):
+        # The reason this test exists as well as the two above: redacting the
+        # numeric prefix alone makes the FULL token stop appearing verbatim, so
+        # a test that only looks for the whole token passes with the real
+        # secret still in the log. That exact vacuous check has shipped in this
+        # project once already. This one looks for the half that is the secret.
+        tg = gs.Telegram(self.TOKEN, "-100123")
+        secret = self.TOKEN.split(":", 1)[1]
+        self.assertNotIn(secret, tg.redact("HTTPError 401 at %s" % tg.url()))
+
+    def test_dry_run_never_builds_a_request(self):
+        sent = []
+
+        def must_not_be_called(*a, **k):
+            raise AssertionError("a dry run reached the network")
+
+        tg = gs.Telegram(self.TOKEN, "-100123", dry_run=True,
+                         log=lambda m: sent.append(m), opener=must_not_be_called)
+        self.assertTrue(tg.send("hello"))
+        self.assertEqual(len(sent), 1)
+        self.assertNotIn(self.TOKEN, sent[0])
+
+    def test_a_real_send_posts_the_text_to_the_channel(self):
+        seen = {}
+
+        class Resp(object):
+            def read(self):
+                return b"{}"
+
+            def close(self):
+                pass
+
+        def fake(req, timeout=None):
+            seen["url"] = req.full_url
+            seen["body"] = req.data.decode("utf-8")
+            return Resp()
+
+        tg = gs.Telegram(self.TOKEN, "-100123", opener=fake)
+        self.assertTrue(tg.send("Buy gold"))
+        self.assertIn("sendMessage", seen["url"])
+        self.assertIn("chat_id=-100123", seen["body"])
+        self.assertIn("Buy+gold", seen["body"])
+
+
+class TestFeedReading(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.path = os.path.join(self.dir, "signals.jsonl")
+
+    def write(self, *rows, **kw):
+        with open(self.path, "a" if kw.get("append") else "w", encoding="utf-8") as fh:
+            for r in rows:
+                fh.write(json.dumps(r) + "\n")
+
+    def test_reads_only_what_is_new(self):
+        self.write({"t": "start"}, {"t": "stop"})
+        lines, off = gs.read_new_lines(self.path, 0)
+        self.assertEqual(len(lines), 2)
+        again, off2 = gs.read_new_lines(self.path, off)
+        self.assertEqual(again, [])
+        self.write({"t": "entry"}, append=True)
+        more, _ = gs.read_new_lines(self.path, off2)
+        self.assertEqual(len(more), 1)
+
+    def test_a_half_written_line_is_left_for_next_time(self):
+        # cTrader appends; a read can land mid-write. Posting half a JSON object
+        # would drop the event entirely, because the next read starts after it.
+        with open(self.path, "w", encoding="utf-8") as fh:
+            fh.write('{"t":"entry","side":"BUY"}\n{"t":"tp","ru')
+        lines, off = gs.read_new_lines(self.path, 0)
+        self.assertEqual(len(lines), 1)
+        with open(self.path, "a", encoding="utf-8") as fh:
+            fh.write('ng":1}\n')
+        rest, _ = gs.read_new_lines(self.path, off)
+        self.assertEqual(len(rest), 1)
+        self.assertEqual(json.loads(rest[0])["rung"], 1)
+
+    def test_a_truncated_feed_restarts_instead_of_going_silent(self):
+        self.write({"t": "start"}, {"t": "stop"})
+        _, off = gs.read_new_lines(self.path, 0)
+        self.write({"t": "entry"})                  # rewrites the file, shorter
+        lines, _ = gs.read_new_lines(self.path, off)
+        self.assertEqual(len(lines), 1)
+
+    def test_missing_feed_is_not_an_error(self):
+        lines, off = gs.read_new_lines(os.path.join(self.dir, "nope"), 0)
+        self.assertEqual((lines, off), ([], 0))
+
+
+if __name__ == "__main__":
+    unittest.main()
