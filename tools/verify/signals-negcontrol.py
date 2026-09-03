@@ -91,6 +91,30 @@ FAULTS = [
      "    return [w for w in PRIVATE_WORDS if w.lower() in low]",
      "    return []"),
 
+    ("setup saves a config even when the token was rejected",
+     "        out(\"  That token did not work: %s\" % exc)\n"
+     "        out(\"  Check you copied all of it, including the part after the colon.\")\n"
+     "        return 1",
+     "        out(\"  That token did not work: %s\" % exc)\n"
+     "        me = {}"),
+
+    ("setup saves a config it could not post to",
+     "        out(\"  The usual cause is the bot not being an ADMIN of the channel.\")\n"
+     "        return 1",
+     "        out(\"  The usual cause is the bot not being an ADMIN of the channel.\")"),
+
+    ("the saved config is left world-readable",
+     "        os.chmod(path, 0o600)",
+     "        os.chmod(path, 0o644)"),
+
+    ("--check reports success whatever the state of the feed",
+     '        out("  [X] no feed file at %s" % feed)',
+     '        ok = True'),
+
+    ("the token echoed back into the setup transcript",
+     '    out("  OK — the token belongs to @%s." % me.get("username", "?"))',
+     '    out("  OK — token %s belongs to @%s." % (token, me.get("username", "?")))'),
+
     ("the event filter is ignored, so --only does nothing",
      "    if kind not in want:\n        return None",
      "    if False:\n        return None"),

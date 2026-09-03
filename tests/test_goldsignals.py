@@ -237,6 +237,141 @@ class TestTokenSafety(unittest.TestCase):
         self.assertIn("Buy+gold", seen["body"])
 
 
+class FakeTelegram(object):
+    """Stands in for api.telegram.org. Records what was asked of it so the
+    setup flow can be driven end to end without a network or a real token."""
+
+    def __init__(self, ok=True, sends_fail=False, fail_methods=()):
+        self.ok = ok
+        self.sends_fail = sends_fail
+        # Which single call fails, so a test can isolate ONE broken link
+        # instead of breaking the whole chain and proving nothing about which
+        # step stopped it.
+        self.fail_methods = set(fail_methods)
+        self.calls = []
+
+    def __call__(self, req, timeout=None):
+        url = req.full_url
+        method = url.rsplit("/", 1)[-1]
+        self.calls.append(method)
+        if not self.ok or method in self.fail_methods:
+            raise IOError("HTTP Error 401: Unauthorized")
+        if url.endswith("getMe"):
+            body = '{"ok":true,"result":{"username":"goldict_bot"}}'
+        elif url.endswith("getUpdates"):
+            body = ('{"ok":true,"result":[{"channel_post":{"chat":'
+                    '{"id":-1001234567890,"title":"Gold Signals","type":"channel"}}}]}')
+        elif url.endswith("sendMessage"):
+            if self.sends_fail:
+                raise IOError("HTTP Error 400: chat not found")
+            body = '{"ok":true,"result":{}}'
+        else:
+            body = '{"ok":true,"result":{}}'
+
+        class R(object):
+            def read(self_inner):
+                return body.encode("utf-8")
+
+            def close(self_inner):
+                pass
+
+        return R()
+
+
+class TestSetupFlow(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.cfg = os.path.join(self.dir, "sub", "telegram_config.json")
+        self.out = []
+
+    def answers(self, *values):
+        it = iter(values)
+
+        def ask(_prompt):
+            return next(it, "")
+        return ask
+
+    def test_happy_path_writes_a_usable_config(self):
+        fake = FakeTelegram()
+        rc = gs.cmd_setup(self.cfg, feed_default="~/GoldICT/signals.jsonl",
+                          ask=self.answers("123:ABC", "", "1", ""),
+                          out=self.out.append, opener=fake)
+        self.assertEqual(rc, 0, "\n".join(self.out))
+        saved = json.load(open(self.cfg))
+        self.assertEqual(saved["bot_token"], "123:ABC")
+        self.assertEqual(saved["chat_id"], "-1001234567890")
+        self.assertEqual(saved["feed"], "~/GoldICT/signals.jsonl")
+        self.assertIn("sendMessage", fake.calls)
+
+    def test_the_config_is_not_readable_by_other_users(self):
+        gs.cmd_setup(self.cfg, ask=self.answers("123:ABC", "", "1", ""),
+                     out=self.out.append, opener=FakeTelegram())
+        mode = os.stat(self.cfg).st_mode & 0o777
+        self.assertEqual(mode, 0o600, oct(mode))
+
+    def test_a_bad_token_saves_nothing(self):
+        # Half-written config files are how people end up debugging the wrong
+        # thing. Nothing is saved until every step has passed.
+        rc = gs.cmd_setup(self.cfg, ask=self.answers("nonsense"),
+                          out=self.out.append, opener=FakeTelegram(ok=False))
+        self.assertEqual(rc, 1)
+        self.assertFalse(os.path.exists(self.cfg))
+
+    def test_a_channel_it_cannot_post_to_saves_nothing(self):
+        rc = gs.cmd_setup(self.cfg, ask=self.answers("123:ABC", "", "1", ""),
+                          out=self.out.append,
+                          opener=FakeTelegram(sends_fail=True))
+        self.assertEqual(rc, 1)
+        self.assertFalse(os.path.exists(self.cfg))
+        self.assertTrue(any("ADMIN" in line for line in self.out),
+                        "the message should name the usual cause")
+
+    def test_only_the_token_failing_is_enough_to_stop_the_flow(self):
+        # Deliberately the ONLY broken step: everything downstream would work.
+        # Without this, a control that removes the early return still looks
+        # caught, because the next call happens to fail too.
+        fake = FakeTelegram(fail_methods={"getMe"})
+        rc = gs.cmd_setup(self.cfg, ask=self.answers("123:ABC", "", "1", ""),
+                          out=self.out.append, opener=fake)
+        self.assertEqual(rc, 1)
+        self.assertFalse(os.path.exists(self.cfg))
+        self.assertEqual(fake.calls, ["getMe"],
+                         "a rejected token should stop before anything else")
+
+    def test_the_token_is_never_echoed_back(self):
+        gs.cmd_setup(self.cfg, ask=self.answers("8123456789:AAsecret", "", "1", ""),
+                     out=self.out.append, opener=FakeTelegram())
+        self.assertNotIn("AAsecret", "\n".join(self.out))
+
+    def test_channel_ids_are_read_out_of_the_update_feed(self):
+        result = [{"channel_post": {"chat": {"id": -100111, "title": "Gold"}}},
+                  {"my_chat_member": {"chat": {"id": -100222, "title": "Other"}}}]
+        found = gs.chat_ids_from_updates(result)
+        self.assertEqual(found[0], ("-100222", "Other"))
+        self.assertIn(("-100111", "Gold"), found)
+
+    def test_an_empty_update_feed_is_not_a_crash(self):
+        self.assertEqual(gs.chat_ids_from_updates([]), [])
+        self.assertEqual(gs.chat_ids_from_updates(None), [])
+
+    def test_check_names_the_broken_link(self):
+        gs.write_config(self.cfg, {"bot_token": "123:ABC", "chat_id": "-1",
+                                   "feed": os.path.join(self.dir, "missing.jsonl")})
+        rc = gs.cmd_check(self.cfg, out=self.out.append, opener=FakeTelegram())
+        text = "\n".join(self.out)
+        self.assertEqual(rc, 1)
+        self.assertIn("no feed file", text)
+        self.assertIn("Write the signal feed", text)
+
+    def test_check_passes_when_everything_is_wired(self):
+        feed = os.path.join(self.dir, "signals.jsonl")
+        open(feed, "w").write('{"t":"start"}\n')
+        gs.write_config(self.cfg, {"bot_token": "123:ABC", "chat_id": "-1",
+                                   "feed": feed})
+        rc = gs.cmd_check(self.cfg, out=self.out.append, opener=FakeTelegram())
+        self.assertEqual(rc, 0, "\n".join(self.out))
+
+
 class TestFeedReading(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()

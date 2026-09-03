@@ -485,6 +485,232 @@ def serve_tradingview(port, tg, log=print):
     return srv
 
 
+# ---------------------------------------------------------------- setup help
+# The fiddly part of this is not the code, it is getting a token, a channel id
+# and a file path lined up without a typo. So the program does it, checks each
+# piece as it goes, and says which one is wrong instead of just going quiet.
+
+def api(token, method, params=None, opener=None):
+    """One Telegram API call. Returns the parsed 'result', or raises with the
+    token stripped out of the message."""
+    url = "https://api.telegram.org/bot%s/%s" % (token, method)
+    data = urllib.parse.urlencode(params or {}).encode("utf-8")
+    op = opener or urllib.request.urlopen
+    try:
+        resp = op(urllib.request.Request(url, data=data), timeout=20)
+        try:
+            body = resp.read().decode("utf-8", "replace")
+        finally:
+            close = getattr(resp, "close", None)
+            if close:
+                close()
+    except Exception as exc:
+        msg = str(exc).replace(token, "<token>")
+        raise RuntimeError("%s: %s" % (type(exc).__name__, msg))
+    parsed = json.loads(body)
+    if not parsed.get("ok"):
+        raise RuntimeError(parsed.get("description", "Telegram said no"))
+    return parsed.get("result")
+
+
+def chat_ids_from_updates(result):
+    """Every chat id Telegram has seen this bot in, newest first, with a label.
+
+    A channel id is the awkward part of the setup: it is not in the channel's
+    URL and Telegram does not show it anywhere in the app. But the moment the
+    bot is added as an admin, or anything is posted, it turns up here."""
+    found = []
+    for upd in reversed(result or []):
+        for key in ("channel_post", "message", "my_chat_member",
+                    "edited_channel_post"):
+            node = upd.get(key)
+            if not isinstance(node, dict):
+                continue
+            chat = node.get("chat")
+            if not isinstance(chat, dict) or "id" not in chat:
+                continue
+            entry = (str(chat["id"]),
+                     chat.get("title") or chat.get("username")
+                     or chat.get("first_name") or chat.get("type", "chat"))
+            if entry not in found:
+                found.append(entry)
+    return found
+
+
+def default_config_path():
+    """Prefer the repo's gitignored data/ directory when running from a clone,
+    so a token cannot be committed by accident. Otherwise the home directory."""
+    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    repo_data = os.path.join(here, "data")
+    if os.path.isdir(repo_data) and os.path.exists(os.path.join(here, ".gitignore")):
+        return os.path.join(repo_data, "telegram_config.json")
+    return os.path.expanduser("~/.goldsignals/telegram_config.json")
+
+
+def write_config(path, cfg):
+    """Written owner-only. A bot token in a world-readable file is a bot token
+    anyone with an account on the machine can post as."""
+    d = os.path.dirname(path)
+    if d and not os.path.isdir(d):
+        os.makedirs(d)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(cfg, fh, indent=2)
+        fh.write("\n")
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+
+
+def cmd_setup(config_path, feed_default=DEFAULT_FEED, ask=input, out=print,
+              opener=None):
+    out("")
+    out("  GoldICT -> Telegram setup")
+    out("  " + "-" * 40)
+    out("  Nothing here is saved until every step below passes.")
+    out("")
+
+    out("  STEP 1  In Telegram, message @BotFather, send /newbot, follow it,")
+    out("          and copy the token it gives you.")
+    token = ask("          Paste the token here: ").strip()
+    if not token:
+        out("  No token given. Nothing was saved.")
+        return 1
+    try:
+        me = api(token, "getMe", opener=opener)
+    except Exception as exc:
+        out("  That token did not work: %s" % exc)
+        out("  Check you copied all of it, including the part after the colon.")
+        return 1
+    out("  OK — the token belongs to @%s." % me.get("username", "?"))
+    out("")
+
+    out("  STEP 2  Add @%s to your channel AS AN ADMIN." % me.get("username", "?"))
+    out("          Channel -> Administrators -> Add Admin -> search the bot.")
+    out("          A bot that is only a member cannot post.")
+    out("          Then post any message in the channel.")
+    ask("          Press Enter once you have done that: ")
+
+    chat_id = ""
+    try:
+        found = chat_ids_from_updates(api(token, "getUpdates", opener=opener))
+    except Exception as exc:
+        found = []
+        out("  Could not read the chat list (%s) — you can type the id instead." % exc)
+    if found:
+        out("")
+        out("  Telegram has seen this bot in:")
+        for i, (cid, title) in enumerate(found, 1):
+            out("    %d) %s   (%s)" % (i, title, cid))
+        pick = ask("  Which one is your channel? (number, or paste an id): ").strip()
+        if pick.isdigit() and 1 <= int(pick) <= len(found):
+            chat_id = found[int(pick) - 1][0]
+        else:
+            chat_id = pick
+    else:
+        out("  Telegram has not seen the bot anywhere yet. That usually means it")
+        out("  was not added to the channel, or nothing has been posted since.")
+        chat_id = ask("  Paste the channel id instead (looks like -1001234567890): ").strip()
+    if not chat_id:
+        out("  No channel id. Nothing was saved.")
+        return 1
+
+    out("")
+    out("  STEP 3  Sending a test message ...")
+    try:
+        api(token, "sendMessage",
+            {"chat_id": chat_id,
+             "text": "GoldICT is connected. Signals will arrive here."},
+            opener=opener)
+    except Exception as exc:
+        out("  Could not post to that channel: %s" % exc)
+        out("  The usual cause is the bot not being an ADMIN of the channel.")
+        return 1
+    out("  Sent. Check the channel — you should see it.")
+    out("")
+
+    out("  STEP 4  Where cTrader writes its signal file.")
+    out("          Leave blank for the default.")
+    feed = ask("          Feed file [%s]: " % feed_default).strip() or feed_default
+    expanded = os.path.expanduser(feed)
+    if os.path.exists(expanded):
+        out("  Found it.")
+    else:
+        out("  Not there yet — that is normal before GoldICT has run once with")
+        out("  'Write the signal feed' switched on. It will be picked up when")
+        out("  it appears.")
+
+    write_config(config_path, {"bot_token": token, "chat_id": chat_id,
+                               "feed": feed, "show_account_type": False})
+    out("")
+    out("  Saved to %s (readable only by you)." % config_path)
+    out("  Never commit that file, screenshot it, or paste it into a chat.")
+    out("")
+    out("  Now run:   python3 %s" % os.path.abspath(__file__))
+    out("")
+    return 0
+
+
+def cmd_check(config_path, out=print, opener=None):
+    """Says which link in the chain is broken, rather than sitting silent."""
+    ok = True
+    out("")
+    out("  Checking the chain, cTrader -> file -> Telegram")
+    out("  " + "-" * 46)
+
+    if not os.path.exists(config_path):
+        out("  [X] no config at %s — run with --setup" % config_path)
+        return 1
+    cfg = load_config(config_path)
+    out("  [OK] config found at %s" % config_path)
+
+    feed = os.path.expanduser(cfg.get("feed") or DEFAULT_FEED)
+    if not os.path.exists(feed):
+        out("  [X] no feed file at %s" % feed)
+        out("       -> is cTrader running, with GoldICT on the chart and")
+        out("          'Write the signal feed' set to true?")
+        ok = False
+    else:
+        size = os.path.getsize(feed)
+        age = time.time() - os.path.getmtime(feed)
+        out("  [OK] feed file: %s (%d bytes)" % (feed, size))
+        if age > 3600:
+            out("  [!]  nothing new in it for %d minutes. If cTrader is running"
+                % (age / 60))
+            out("       and the market is open, check the cTrader log for")
+            out("       'Signal feed DISABLED'.")
+
+    token = cfg.get("bot_token")
+    if not token:
+        out("  [X] no bot_token in the config")
+        return 1
+    try:
+        me = api(token, "getMe", opener=opener)
+        out("  [OK] token works — @%s" % me.get("username", "?"))
+    except Exception as exc:
+        out("  [X] token rejected: %s" % exc)
+        return 1
+
+    chat = cfg.get("chat_id")
+    if not chat:
+        out("  [X] no chat_id in the config")
+        return 1
+    try:
+        api(token, "sendMessage",
+            {"chat_id": chat, "text": "Connection check — everything is wired up."},
+            opener=opener)
+        out("  [OK] posted a test message to %s" % chat)
+    except Exception as exc:
+        out("  [X] cannot post to %s: %s" % (chat, exc))
+        out("       -> the bot almost certainly is not an ADMIN of the channel")
+        return 1
+
+    out("")
+    out("  All good." if ok else "  Telegram is fine; the cTrader end needs a look.")
+    out("")
+    return 0 if ok else 1
+
+
 # ----------------------------------------------------------------------- main
 ALL_EVENTS = ["entry", "tp", "sl", "close", "setup", "news", "vacuum",
               "guard", "start", "stop", "heartbeat"]
@@ -500,8 +726,12 @@ def load_config(path):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="Post GoldICT's cTrader activity to a Telegram channel.")
-    ap.add_argument("--config", default=DEFAULT_CONFIG,
+    ap.add_argument("--config", default=None,
                     help="gitignored JSON with bot_token, chat_id, feed")
+    ap.add_argument("--setup", action="store_true",
+                    help="walk through connecting Telegram, step by step")
+    ap.add_argument("--check", action="store_true",
+                    help="say which link in the chain is broken")
     ap.add_argument("--feed", default=None, help="the JSONL file GoldICT writes")
     ap.add_argument("--state", default=None,
                     help="where to remember how far the feed was read")
@@ -518,8 +748,14 @@ def main(argv=None):
     ap.add_argument("--once", action="store_true",
                     help="drain what is there and exit (for testing)")
     args = ap.parse_args(argv)
+    config_path = args.config or default_config_path()
 
-    cfg = load_config(args.config)
+    if args.setup:
+        return cmd_setup(config_path)
+    if args.check:
+        return cmd_check(config_path)
+
+    cfg = load_config(config_path)
     feed = os.path.expanduser(args.feed or cfg.get("feed") or DEFAULT_FEED)
     state_path = args.state or (feed + ".posted")
     want = set(x.strip() for x in args.only.split(",") if x.strip())
@@ -531,9 +767,9 @@ def main(argv=None):
 
     if not args.dry_run and (not cfg.get("bot_token") or not cfg.get("chat_id")):
         print("No bot_token/chat_id in %s — running as --dry-run.\n"
-              "Put them in that file (it is gitignored) to post for real.\n"
-              "Setup instructions are in the header of this script."
-              % args.config)
+              "Run this to connect Telegram, one step at a time:\n"
+              "    python3 %s --setup"
+              % (config_path, os.path.abspath(__file__)))
         tg.dry_run = True
 
     state = load_state(state_path)

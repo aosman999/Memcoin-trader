@@ -34,46 +34,58 @@ requires each break to be caught.
 
 ## Setting it up
 
-**1. Telegram bot.** Message `@BotFather`, send `/newbot`, pick a name. It
-replies with a token like `8123456789:AAF...`.
-
-That token is a credential. It goes in a gitignored file and nowhere else — not
-in a commit, not in a screenshot, not pasted into a chat. `goldsignals.py`
-strips it from everything it prints.
-
-**2. Add the bot to your channel as an ADMIN.** A bot cannot post to a channel
-it is only a member of.
-
-**3. Find the channel id.** Post anything in the channel, forward that message
-to `@userinfobot`, and read the id — it looks like `-1001234567890`.
-
-**4. Write the config.** Copy the template and fill it in:
+Two commands. The first one walks you through it and checks each step before it
+saves anything.
 
 ```bash
-cp data/telegram_config.example.json data/telegram_config.json
+python3 tools/goldsignals.py --setup
 ```
 
-```json
-{
-  "bot_token": "8123456789:AAF...",
-  "chat_id": "-1001234567890",
-  "feed": "~/GoldICT/signals.jsonl"
-}
-```
+It will:
 
-**5. Turn the feed on in cTrader.** GoldICT's parameters, group *Signal feed*:
-`Write the signal feed` = true. Leave the path blank and it writes to
-`~/GoldICT/signals.jsonl`.
+1. ask for the token from `@BotFather` — and immediately verify it, so a typo is
+   caught there and not three steps later
+2. tell you to add the bot to your channel **as an admin** (a bot that is only a
+   member cannot post), then **list every channel Telegram has seen it in** so
+   you can pick yours instead of hunting for the id
+3. send a test message and wait for it to land
+4. ask where cTrader writes its file, defaulting to `~/GoldICT/signals.jsonl`
 
-**6. Run it.**
+Nothing is written until all four pass, so you never end up debugging a
+half-finished config. The file is saved readable only by you.
+
+Then:
 
 ```bash
-python3 tools/goldsignals.py --dry-run     # prints, posts nothing — do this first
-python3 tools/goldsignals.py               # posts for real
+python3 tools/goldsignals.py
 ```
 
-Leave it running in a terminal alongside cTrader. It starts at the END of the
-feed, so switching it on does not dump history into the channel.
+Leave that running. It starts at the END of the feed, so switching it on does
+not dump history into the channel.
+
+### On the cTrader side, once
+
+Click GoldICT on the chart → parameters → group **Signal feed** →
+`Write the signal feed` = **true**.
+
+cTrader keeps the parameters saved on an instance that is already running, so
+**remove the bot from the chart and add it again** or the old setting sticks.
+
+### When something is not working
+
+```bash
+python3 tools/goldsignals.py --check
+```
+
+It walks the chain — config, feed file, token, channel — and names the link that
+is broken instead of leaving you guessing:
+
+```
+  [OK] config found at data/telegram_config.json
+  [X] no feed file at /Users/ahmed/GoldICT/signals.jsonl
+       -> is cTrader running, with GoldICT on the chart and
+          'Write the signal feed' set to true?
+```
 
 ## What gets posted
 
