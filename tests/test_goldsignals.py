@@ -87,7 +87,7 @@ class TestSignalFormat(unittest.TestCase):
     def test_news_message_states_it_is_not_traded_on(self):
         text = gs.format_news({"source": "cnn.com", "headline": "x",
                                "impact": 5.0, "lean": "leans gold UP"})
-        self.assertIn("will not trade this", text)
+        self.assertIn("No signal is taken from a headline", text)
 
     def test_render_respects_the_filter(self):
         self.assertIsNone(gs.render(ENTRY, {"tp"}))
@@ -99,6 +99,54 @@ class TestSignalFormat(unittest.TestCase):
     def test_a_malformed_event_does_not_crash_the_bot(self):
         text = gs.render({"t": "tp"}, {"tp"})       # no fields at all
         self.assertIsInstance(text, str)
+
+
+class TestTheMethodStaysPrivate(unittest.TestCase):
+    """The channel gets the trade and a risk reminder. It does not get the
+    model name or the reasoning: nobody following a signal needs the method,
+    and a signal that explains itself invites arguing with it. The feed still
+    carries both — the cTrader log and the ledger need them — so this is a
+    rendering rule, and rendering rules rot the moment someone edits a
+    formatter without thinking about it. Hence a test."""
+
+    LOADED = {
+        "model": "BREAKER", "detail": "old low taken, price back through the "
+        "swing high; buying its breaker", "models": "MSS BREAKER VOID",
+    }
+
+    def test_no_strategy_word_reaches_a_signal(self):
+        text = gs.format_entry(dict(ENTRY, **self.LOADED))
+        self.assertEqual(gs.leaks_method(text), [], text)
+
+    def test_no_strategy_word_reaches_a_get_ready(self):
+        ev = dict(self.LOADED, side="BUY", level=4301.2, stop=4288.9,
+                  projected_tp=4325.6)
+        self.assertEqual(gs.leaks_method(gs.format_setup(ev)), [])
+
+    def test_no_strategy_word_reaches_the_start_message(self):
+        ev = dict(self.LOADED, symbol="XAUUSD", timeframe="Minute5")
+        self.assertEqual(gs.leaks_method(gs.format_start(ev)), [])
+
+    def test_every_formatter_is_clean_on_loaded_input(self):
+        loaded = dict(ENTRY, **self.LOADED)
+        loaded.update(rung=1, of=3, price=4308.02, profit=6.1, impact=7.0,
+                      lean="leans gold UP", source="cnn.com", headline="x",
+                      until="2026-09-03T14:01:00Z", equity=2540.0,
+                      start_equity=3000.0,
+                      trades_today=2, open_signals=1, waiting_setups=1)
+        for kind in gs.ALL_EVENTS:
+            text = gs.render(dict(loaded, t=kind), gs.ALL_EVENTS)
+            self.assertEqual(gs.leaks_method(text), [],
+                             "%s leaked: %s" % (kind, text))
+
+    def test_the_risk_line_is_on_the_signal(self):
+        self.assertIn("Utilize risk management techniques to protect capital.",
+                      gs.format_entry(ENTRY))
+
+    def test_the_detector_itself_is_not_vacuous(self):
+        # If leaks_method() could never return anything, every test above would
+        # pass with the model name printed in full.
+        self.assertEqual(gs.leaks_method("entered on the BREAKER"), ["BREAKER"])
 
 
 class TestTokenSafety(unittest.TestCase):

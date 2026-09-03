@@ -84,6 +84,27 @@ import urllib.request
 from datetime import datetime, timezone
 
 CHART_URL = "https://www.tradingview.com/chart/?symbol=OANDA%3AXAUUSD"
+
+# What the channel is told instead of WHY the bot took the trade. The feed still
+# carries the model name and the reasoning -- the cTrader log and the ledger
+# both need them -- but neither goes out to followers. Nobody in the channel
+# needs the method, and a signal that explains itself invites arguing with it.
+RISK_LINE = "Utilize risk management techniques to protect capital."
+
+# Strategy words that must never appear in a posted message. Checked by a test,
+# because this is the kind of thing that comes back the moment a formatter is
+# edited without thinking about it.
+PRIVATE_WORDS = ("BREAKER", "MSS", "VOID", "ORDERBLOCK",
+                 "mitigation", "displacement", "swing high", "swing low",
+                 "liquidity", "vacuum block")
+
+
+def leaks_method(text):
+    """Any strategy word that made it into a posted message. Empty is correct."""
+    if not text:
+        return []
+    low = text.lower()
+    return [w for w in PRIVATE_WORDS if w.lower() in low]
 DEFAULT_CONFIG = "data/telegram_config.json"
 DEFAULT_FEED = "~/GoldICT/signals.jsonl"
 
@@ -125,9 +146,7 @@ def format_entry(ev):
         lines.append("Tp%s%d: %s" % (" " if i == 1 else "", i, _f(tp)))
     lines.append("Sl \U0001f6d1: %s" % _f(ev.get("stop")))
     lines.append("")
-    lines.append("%s · risk %s%% · %s"
-                 % (ev.get("model", "?"), _f(ev.get("risk_pct"), 1),
-                    ev.get("detail", "")))
+    lines.append(RISK_LINE)
     if not ev.get("demo", True):
         lines.append("⚠️ LIVE ACCOUNT")
     else:
@@ -190,11 +209,12 @@ def format_setup(ev):
     side = (ev.get("side") or "").upper()
     return "\n".join([
         "⚡ GET READY — possible %s gold" % ("Buy" if side == "BUY" else "Sell"),
-        "Watching %s for a return to %s" % (ev.get("model", "?"), _f(ev.get("level"))),
+        "Watching %s" % _f(ev.get("level")),
         "If it fills: stop %s, first target around %s"
         % (_f(ev.get("stop")), _f(ev.get("projected_tp"))),
         "",
         "Nothing is open yet. No entry until price comes back to that level.",
+        RISK_LINE,
     ])
 
 
@@ -204,28 +224,44 @@ def format_news(ev):
         ev.get("headline", ""),
         "impact %s · %s" % (_f(ev.get("impact"), 1), ev.get("lean", "")),
         "",
-        "Headlines are NOT a measured edge here. The bot will not trade this on "
-        "its own — it only stands aside, protects open trades, and watches "
-        "for the gap the move leaves behind.",
+        "News only. No signal is taken from a headline on its own.",
+        RISK_LINE,
     ])
 
 
 def format_vacuum(ev):
-    return ("\U0001f300 Vacuum window armed until %s UTC — after a move like that "
-            "the bot accepts a smaller displacement as a liquidity void. Setups "
-            "may come faster for a while." % (ev.get("until", "?")[11:16]))
+    return "\n".join([
+        "\U0001f300 Heads up until %s UTC" % (ev.get("until", "?")[11:16]),
+        "Conditions after a move like that let setups come faster than usual.",
+        RISK_LINE,
+    ])
 
 
 def format_guard(ev):
-    return "⛔ DAY GUARD — %s" % ev.get("detail", "no more entries today.")
+    """Built from the numbers, not from the feed's free text. A formatter that
+    echoes a free-text field is one edit away from putting the model name in
+    the channel, and this one used to."""
+    try:
+        start = float(ev.get("start_equity"))
+        now = float(ev.get("equity"))
+        down = (start - now) / start * 100.0 if start else 0.0
+        detail = "Down %s%% on the day." % _f(down, 1)
+    except (TypeError, ValueError, ZeroDivisionError):
+        detail = "The daily loss limit was reached."
+    return "\n".join([
+        "⛔ No more entries today",
+        detail,
+        "Open trades keep their stops. Trading resumes tomorrow.",
+        RISK_LINE,
+    ])
 
 
 def format_start(ev):
     return "\n".join([
-        "\U0001f7e2 GoldICT is live on %s" % ev.get("symbol", "XAUUSD"),
-        "Models: %s · %s chart" % (ev.get("models", "?"), ev.get("timeframe", "?")),
+        "\U0001f7e2 Live on %s" % ev.get("symbol", "XAUUSD"),
         "Every signal in this channel is placed by the bot itself. Nothing here "
         "is typed by hand.",
+        RISK_LINE,
     ])
 
 

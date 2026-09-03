@@ -78,6 +78,18 @@ FAULTS = [
      '            lines.append("Runners still open, stop is trailing.")',
      '            lines.append("Full position closed.")'),
 
+    ("the model name put back into the signal",
+     '    lines.append(RISK_LINE)',
+     '    lines.append("%s · %s" % (ev.get("model", ""), ev.get("detail", "")))'),
+
+    ("the day guard echoes free text from the feed again",
+     '        detail = "Down %s%% on the day." % _f(down, 1)',
+     '        detail = ev.get("detail", "")'),
+
+    ("the leak detector made vacuous, so nothing can ever be reported",
+     "    return [w for w in PRIVATE_WORDS if w.lower() in low]",
+     "    return []"),
+
     ("the event filter is ignored, so --only does nothing",
      "    if kind not in want:\n        return None",
      "    if False:\n        return None"),

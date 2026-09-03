@@ -102,7 +102,7 @@ Tp2: 4314.19
 Tp3: 4320.36
 Sl 🛑: 4289.55
 
-BREAKER · risk 1.0% · old low taken, price back through the swing high
+Utilize risk management techniques to protect capital.
 Demo account — simulated fills.
 https://www.tradingview.com/chart/?symbol=OANDA%3AXAUUSD
 ```
@@ -110,6 +110,18 @@ https://www.tradingview.com/chart/?symbol=OANDA%3AXAUUSD
 The entry is a range because there genuinely is one: the level the model waited
 for, and the price the order filled at. When they match to the cent, one number
 is printed — an invented range would send followers to a limit that never fills.
+
+**The method never goes out.** The model name and the reason for the trade stay
+in the cTrader log and in the feed, where the ledger needs them; the channel
+gets the trade and the risk line. Nobody following a signal needs the method,
+and a signal that explains itself invites arguing with it.
+
+That is a rendering rule, and rendering rules rot the first time somebody edits
+a formatter without thinking about it — so `leaks_method()` lists the words that
+must never appear, every formatter is tested against loaded input containing all
+of them, and three negative controls prove those tests can fail. One real leak
+was found this way: the day-guard message used to echo a free-text field
+straight from the feed.
 
 ## TradingView
 
