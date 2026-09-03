@@ -472,6 +472,106 @@ class TestSetupFlow(unittest.TestCase):
         self.assertEqual(rc, 0, "\n".join(self.out))
 
 
+class TestRateLimiting(unittest.TestCase):
+    """The owner's channel hit HTTP 429 and the sender made it worse: it backed
+    off on a fixed 2/4/8 schedule, ignored the number Telegram actually gave it,
+    burned its retries and dropped the message."""
+
+    TOKEN = "8123456789:AAsecret"
+
+    class Rate(object):
+        """Fails with 429 for the first `n` calls, then succeeds."""
+
+        def __init__(self, n, retry_after=17):
+            self.left = n
+            self.retry_after = retry_after
+            self.calls = 0
+
+        def __call__(self, req, timeout=None):
+            self.calls += 1
+            if self.left > 0:
+                self.left -= 1
+                err = IOError("HTTP Error 429: Too Many Requests")
+                body = ('{"ok":false,"error_code":429,"parameters":'
+                        '{"retry_after":%d}}' % self.retry_after).encode()
+                err.read = lambda: body
+                raise err
+
+            class R(object):
+                def read(self_inner):
+                    return b"{}"
+
+                def close(self_inner):
+                    pass
+            return R()
+
+    def make(self, opener, slept, min_gap=0.0):
+        return gs.Telegram(self.TOKEN, "-100", opener=opener, log=lambda m: None,
+                           sleep=slept.append, clock=lambda: 0.0, min_gap=min_gap)
+
+    def test_it_waits_the_number_telegram_gave_it(self):
+        slept = []
+        fake = self.Rate(1, retry_after=17)
+        self.assertTrue(self.make(fake, slept).send("hello"))
+        self.assertTrue(any(x >= 17 for x in slept),
+                        "should have waited the 17s Telegram asked for, slept %s" % slept)
+
+    def test_being_told_to_wait_does_not_use_up_a_retry(self):
+        # Four 429s then success. On the old fixed-backoff logic those four
+        # would have exhausted the attempts and the message would be lost.
+        slept = []
+        fake = self.Rate(4, retry_after=3)
+        self.assertTrue(self.make(fake, slept).send("hello", attempts=2))
+
+    def test_a_message_that_is_dropped_says_so_loudly(self):
+        lines = []
+
+        def boom(req, timeout=None):
+            raise IOError("HTTP Error 500: Server Error")
+
+        tg = gs.Telegram(self.TOKEN, "-100", opener=boom, log=lines.append,
+                         sleep=lambda s: None, clock=lambda: 0.0, min_gap=0.0)
+        self.assertFalse(tg.send("Buy gold\nEntry- 1", attempts=2))
+        self.assertEqual(tg.dropped, 1)
+        self.assertTrue(any("DROPPED" in l for l in lines), lines)
+        self.assertTrue(any("Buy gold" in l for l in lines),
+                        "the dropped message should be identifiable")
+
+    def test_it_paces_itself_before_being_told_to(self):
+        slept = []
+        clock = [0.0]
+
+        class Ok(object):
+            def __call__(self, req, timeout=None):
+                class R(object):
+                    def read(self_inner):
+                        return b"{}"
+
+                    def close(self_inner):
+                        pass
+                return R()
+
+        tg = gs.Telegram(self.TOKEN, "-100", opener=Ok(), log=lambda m: None,
+                         sleep=slept.append, clock=lambda: clock[0], min_gap=3.5)
+        tg.send("one")
+        tg.send("two")           # immediately after, so it must pause
+        self.assertTrue(any(x >= 3.0 for x in slept),
+                        "second send should have been paced, slept %s" % slept)
+
+    def test_retry_after_is_read_out_of_the_body(self):
+        err = IOError("boom")
+        err.read = lambda: b'{"parameters":{"retry_after":42}}'
+        self.assertEqual(gs.Telegram.retry_after(err), 42)
+
+    def test_a_silly_retry_after_is_capped(self):
+        err = IOError("boom")
+        err.read = lambda: b'{"parameters":{"retry_after":99999}}'
+        self.assertEqual(gs.Telegram.retry_after(err), 300)
+
+    def test_no_retry_after_returns_none(self):
+        self.assertIsNone(gs.Telegram.retry_after(IOError("plain failure")))
+
+
 class TestFeedReading(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()

@@ -426,11 +426,22 @@ class Telegram(object):
     """Posts to a channel. The token is a credential: it is loaded from a
     gitignored file, never logged, and stripped from every error message."""
 
-    def __init__(self, token, chat_id, dry_run=False, log=print, opener=None):
+    # Telegram allows roughly 20 messages a minute to one channel. Going over
+    # earns a 429 and, if you keep going, a longer block. So the sender paces
+    # itself rather than firing as fast as the feed is read.
+    MIN_GAP_SECONDS = 3.5
+
+    def __init__(self, token, chat_id, dry_run=False, log=print, opener=None,
+                 sleep=time.sleep, clock=time.time, min_gap=None):
         self.token = token or ""
         self.chat_id = chat_id or ""
         self.dry_run = dry_run
         self.log = log
+        self.sleep = sleep
+        self.clock = clock
+        self.min_gap = self.MIN_GAP_SECONDS if min_gap is None else min_gap
+        self._last_send = 0.0
+        self.dropped = 0
         # Injectable so a test can prove no request is even attempted in a dry
         # run, without the test itself touching the network.
         self.opener = opener or urllib.request.urlopen
@@ -447,6 +458,36 @@ class Telegram(object):
     def url(self):
         return "https://api.telegram.org/bot%s/sendMessage" % self.token
 
+    @staticmethod
+    def retry_after(exc):
+        """How long Telegram ASKED us to wait. A 429 carries the number in its
+        body: {"parameters":{"retry_after":34}}. Guessing with a fixed backoff
+        instead -- which is what this used to do -- means hammering a server
+        that already said stop, burning the retries, and dropping the message."""
+        body = ""
+        read = getattr(exc, "read", None)
+        if read:
+            try:
+                body = read().decode("utf-8", "replace")
+            except Exception:
+                body = ""
+        if not body:
+            body = str(exc)
+        marker = '"retry_after"'
+        i = body.find(marker)
+        if i < 0:
+            return None
+        digits = ""
+        for ch in body[i + len(marker):]:
+            if ch.isdigit():
+                digits += ch
+            elif digits:
+                break
+        try:
+            return min(300, int(digits))          # never sleep more than 5 min
+        except ValueError:
+            return None
+
     def send(self, text, attempts=4):
         if self.dry_run or not self.token or not self.chat_id:
             self.log("---- would post ----\n%s\n" % text)
@@ -456,8 +497,16 @@ class Telegram(object):
             "text": text,
             "disable_web_page_preview": "true",
         }).encode("utf-8")
+
+        # pace ourselves before we are told to
+        gap = self.clock() - self._last_send
+        if gap < self.min_gap:
+            self.sleep(self.min_gap - gap)
+
         delay = 2
-        for attempt in range(1, attempts + 1):
+        attempt = 0
+        waits = 0
+        while attempt < attempts:
             try:
                 req = urllib.request.Request(self.url(), data=data)
                 resp = self.opener(req, timeout=20)
@@ -467,15 +516,32 @@ class Telegram(object):
                     close = getattr(resp, "close", None)
                     if close:
                         close()
+                self._last_send = self.clock()
                 return True
             except Exception as exc:
                 msg = self.redact("%s: %s" % (type(exc).__name__, exc))
-                if attempt == attempts:
-                    self.log("TELEGRAM FAILED after %d tries — %s" % (attempts, msg))
+                wait = self.retry_after(exc)
+                if wait is not None and waits < 5:
+                    # Telegram named a number. Waiting less is how a rate limit
+                    # becomes a block, and being told to wait is not the same as
+                    # failing -- so it does NOT consume a retry. Capped at 5 so a
+                    # server stuck on 429 cannot hold the loop forever.
+                    waits += 1
+                    self.log("telegram rate limited, waiting %ds as instructed" % wait)
+                    self.sleep(wait + 1)
+                    self._last_send = self.clock()
+                    continue
+                attempt += 1
+                if attempt >= attempts:
+                    self.dropped += 1
+                    self.log("TELEGRAM FAILED after %d tries — %s\n"
+                             "  DROPPED this message: %s"
+                             % (attempts, msg, text.split("\n")[0][:70]))
                     return False
                 self.log("telegram send failed (%s), retrying in %ds" % (msg, delay))
-                time.sleep(delay)
+                self.sleep(delay)
                 delay *= 2
+        self._last_send = self.clock()
         return False
 
 

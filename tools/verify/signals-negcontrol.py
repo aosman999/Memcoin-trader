@@ -147,6 +147,30 @@ FAULTS = [
      "    if kind == \"news\" and gate is not None:",
      "    if False:"),
 
+    ("Telegram's retry-after ignored, fixed backoff again",
+     "                if wait is not None and waits < 5:",
+     "                if False:"),
+
+    ("waiting on a rate limit burns a retry, so messages get dropped",
+     "                    waits += 1",
+     "                    attempt += 1"),
+
+    ("the retry-after number is never parsed out of the body",
+     "        marker = '\"retry_after\"'",
+     "        return None\n        marker = '\"retry_after\"'"),
+
+    ("self-pacing removed, so it floods until told to stop",
+     "        gap = self.clock() - self._last_send\n"
+     "        if gap < self.min_gap:\n"
+     "            self.sleep(self.min_gap - gap)",
+     "        pass"),
+
+    ("a dropped message vanishes without a word",
+     '                    self.log("TELEGRAM FAILED after %d tries — %s\\n"\n'
+     '                             "  DROPPED this message: %s"\n'
+     '                             % (attempts, msg, text.split("\\n")[0][:70]))',
+     '                    pass'),
+
     ("the event filter is ignored, so --only does nothing",
      "    if kind not in want:\n        return None",
      "    if False:\n        return None"),
