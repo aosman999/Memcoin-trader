@@ -571,6 +571,57 @@ def read_new_lines(path, offset):
     return [l for l in chunk.split("\n") if l.strip()], new_offset
 
 
+# ------------------------------------------------------------------ one copy
+# Two copies of this program watching the same feed post every event twice,
+# and there is nothing in the messages to say which copy sent which. It is an
+# easy mistake -- start it in a second tab, forget the first is still alive --
+# and it looks exactly like a bug in the bot. So the second copy refuses.
+
+def _alive(pid):
+    try:
+        os.kill(pid, 0)                 # signal 0 asks "does this exist?"
+    except OSError:
+        return False
+    except Exception:
+        return False
+    return True
+
+
+def claim_lock(path):
+    """Take the lock, or return the pid of whoever already holds it.
+
+    A lock left behind by a crash is taken over rather than blocking forever:
+    what matters is whether that process is still RUNNING, not whether it
+    tidied up after itself."""
+    try:
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as fh:
+                    other = int((fh.read() or "0").strip())
+            except (ValueError, OSError):
+                other = 0
+            if other and other != os.getpid() and _alive(other):
+                return other
+        d = os.path.dirname(path)
+        if d and not os.path.isdir(d):
+            os.makedirs(d)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(str(os.getpid()))
+    except OSError:
+        return None                     # cannot lock: do not block the user
+    return None
+
+
+def release_lock(path):
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            if int((fh.read() or "0").strip()) != os.getpid():
+                return                  # someone else's lock, leave it alone
+        os.remove(path)
+    except (ValueError, OSError):
+        pass
+
+
 def load_state(path):
     try:
         with open(path, "r", encoding="utf-8") as fh:
@@ -969,6 +1020,18 @@ def main(argv=None):
         # dumped into the channel the first time this is switched on.
         offset = os.path.getsize(feed)
 
+    lock_path = state_path + ".lock"
+    holder = claim_lock(lock_path)
+    if holder is not None:
+        print("ALREADY RUNNING as process %d, watching the same feed.\n"
+              "Two copies post every message twice — which looks exactly like a\n"
+              "bug in the bot, and is not. This one is stopping.\n"
+              "\n"
+              "To stop every copy and start fresh:\n"
+              "    pkill -f goldsignals.py\n"
+              "    python3 %s" % (holder, os.path.abspath(__file__)))
+        return 1
+
     print("goldsignals watching %s" % feed)
     if not os.path.exists(feed):
         print("  (that file does not exist yet — it appears the first time "
@@ -998,11 +1061,13 @@ def main(argv=None):
             state["offset"] = offset
             save_state(state_path, state)
         if args.once:
+            release_lock(lock_path)
             return 0
         try:
             time.sleep(args.poll)
         except KeyboardInterrupt:
             print("\nstopped.")
+            release_lock(lock_path)
             return 0
 
 

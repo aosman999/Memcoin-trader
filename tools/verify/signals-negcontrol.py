@@ -171,6 +171,21 @@ FAULTS = [
      '                             % (attempts, msg, text.split("\\n")[0][:70]))',
      '                    pass'),
 
+    ("a second copy is allowed to run, so everything posts twice",
+     "            if other and other != os.getpid() and _alive(other):\n"
+     "                return other",
+     "            pass"),
+
+    ("a crashed run locks the user out forever",
+     "    except OSError:\n        return False\n    except Exception:\n"
+     "        return False\n    return True",
+     "    return True"),
+
+    ("release deletes whichever lock it finds, including someone else's",
+     "            if int((fh.read() or \"0\").strip()) != os.getpid():\n"
+     "                return                  # someone else's lock, leave it alone",
+     "        pass"),
+
     ("the event filter is ignored, so --only does nothing",
      "    if kind not in want:\n        return None",
      "    if False:\n        return None"),

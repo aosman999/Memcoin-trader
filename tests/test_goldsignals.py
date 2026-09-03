@@ -572,6 +572,65 @@ class TestRateLimiting(unittest.TestCase):
         self.assertIsNone(gs.Telegram.retry_after(IOError("plain failure")))
 
 
+class TestOnlyOneCopy(unittest.TestCase):
+    """The owner got every message twice. Not a bug in the messages -- two
+    copies of the program were watching the same feed, each posting everything
+    once. From the channel it is indistinguishable from a duplication bug."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.lock = os.path.join(self.dir, "sub", "signals.jsonl.posted.lock")
+
+    def test_the_first_copy_takes_the_lock(self):
+        self.assertIsNone(gs.claim_lock(self.lock))
+        self.assertTrue(os.path.exists(self.lock))
+        with open(self.lock) as fh:
+            self.assertEqual(int(fh.read()), os.getpid())
+
+    def test_a_second_copy_is_told_who_holds_it(self):
+        # A pid that is definitely alive but is not us: our own parent.
+        other = os.getppid()
+        with open_lock(self.lock) as fh:
+            fh.write(str(other))
+        held = gs.claim_lock(self.lock)
+        self.assertEqual(held, other)
+
+    def test_a_lock_left_by_a_dead_process_is_taken_over(self):
+        # A crash must not lock the user out forever. What matters is whether
+        # that process is still running, not whether it tidied up.
+        with open_lock(self.lock) as fh:
+            fh.write("999999")            # a pid that cannot be alive
+        self.assertIsNone(gs.claim_lock(self.lock))
+
+    def test_a_corrupt_lock_file_is_taken_over(self):
+        with open_lock(self.lock) as fh:
+            fh.write("not a number")
+        self.assertIsNone(gs.claim_lock(self.lock))
+
+    def test_our_own_lock_does_not_block_us(self):
+        gs.claim_lock(self.lock)
+        self.assertIsNone(gs.claim_lock(self.lock))
+
+    def test_releasing_removes_it(self):
+        gs.claim_lock(self.lock)
+        gs.release_lock(self.lock)
+        self.assertFalse(os.path.exists(self.lock))
+
+    def test_releasing_never_removes_somebody_elses_lock(self):
+        with open_lock(self.lock) as fh:
+            fh.write(str(os.getppid()))
+        gs.release_lock(self.lock)
+        self.assertTrue(os.path.exists(self.lock),
+                        "released a lock this process never held")
+
+
+def open_lock(path):
+    d = os.path.dirname(path)
+    if d and not os.path.isdir(d):
+        os.makedirs(d)
+    return open(path, "w", encoding="utf-8")
+
+
 class TestFeedReading(unittest.TestCase):
     def setUp(self):
         self.dir = tempfile.mkdtemp()
