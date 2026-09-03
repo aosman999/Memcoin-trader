@@ -25,10 +25,6 @@ FAULTS = [
      '        lines.append("Tp%s%d: %s" % (" " if i == 1 else "", i, _f(tp)))',
      '        lines.append("TP%d = %s" % (i, _f(tp)))'),
 
-    ("buy and sell swapped in the signal",
-     '    lines = ["%s gold" % ("Buy" if side == "BUY" else "Sell"),',
-     '    lines = ["%s gold" % ("Sell" if side == "BUY" else "Buy"),'),
-
     ("an entry zone invented when there is only one price",
      "    if hi - lo < 0.01:\n        return _f(fill)",
      "    if False:\n        return _f(fill)"),
@@ -37,13 +33,18 @@ FAULTS = [
      '    lines.append("Sl \\U0001f6d1: %s" % _f(ev.get("stop")))',
      '    pass'),
 
-    ("live account no longer flagged",
-     '        lines.append("⚠️ LIVE ACCOUNT")',
-     '        pass'),
+    ("the account-type switch stops working",
+     '    if show_account:',
+     '    if False:'),
 
-    # Two separate controls, because the redaction has two clauses and either
-    # one alone hides the FULL token from a naive check while leaving the
-    # secret half in the log. Each clause has to be provably load-bearing.
+    ("buy and sell swapped in the signal",
+     '    buy = side == "BUY"',
+     '    buy = side != "BUY"'),
+
+    ("the green/red cue is the same colour whichever way the trade points",
+     '    return "\\U0001f7e2" if (side or "").upper() == "BUY" else "\\U0001f534"',
+     '    return "\\U0001f7e2"'),
+
     ("token redaction removed (secret half left in the log)",
      "        if self.token and self.token in text:\n"
      "            text = text.replace(self.token, \"<token redacted>\")",

@@ -28,7 +28,7 @@ class TestSignalFormat(unittest.TestCase):
     def test_entry_has_the_requested_shape(self):
         text = gs.format_entry(ENTRY)
         lines = text.split("\n")
-        self.assertEqual(lines[0], "Buy gold")
+        self.assertEqual(lines[0], "\U0001f7e2 Buy gold")
         self.assertTrue(lines[1].startswith("Entry- "), lines[1])
         self.assertEqual(lines[2], "Tp 1: 4308.02")
         self.assertEqual(lines[3], "Tp2: 4314.19")
@@ -37,7 +37,30 @@ class TestSignalFormat(unittest.TestCase):
 
     def test_sell_says_sell(self):
         ev = dict(ENTRY, side="SELL")
-        self.assertTrue(gs.format_entry(ev).startswith("Sell gold"))
+        self.assertTrue(gs.format_entry(ev).startswith("\U0001f534 Sell gold"))
+
+    def test_buy_and_sell_are_never_rendered_the_same(self):
+        # The whole message has to read differently at a glance: a follower
+        # scrolling a channel should not have to parse prices to tell which way
+        # a signal points.
+        buy = gs.format_entry(ENTRY)
+        sell = gs.format_entry(dict(ENTRY, side="SELL",
+                                    tps=[4295.68, 4289.51, 4283.34],
+                                    stop=4314.15))
+        self.assertNotEqual(buy.split("\n")[0], sell.split("\n")[0])
+        self.assertIn("\U0001f7e2", buy)
+        self.assertIn("\U0001f534", sell)
+        self.assertNotIn("\U0001f534", buy.split("\n")[0])
+        self.assertNotIn("\U0001f7e2", sell.split("\n")[0])
+
+    def test_the_direction_marker_is_on_every_message_about_the_trade(self):
+        for fn, ev in ((gs.format_tp, {"rung": 1, "of": 3, "entry": 1.0,
+                                       "price": 2.0, "profit": 1.0}),
+                       (gs.format_sl, {"entry": 1.0, "price": 0.5, "profit": -1.0}),
+                       (gs.format_setup, {"level": 1.0, "stop": 0.5,
+                                          "projected_tp": 2.0})):
+            self.assertIn("\U0001f7e2", fn(dict(ev, side="BUY")))
+            self.assertIn("\U0001f534", fn(dict(ev, side="SELL")))
 
     def test_entry_zone_is_the_level_and_the_fill(self):
         self.assertEqual(gs.entry_zone(ENTRY), "4301.20 - 4301.85")
@@ -53,9 +76,18 @@ class TestSignalFormat(unittest.TestCase):
         self.assertIn("Tp 1: 4308.02", one)
         self.assertNotIn("Tp2:", one)
 
-    def test_a_live_account_is_labelled_as_one(self):
-        self.assertIn("LIVE ACCOUNT", gs.format_entry(dict(ENTRY, demo=False)))
-        self.assertIn("Demo account", gs.format_entry(ENTRY))
+    def test_the_account_type_is_not_mentioned_by_default(self):
+        # The owner asked for it out of the channel. Recorded here so the
+        # behaviour is deliberate rather than something that quietly regressed.
+        text = gs.format_entry(ENTRY)
+        self.assertNotIn("Demo", text)
+        self.assertNotIn("LIVE", text)
+
+    def test_the_switch_puts_the_account_type_back(self):
+        self.assertIn("Demo account",
+                      gs.format_entry(ENTRY, show_account=True))
+        self.assertIn("LIVE ACCOUNT",
+                      gs.format_entry(dict(ENTRY, demo=False), show_account=True))
 
     def test_tp_message_names_the_rung_and_the_state(self):
         first = gs.format_tp({"side": "BUY", "rung": 1, "of": 3, "entry": 4301.85,

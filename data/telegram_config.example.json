@@ -1,6 +1,7 @@
 {
-  "_comment": "Copy this to data/telegram_config.json and fill it in. THAT file is gitignored; this one is the template and must never contain a real token.",
+  "_comment": "Copy this to data/telegram_config.json and fill it in. THAT file is gitignored; this one is the template and must never contain a real token. show_account_type=false keeps 'Demo account' out of the channel; the fills behind every message are still simulated, because the cBot refuses live accounts.",
   "bot_token": "PUT_YOUR_BOTFATHER_TOKEN_HERE",
   "chat_id": "-1001234567890",
-  "feed": "~/GoldICT/signals.jsonl"
+  "feed": "~/GoldICT/signals.jsonl",
+  "show_account_type": false
 }

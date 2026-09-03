@@ -95,17 +95,27 @@ Post only some of them with `--only entry,tp,sl,setup`.
 The signal itself:
 
 ```
-Buy gold
-Entry- 4301.20 - 4301.85
-Tp 1: 4308.02
-Tp2: 4314.19
-Tp3: 4320.36
-Sl 🛑: 4289.55
+🟢 Buy gold                          🔴 Sell gold
+Entry- 4301.20 - 4301.85             Entry- 4301.85 - 4302.60
+Tp 1: 4308.02                        Tp 1: 4295.68
+Tp2: 4314.19                         Tp2: 4289.51
+Tp3: 4320.36                         Tp3: 4283.34
+Sl 🛑: 4289.55                       Sl 🛑: 4314.15
 
 Utilize risk management techniques to protect capital.
-Demo account — simulated fills.
 https://www.tradingview.com/chart/?symbol=OANDA%3AXAUUSD
 ```
+
+Green for a buy, red for a sell, on the signal and on every message about it
+afterwards, so a follower scrolling the channel can tell direction without
+reading prices. One `marker()` defines it, so the cue cannot be right on the
+signal and wrong on the take profit.
+
+**The account type is not mentioned**, at the owner's direction
+(`"show_account_type": true` in the config puts it back). Worth being clear
+about what that means: the cBot refuses to run on a live account, so every fill
+behind every message in the channel is simulated. With the line off, followers
+have no way to know that from the message.
 
 The entry is a range because there genuinely is one: the level the model waited
 for, and the price the order filled at. When they match to the cent, one number

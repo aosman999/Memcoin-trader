@@ -91,6 +91,13 @@ CHART_URL = "https://www.tradingview.com/chart/?symbol=OANDA%3AXAUUSD"
 # needs the method, and a signal that explains itself invites arguing with it.
 RISK_LINE = "Utilize risk management techniques to protect capital."
 
+# Whether the channel is told the account is a demo. Off at the owner's
+# direction. It matters, so it is worth writing down why the switch exists: the
+# cBot REFUSES to run on a live account, so every fill behind every message is
+# simulated. With this off, followers read simulated results as real trades.
+# Turn it back on with "show_account_type": true in the config.
+SHOW_ACCOUNT_TYPE = False
+
 # Strategy words that must never appear in a posted message. Checked by a test,
 # because this is the kind of thing that comes back the moment a formatter is
 # edited without thinking about it.
@@ -112,6 +119,13 @@ DEFAULT_FEED = "~/GoldICT/signals.jsonl"
 # ----------------------------------------------------------------- formatting
 # Pure functions: an event dict in, the message text out, or None for "say
 # nothing". Kept free of network and file IO so tests can drive them directly.
+
+def marker(side):
+    """Green for a buy, red for a sell. One definition, used by every message
+    about a trade, so the cue cannot end up correct on the signal and wrong on
+    the take profit."""
+    return "\U0001f7e2" if (side or "").upper() == "BUY" else "\U0001f534"
+
 
 def _f(v, nd=2):
     try:
@@ -135,22 +149,24 @@ def entry_zone(ev):
     return "%s - %s" % (_f(lo), _f(hi))
 
 
-def format_entry(ev):
+def format_entry(ev, show_account=None):
     side = (ev.get("side") or "").upper()
     if side not in ("BUY", "SELL"):
         return None
+    if show_account is None:
+        show_account = SHOW_ACCOUNT_TYPE
     tps = ev.get("tps") or []
-    lines = ["%s gold" % ("Buy" if side == "BUY" else "Sell"),
+    buy = side == "BUY"
+    lines = ["%s %s gold" % (marker(side), "Buy" if buy else "Sell"),
              "Entry- %s" % entry_zone(ev)]
     for i, tp in enumerate(tps, 1):
         lines.append("Tp%s%d: %s" % (" " if i == 1 else "", i, _f(tp)))
     lines.append("Sl \U0001f6d1: %s" % _f(ev.get("stop")))
     lines.append("")
     lines.append(RISK_LINE)
-    if not ev.get("demo", True):
-        lines.append("⚠️ LIVE ACCOUNT")
-    else:
-        lines.append("Demo account — simulated fills.")
+    if show_account:
+        lines.append("⚠️ LIVE ACCOUNT" if not ev.get("demo", True)
+                     else "Demo account — simulated fills.")
     lines.append(CHART_URL)
     return "\n".join(lines)
 
@@ -158,7 +174,8 @@ def format_entry(ev):
 def format_tp(ev):
     n, of = ev.get("rung"), ev.get("of")
     side = (ev.get("side") or "").upper()
-    head = "✅ TP%s HIT — %s gold" % (n, "Buy" if side == "BUY" else "Sell")
+    head = "✅ TP%s HIT — %s %s gold" % (
+        n, marker(side), "Buy" if side == "BUY" else "Sell")
     lines = [head,
              "Filled at %s (entry %s)" % (_f(ev.get("price")), _f(ev.get("entry"))),
              "Profit on this third: %s" % _f(ev.get("profit"))]
@@ -175,7 +192,8 @@ def format_tp(ev):
 def format_sl(ev):
     side = (ev.get("side") or "").upper()
     return "\n".join([
-        "\U0001f6d1 SL hit — %s gold" % ("Buy" if side == "BUY" else "Sell"),
+        "\U0001f6d1 SL hit — %s %s gold" % (
+            marker(side), "Buy" if side == "BUY" else "Sell"),
         "Out at %s (entry %s)" % (_f(ev.get("price")), _f(ev.get("entry"))),
         "Result: %s" % _f(ev.get("profit")),
     ])
@@ -208,7 +226,8 @@ def format_close(ev):
 def format_setup(ev):
     side = (ev.get("side") or "").upper()
     return "\n".join([
-        "⚡ GET READY — possible %s gold" % ("Buy" if side == "BUY" else "Sell"),
+        "⚡ GET READY — possible %s %s gold" % (
+            marker(side), "Buy" if side == "BUY" else "Sell"),
         "Watching %s" % _f(ev.get("level")),
         "If it fills: stop %s, first target around %s"
         % (_f(ev.get("stop")), _f(ev.get("projected_tp"))),
@@ -504,6 +523,9 @@ def main(argv=None):
     feed = os.path.expanduser(args.feed or cfg.get("feed") or DEFAULT_FEED)
     state_path = args.state or (feed + ".posted")
     want = set(x.strip() for x in args.only.split(",") if x.strip())
+
+    global SHOW_ACCOUNT_TYPE
+    SHOW_ACCOUNT_TYPE = bool(cfg.get("show_account_type", False))
 
     tg = Telegram(cfg.get("bot_token"), cfg.get("chat_id"), dry_run=args.dry_run)
 
