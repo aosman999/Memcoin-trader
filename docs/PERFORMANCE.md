@@ -2988,3 +2988,100 @@ the most canonical part of the method.
 **REJECTED.** Neutral on quality, expensive on opportunity. The code stays in
 the scratchpad so the finding is checkable and so the switch is one edit away if
 the owner wants it against the evidence.
+
+## The stop clamp was overriding the structure (a shipped defect)
+
+`MinStopPercent` was 0.4% of price, carried over from GoldEdgeNews and never
+re-tested for the ICT models. On gold that is about $17 — WIDER than the swing
+that defines the risk on most setups. Instrumenting where each stop actually
+came from:
+
+| chart | stop set by STRUCTURE | set by the FLOOR |
+|---|---|---|
+| m5, floor 0.4% | **2.2%** | 97.8% |
+| h1, floor 0.4% | 70.4% | 22.9% |
+| m5, floor 0.05% | 89.1% | 10.9% |
+| m15, floor 0.05% | 95.3% | 4.7% |
+
+98 of every 100 m5 stops had nothing to do with the setup that produced them.
+The model said "risk to the low of that candle" and the bot said "risk $17,
+wherever that lands". Freeing the floor: m5 +0.095 → **+0.286R**, and it is
+most of the reason the higher timeframes looked so much better.
+
+## Timeframe sweep
+
+Exits scaled to the same number of BARS on every chart, so no timeframe is
+handicapped by a wall-clock hold that suits another. Stop floor freed.
+
+| chart | mixed R | M2 R | win | mixed median | losing |
+|---|---|---|---|---|---|
+| m5 | +0.286 | +0.492 | 62-63% | $4,918 | 0/20 |
+| **m15** | **+0.440** | **+0.682** | 72% | **$13,539** | 0/20 |
+| m30 | +0.528 | +0.793 | 76-78% | $11,822 | 0/20 |
+| h1 | +0.652 | +0.826 | 79-80% | $9,600 | 0/20 |
+
+h1 has the best mean R; **m15 makes the most money** (it trades 2.4x as often)
+and separates most cleanly from its control. The h1 control drifts to +0.114 /
++0.165 with only 9-12 of 20 runs red — the weakest separation in the sweep — so
+the h1 edge is the least trustworthy despite the biggest number. **m15 ships.**
+
+Cost was ruled out as the explanation first: at ZERO spread and commission, m5
+moves +0.095 → +0.103 and h1 stays at +0.614. Cost amortisation accounts for
+none of the timeframe effect.
+
+### Holdout, seeds 201-240, never used for anything
+
+| tape | trades | win | mean R | median | losing |
+|---|---|---|---|---|---|
+| m15 mixed | 48,870 | 72.0% | **+0.434** | $12,465 | 0/40 |
+| its matched random | 35,547 | 51.6% | +0.005 | $2,018 | 34/40 |
+| m15 M1 | 52,206 | 73.3% | **+0.586** | $22,871 | 0/40 |
+| m15 M2 | 53,616 | 73.3% | **+0.706** | $34,577 | 0/40 |
+
+No shrinkage against the selection seeds (+0.440 / +0.682). **CERTIFIED.**
+
+## Multi-timeframe, two forms, both REJECTED
+
+**Form 1 — the higher chart as a VETO** (`ict_mtf.py`). HTF bias from H1/H4
+structure, plus premium/discount as a separate layer, no lookahead (the HTF bar
+consulted is the last one CLOSED when the entry bar opened).
+
+| | trades | mean R | median | losing |
+|---|---|---|---|---|
+| single chart, 1% risk | 25,056 | +0.440 | $13,539 | 0/20 |
+| HTF bias H1, 1% risk | 7,266 | +0.462 | $4,999 | 0/20 |
+| HTF bias H1, 3% risk | 8,325 | +0.438 | $12,142 | 0/20 |
+| single chart, 3% risk | 25,986 | +0.435 | $231,597 | 0/20 |
+| bias + premium/discount H1 | 1,308 | +0.462 | $3,237 | 1/20 |
+
++0.022R of quality for 71% of the trades. Given 3x the size to compensate it
+still trails the unfiltered version at 1%. Premium/discount cuts the survivors
+by another 85% and is the only setting that produces losing runs. The "PASS
+when the higher chart has no clean bias" rule does most of the cutting — the
+most canonical part of the method and the most expensive.
+
+**Form 2 — every chart as a SOURCE** (`ict_stack.py`). m15/m30/h1/h4 each
+hunting their own setups into one shared book, each with its own clock, its own
+memory, sharing the risk budget.
+
+| | mixed R | M2 R | mixed trades |
+|---|---|---|---|
+| m15 only | +0.445 | +0.693 | 48,651 |
+| m15 + m30 | +0.440 | +0.665 | 58,116 |
+| m15 + m30 + h1 | +0.444 | +0.659 | 58,638 |
+| m15 + m30 + h1 + h4 | +0.453 | +0.658 | 47,454 |
+| all four, 4 slots | +0.448 | +0.655 | 53,640 |
+
+Flat on mixed, consistently **worse** on M2. More charts buys more trades at
+the same or slightly lower quality per trade — not more edge.
+
+**Two cautions on this run, recorded because they matter more than the table.**
+The median equities here ($129k to $1.5M from $3,000) are NOT credible: they
+are what unconstrained 1% compounding over 3,000+ trades produces in a
+simulator with no slippage, no size ceiling and no drawdown de-risking. Trade
+count drives them, so they cannot be used to rank these variants — mean R is
+the honest measure and it says the stack adds nothing. And the matched random
+control on the M2 stack reached +0.151 with only 7 of 15 runs red, the weakest
+separation measured anywhere in this project. On M2 the EXITS are carrying more
+of the result than the entries are, which is a caution about M2 rather than
+about the stack.
