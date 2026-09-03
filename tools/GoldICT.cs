@@ -135,6 +135,46 @@ namespace cAlgo.Robots
         [Parameter("Orderblock (REJECTED — loses money on M2)", DefaultValue = false, Group = "Models")]
         public bool UseOrderblock { get; set; }
 
+        // ======================= TOP-DOWN ==================================
+        // The higher chart says WHERE, the lower chart says WHEN. Measured
+        // against the single-chart model: better per trade (+0.851 vs +0.441 R
+        // on mixed, 85% win) and roughly forty times rarer -- about one trade
+        // every ten days. Read the trade-off honestly: the single-chart model's
+        // simulated equity curve is not a real number, because it compounds 1%
+        // risk over 3,000+ trades with no slippage, no size ceiling and no
+        // market impact. The top-down model's ~4% per 150 days at 1% risk is a
+        // number a real account could actually produce.
+        //
+        // Ablations, and they matter: removing the H4 zone rule costs only
+        // 0.037 R, removing the structure shift 0.063 R, and removing the fair
+        // value gap costs NOTHING while more than doubling the trades. No
+        // single rule here is load-bearing -- what generates the edge is the
+        // displacement requirement they all share.
+        [Parameter("Top-down: higher chart marks the zone", DefaultValue = false, Group = "Top-down")]
+        public bool UseTopDown { get; set; }
+
+        [Parameter("Zone chart", DefaultValue = "Hour4", Group = "Top-down")]
+        public string ZoneTimeFrame { get; set; }
+
+        [Parameter("Zone lookback (higher-chart bars)", DefaultValue = 24, MinValue = 4, MaxValue = 200, Group = "Top-down")]
+        public int ZoneLookback { get; set; }
+
+        [Parameter("Zone must be validated within (bars)", DefaultValue = 12, MinValue = 1, MaxValue = 100, Group = "Top-down")]
+        public int ZoneValidWithin { get; set; }
+
+        [Parameter("Forget a zone after (higher-chart bars)", DefaultValue = 40, MinValue = 2, MaxValue = 500, Group = "Top-down")]
+        public int ZoneMaxAge { get; set; }
+
+        [Parameter("Require a structure shift inside the zone", DefaultValue = true, Group = "Top-down")]
+        public bool RequireShift { get; set; }
+
+        // Costs 60% of the trades and bought nothing in the ablation. Off.
+        [Parameter("Require a fair value gap (ablation says it adds nothing)", DefaultValue = false, Group = "Top-down")]
+        public bool RequireFvg { get; set; }
+
+        [Parameter("Only trade the London and New York killzones", DefaultValue = false, Group = "Top-down")]
+        public bool KillzonesOnly { get; set; }
+
         // ======================= STRUCTURE ==================================
         [Parameter("Swing fractal size (bars each side)", DefaultValue = 2, MinValue = 1, MaxValue = 10, Group = "Structure")]
         public int SwingFractal { get; set; }
@@ -356,7 +396,21 @@ namespace cAlgo.Robots
             public string Detail;
         }
 
+        // An active higher-timeframe PD array: the price band the model is
+        // willing to trade from, and nothing outside it.
+        private sealed class Zone
+        {
+            public int Direction;
+            public double Low;
+            public double High;
+            public int BornIndex;
+            public double Liquidity;
+        }
+
         private AverageTrueRange _atr;
+        private Bars _zoneBars;
+        private readonly List<Zone> _zones = new List<Zone>();
+        private int _lastZoneBar = -1;
         private bool _stopped;
         private readonly List<Setup> _pending = new List<Setup>();
         private readonly HashSet<string> _seen = new HashSet<string>();
@@ -412,6 +466,29 @@ namespace cAlgo.Robots
             }
 
             _atr = Indicators.AverageTrueRange(14, MovingAverageType.Exponential);
+
+            if (UseTopDown)
+            {
+                _zoneBars = MarketData.GetBars(ParseTimeFrame(ZoneTimeFrame), SymbolName);
+                if (_zoneBars == null)
+                {
+                    // Fail loudly rather than quietly trading a model that is
+                    // missing the half of itself that decides WHERE.
+                    Print("REFUSING TO RUN: top-down is on but the {0} chart could not be " +
+                          "loaded. Without the higher chart there is no zone, and without a " +
+                          "zone this is not the top-down model.", ZoneTimeFrame);
+                    _stopped = true;
+                    Stop();
+                    return;
+                }
+                Print("Top-down: {0} marks the zones, {1} takes the entry. Structure shift {2}, " +
+                      "fair value gap {3}, killzones {4}.",
+                      ZoneTimeFrame, Bars.TimeFrame, RequireShift ? "required" : "off",
+                      RequireFvg ? "required" : "off", KillzonesOnly ? "only" : "off");
+                Print("Measured: +0.851 R on mixed and +0.755 on M2 at 80-85% win, against the " +
+                      "single-chart model's +0.441 / +0.691 — but roughly FORTY TIMES rarer, " +
+                      "about one trade every ten days. SIMULATED.");
+            }
             _dayStart = Server.TimeInUtc.Date;
             _dayStartEquity = Account.Equity;
 
@@ -705,8 +782,163 @@ namespace cAlgo.Robots
             return v;
         }
 
+        private static TimeFrame ParseTimeFrame(string name)
+        {
+            switch ((name ?? "").Trim().ToLowerInvariant())
+            {
+                case "minute15": case "m15": return TimeFrame.Minute15;
+                case "minute30": case "m30": return TimeFrame.Minute30;
+                case "hour": case "h1": return TimeFrame.Hour;
+                case "hour4": case "h4": return TimeFrame.Hour4;
+                case "daily": case "d1": return TimeFrame.Daily;
+                default: return TimeFrame.Hour4;
+            }
+        }
+
+        // STEP 1 of the top-down model: the higher chart marks the PD arrays.
+        // Rebuilt only when a higher-timeframe bar CLOSES, and only from bars
+        // that have closed — a forming h4 bar knows the future relative to the
+        // m15 chart trading inside it, and using it would make any zone look
+        // prophetic.
+        private void RefreshZones()
+        {
+            if (_zoneBars == null)
+                return;
+            var j = _zoneBars.Count - 2;
+            if (j == _lastZoneBar || j < ZoneLookback + 4)
+                return;
+            _lastZoneBar = j;
+
+            // A zone dies of old age, or when the higher chart closes through it.
+            _zones.RemoveAll(z => j - z.BornIndex > ZoneMaxAge ||
+                                  (z.Direction > 0 ? _zoneBars.ClosePrices[j] < z.Low
+                                                   : _zoneBars.ClosePrices[j] > z.High));
+
+            var k = ZoneOrderblock(j, 1);
+            if (k >= 0 && ZoneValidated(k, j, 1) && !_zones.Any(z => z.Direction > 0 && z.BornIndex == k))
+                _zones.Add(new Zone
+                {
+                    Direction = 1, Low = _zoneBars.LowPrices[k], High = _zoneBars.HighPrices[k],
+                    BornIndex = k, Liquidity = ZoneExtreme(j, true),
+                });
+            k = ZoneOrderblock(j, -1);
+            if (k >= 0 && ZoneValidated(k, j, -1) && !_zones.Any(z => z.Direction < 0 && z.BornIndex == k))
+                _zones.Add(new Zone
+                {
+                    Direction = -1, Low = _zoneBars.LowPrices[k], High = _zoneBars.HighPrices[k],
+                    BornIndex = k, Liquidity = ZoneExtreme(j, false),
+                });
+        }
+
+        private int ZoneOrderblock(int j, int direction)
+        {
+            var best = -1;
+            var bestEdge = direction > 0 ? double.MaxValue : double.MinValue;
+            var bestBody = -1.0;
+            for (var k = Math.Max(0, j - ZoneLookback); k < j; k++)
+            {
+                var up = _zoneBars.ClosePrices[k] > _zoneBars.OpenPrices[k];
+                if (direction > 0 ? up : !up)
+                    continue;                      // bullish zone wants a DOWN close
+                var body = Math.Abs(_zoneBars.ClosePrices[k] - _zoneBars.OpenPrices[k]);
+                var edge = direction > 0 ? _zoneBars.LowPrices[k] : _zoneBars.HighPrices[k];
+                var better = direction > 0 ? edge < bestEdge : edge > bestEdge;
+                if (better || (edge == bestEdge && body > bestBody))
+                {
+                    bestEdge = edge; bestBody = body; best = k;
+                }
+            }
+            return best;
+        }
+
+        private bool ZoneValidated(int k, int j, int direction)
+        {
+            var to = Math.Min(j, k + ZoneValidWithin);
+            for (var m = k + 1; m <= to; m++)
+                if (direction > 0 ? _zoneBars.HighPrices[m] > _zoneBars.HighPrices[k]
+                                  : _zoneBars.LowPrices[m] < _zoneBars.LowPrices[k])
+                    return true;
+            return false;
+        }
+
+        private double ZoneExtreme(int j, bool high)
+        {
+            var v = high ? double.MinValue : double.MaxValue;
+            for (var m = Math.Max(0, j - StructureLookback); m <= j; m++)
+            {
+                if (high && _zoneBars.HighPrices[m] > v) v = _zoneBars.HighPrices[m];
+                if (!high && _zoneBars.LowPrices[m] < v) v = _zoneBars.LowPrices[m];
+            }
+            return v;
+        }
+
+        // STEPS 2-4: price has to be delivering INSIDE a zone, the lower chart
+        // has to confirm with a displacement (and a structure shift), and the
+        // entry is the array that displacement leaves behind.
+        private void FindTopDownSetups()
+        {
+            var i = Bars.Count - 2;
+            if (i < StructureLookback + SwingFractal + 5 || _zones.Count == 0)
+                return;
+            var hour = Server.TimeInUtc.Hour;
+            if (KillzonesOnly && !((hour >= 7 && hour < 10) || (hour >= 12 && hour < 15)))
+                return;
+
+            var atr = _atr.Result[i];
+            if (atr <= 0)
+                return;
+            var displaced = (Bars.HighPrices[i] - Bars.LowPrices[i]) > VoidDisplacementAtr * atr;
+            if (!displaced)
+                return;
+
+            var close = Bars.ClosePrices[i];
+            List<int> highs = null, lows = null;
+
+            foreach (var z in _zones.ToList())
+            {
+                if (close < z.Low || close > z.High)
+                    continue;                                  // not in the zone
+                var d = z.Direction;
+
+                if (RequireShift)
+                {
+                    if (highs == null)
+                        CollectSwings(i, out highs, out lows);
+                    var shifted = d > 0
+                        ? (highs.Count > 0 && close > Bars.HighPrices[highs[highs.Count - 1]])
+                        : (lows.Count > 0 && close < Bars.LowPrices[lows[lows.Count - 1]]);
+                    if (!shifted)
+                        continue;
+                }
+
+                double entry;
+                if (d > 0 && Bars.LowPrices[i] > Bars.HighPrices[i - 2])
+                    entry = Bars.LowPrices[i];
+                else if (d < 0 && Bars.HighPrices[i] < Bars.LowPrices[i - 2])
+                    entry = Bars.HighPrices[i];
+                else if (!RequireFvg)
+                    entry = close;
+                else
+                    continue;
+
+                if (!Fresh("TOPDOWN", d, z.BornIndex, i))
+                    continue;
+
+                Add("TOP-DOWN", d, entry, d > 0 ? z.Low : z.High, z.Liquidity,
+                    string.Format("{0} zone {1:F2}-{2:F2}, displacement on {3}",
+                                  ZoneTimeFrame, z.Low, z.High, Bars.TimeFrame));
+            }
+        }
+
         private void FindSetups()
         {
+            if (UseTopDown)
+            {
+                RefreshZones();
+                FindTopDownSetups();
+                return;
+            }
+
             var i = Bars.Count - 2;                 // last CLOSED bar
             if (i < StructureLookback + SwingFractal + 5)
                 return;

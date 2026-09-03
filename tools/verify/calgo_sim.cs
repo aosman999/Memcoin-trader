@@ -165,6 +165,19 @@ namespace cAlgo.API.Internals
     }
 
     public class Server { public DateTime TimeInUtc; }
+
+    // Higher-timeframe bars, so the top-down model can be exercised by the
+    // behaviour tests. A bot that asks for h4 bars and gets null is a bot whose
+    // top-down path is never tested.
+    public class MarketDataStub
+    {
+        public Func<cAlgo.API.TimeFrame, string, cAlgo.API.Bars> Provider;
+        public cAlgo.API.Bars GetBars(cAlgo.API.TimeFrame tf, string symbolName)
+        {
+            return Provider == null ? null : Provider(tf, symbolName);
+        }
+        public cAlgo.API.Bars GetBars(cAlgo.API.TimeFrame tf) { return GetBars(tf, null); }
+    }
 }
 
 namespace cAlgo.API.Indicators
@@ -197,6 +210,8 @@ namespace cAlgo.API
         public Account Account;
         public Server Server;
         public IndicatorFactory Indicators;
+        public cAlgo.API.Internals.MarketDataStub MarketData =
+            new cAlgo.API.Internals.MarketDataStub();
         public Positions Positions = new Positions();
         public History History = new History();
         public string SymbolName = "XAUUSD";

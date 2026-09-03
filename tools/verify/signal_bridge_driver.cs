@@ -240,6 +240,9 @@ public static class BridgeSim
         b.UseNews = false;                       // no network in a test
         b.ProtectOnNews = false; b.BlockEntriesOnNews = false; b.UseVacuumWindow = false;
         b.TelegramBotToken = ""; b.TelegramChatId = ""; b.TelegramTrades = false;
+        b.UseTopDown = false; b.ZoneTimeFrame = "Hour4"; b.ZoneLookback = 24;
+        b.ZoneValidWithin = 12; b.ZoneMaxAge = 40; b.RequireShift = true;
+        b.RequireFvg = false; b.KillzonesOnly = false;
         b.Label = "GoldICT"; b.Verbose = false;
         b.FeedHeartbeatMinutes = 0;              // heartbeats are not the subject
         b.PollMinutes = 3; b.AlertThreshold = 3.0;

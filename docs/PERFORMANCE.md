@@ -3085,3 +3085,82 @@ control on the M2 stack reached +0.151 with only 7 of 15 runs red, the weakest
 separation measured anywhere in this project. On M2 the EXITS are carrying more
 of the result than the entries are, which is a caution about M2 rather than
 about the stack.
+
+## The REAL ICT top-down model — ADOPTED as a mode
+
+The multi-timeframe test that was rejected above asked the higher chart the
+wrong question. Researching how the method is actually taught: the higher chart
+supplies a **location**, not a direction.
+
+  1. H4 (or H1) marks the PD array — the orderblock. A 4H orderblock is a far
+     larger institutional position-building event than an m15 one; that is why
+     the higher chart is consulted.
+  2. Wait for price to deliver **into** that zone. Nothing is taken elsewhere.
+  3. Inside the zone, the lower chart must confirm: displacement plus a market
+     structure shift.
+  4. Enter at the array the displacement leaves. Risk beyond the zone.
+
+Higher chart says WHERE, lower chart says WHEN. The rejected version only ever
+asked WHICH WAY — the one question that costs trades without adding anything.
+
+| configuration | mixed R | M2 R | win | trades |
+|---|---|---|---|---|
+| m15 single chart (previous default) | +0.441 | +0.691 | 72-73% | ~65,000 |
+| **H4 zone → m15 entry** | **+0.851** | **+0.755** | 80-85% | 300 / 810 |
+| H1 zone → m15 entry | +0.528 | +0.699 | 70-80% | 204 / 558 |
+| H4 zone → m5 entry | +0.269 | +0.372 | 63% | 1,191 / 2,733 |
+| H4 → m15, killzones only | +0.764 | +0.764 | 80% | 78 / 414 |
+| its matched random control | −0.063 | +0.095 | 43-50% | 372 / 897 |
+
+### Holdout, seeds 301-330, never used for anything
+
+| | trades | win | mean R | losing |
+|---|---|---|---|---|
+| H4→m15 strict, mixed | 441 | 77.6% | +0.665 | 3/30 |
+| H4→m15 no-FVG, mixed | 1,008 | 83.7% | **+0.728** | **0/30** |
+| its matched random | 582 | 34.5% | −0.277 | 27/30 |
+| H4→m15 strict, M1 | 792 | 87.0% | **+0.851** | 1/30 |
+| H4→m15 no-FVG, M1 | 2,022 | 85.4% | +0.773 | 0/30 |
+| H4→m15 strict, M2 | 1,281 | 78.0% | +0.717 | 1/30 |
+
+Roughly **double the per-trade edge** of the single-chart model, certified on
+virgin seeds, with controls deeply negative. **ADOPTED** as `UseTopDown`.
+
+### Ablations — no single rule is load-bearing
+
+| removed | mixed R | M2 R | trades |
+|---|---|---|---|
+| nothing (full model) | +0.851 | +0.755 | 300 / 810 |
+| the H4 zone rule | +0.814 | +0.693 | 351 / 1,050 |
+| the structure shift | +0.788 | +0.725 | 549 / 1,335 |
+| the fair value gap | +0.851 | +0.747 | 732 / 2,013 |
+
+The zone adds 0.037 R, the shift 0.063 R, and the FVG **nothing at all** while
+costing 60% of the trades — so `RequireFvg` ships OFF. What actually generates
+the edge is the displacement requirement common to every variant.
+
+### The limit of this whole rig, stated plainly
+
+**These tapes are synthetic.** Fractional Brownian motion and a statistical gold
+simulator, tuned to gold's volatility and trendiness. They contain no sessions,
+no news, no order book — **no institutions**. ICT's premise is that price is
+delivered algorithmically around liquidity, that a 4H orderblock matters
+*because it is defended*. There is nothing to defend it here.
+
+So the ablation showing the H4 zone adding only 0.037 R means: *on a random
+process, an H4 orderblock has no special reason to matter.* That is weak
+evidence about real gold. This rig can test GEOMETRY — does entering after
+displacement with a stop beyond structure pay, in a process with these
+statistics? It cannot test whether ICT's REASON is true. It can neither confirm
+nor refute the premise, and no amount of seeds will change that.
+
+Only live data settles it. That is what the demo run is for.
+
+### On the equity column
+
+The single-chart model's simulated equity ($121,126 from $3,000 over 150 days)
+is **not a real number**. It is unconstrained 1% compounding over 3,000+ trades
+with no slippage, no size ceiling and no market impact. The top-down model's
+~4% per 150 days at 1% risk is a figure a real account could produce. Where the
+two disagree, rank by mean R and by whether the trade frequency is livable —
+never by the equity column.
