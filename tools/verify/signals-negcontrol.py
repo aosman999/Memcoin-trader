@@ -120,6 +120,33 @@ FAULTS = [
      '            raise TlsError(msg)',
      '        pass'),
 
+    # NOTE: the python-side publisher-suffix strip deliberately has NO control
+    # here. It is defensive only -- the word-overlap check catches wire
+    # duplicates without it, so breaking it does not fail the suite and a
+    # control claiming otherwise would be decoration. Where the strip IS
+    # load-bearing is the cBots' Normalise(), which compares whole strings;
+    # that one is controlled in tools/verify/news-test.sh.
+    ("stopwords no longer stripped, so unrelated headlines look alike",
+     "        if len(w) > 2 and w not in _STOP:",
+     "        if len(w) > 2:"),
+
+    ("the same-story check made vacuous",
+     "    return shared / float(min(len(a), len(b))) >= overlap",
+     "    return False"),
+
+    ("the impact threshold ignored",
+     "        if impact < self.min_impact:\n            return False, \"below the impact threshold\"",
+     "        pass"),
+
+    ("the hourly ceiling removed",
+     "        if self.max_per_hour > 0 and len(self.recent) >= self.max_per_hour:\n"
+     "            return False, \"hourly news limit reached\"",
+     "        pass"),
+
+    ("the gate skipped entirely when rendering news",
+     "    if kind == \"news\" and gate is not None:",
+     "    if False:"),
+
     ("the event filter is ignored, so --only does nothing",
      "    if kind not in want:\n        return None",
      "    if False:\n        return None"),

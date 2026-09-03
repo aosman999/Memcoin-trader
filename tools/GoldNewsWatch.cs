@@ -613,10 +613,20 @@ namespace cAlgo.Robots
             return t.Trim();
         }
 
+        // Google News appends " - Publisher" to every headline, so the SAME
+        // story filed by Reuters, Al-Monitor and Military Times arrives as three
+        // different strings and the duplicate check lets all three through. It
+        // did, into a live channel. Strip the suffix before comparing.
+        public static string NormalisePublic(string title) { return Normalise(title); }
+
         private static string Normalise(string title)
         {
+            var t = (title ?? "").Trim();
+            var cut = t.LastIndexOf(" - ", StringComparison.Ordinal);
+            if (cut > 20)
+                t = t.Substring(0, cut);
             var sb = new System.Text.StringBuilder();
-            foreach (var ch in title.ToUpperInvariant())
+            foreach (var ch in t.ToUpperInvariant())
                 if (char.IsLetterOrDigit(ch)) sb.Append(ch);
             return sb.ToString();
         }

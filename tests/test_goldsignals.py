@@ -181,6 +181,87 @@ class TestTheMethodStaysPrivate(unittest.TestCase):
         self.assertEqual(gs.leaks_method("entered on the BREAKER"), ["BREAKER"])
 
 
+class TestNewsGate(unittest.TestCase):
+    """The channel got the same airstrike three times, from three wires, at the
+    lowest possible impact score. Both halves of that were bugs."""
+
+    def ev(self, headline, impact=9.0):
+        return {"t": "news", "source": "x", "headline": headline,
+                "impact": impact, "lean": "leans gold UP"}
+
+    def test_the_same_story_from_two_wires_goes_out_once(self):
+        gate = gs.NewsGate()
+        a = "Vance: US probing airstrike that Iran says hit a wedding party - Military Times"
+        b = "Vance: US probing airstrike that Iran says hit a wedding party - Al-Monitor"
+        self.assertTrue(gate.allow(self.ev(a))[0])
+        allowed, why = gate.allow(self.ev(b))
+        self.assertFalse(allowed)
+        self.assertIn("same story", why)
+
+    def test_a_reworded_version_of_the_same_story_is_still_the_same_story(self):
+        # The wires rewrite the wording, not the facts.
+        gate = gs.NewsGate()
+        self.assertTrue(gate.allow(self.ev(
+            "US probing airstrike that Iran says hit a wedding party - Reuters"))[0])
+        self.assertFalse(gate.allow(self.ev(
+            "Iran says US airstrike hit a wedding party, probe under way - AP"))[0])
+
+    def test_a_genuinely_different_story_still_gets_through(self):
+        gate = gs.NewsGate()
+        self.assertTrue(gate.allow(self.ev(
+            "US probing airstrike that Iran says hit a wedding party - Reuters"))[0])
+        self.assertTrue(gate.allow(self.ev(
+            "South Korea prepares Hormuz military deployment - Reuters"))[0])
+
+    def test_two_short_unrelated_headlines_are_not_merged(self):
+        # Short headlines are mostly filler words. "Gold rises after the report"
+        # and "Oil falls after the report" share after/the/report -- three of
+        # five words, over the similarity threshold -- so without dropping
+        # stopwords the second story would be silently swallowed as a repeat of
+        # the first. They are opposite stories about different instruments.
+        gate = gs.NewsGate(min_impact=1.0)
+        self.assertTrue(gate.allow(self.ev("Gold rises after the report"))[0])
+        allowed, why = gate.allow(self.ev("Oil falls after the report"))
+        self.assertTrue(allowed, "different story suppressed as a duplicate: %s" % why)
+
+    def test_weak_headlines_do_not_interrupt(self):
+        gate = gs.NewsGate(min_impact=6.0)
+        allowed, why = gate.allow(self.ev("Something mildly gold related", impact=3.0))
+        self.assertFalse(allowed)
+        self.assertIn("impact", why)
+        self.assertTrue(gate.allow(self.ev("A real escalation", impact=7.0))[0])
+
+    def test_a_busy_news_hour_cannot_flood_the_channel(self):
+        gate = gs.NewsGate(min_impact=1.0, max_per_hour=2)
+        self.assertTrue(gate.allow(self.ev("story one about iran nuclear"))[0])
+        self.assertTrue(gate.allow(self.ev("story two about fed rate cuts"))[0])
+        allowed, why = gate.allow(self.ev("story three about tariffs china"))
+        self.assertFalse(allowed)
+        self.assertIn("limit", why)
+
+    def test_the_limit_lifts_once_the_hour_has_passed(self):
+        clock = [1000.0]
+        gate = gs.NewsGate(min_impact=1.0, max_per_hour=1, now=lambda: clock[0])
+        self.assertTrue(gate.allow(self.ev("story one about iran nuclear"))[0])
+        self.assertFalse(gate.allow(self.ev("story two about fed rate cuts"))[0])
+        clock[0] += 3601
+        self.assertTrue(gate.allow(self.ev("story two about fed rate cuts"))[0])
+
+    def test_the_publisher_suffix_is_what_gets_stripped(self):
+        # Not just any " - ": a genuinely hyphenated short headline must survive.
+        self.assertEqual(gs.story_key("Gold - Silver ratio hits a record"),
+                         gs.story_key("Gold - Silver ratio hits a record"))
+        self.assertTrue(gs.same_story(
+            gs.story_key("Gold hits record high on safe haven demand - Reuters"),
+            gs.story_key("Gold hits record high on safe haven demand - CNBC")))
+
+    def test_render_applies_the_gate_only_to_news(self):
+        gate = gs.NewsGate(min_impact=6.0)
+        self.assertIsNone(gs.render(self.ev("weak", impact=2.0), {"news"}, gate))
+        # a trade signal is never rate limited, whatever the news is doing
+        self.assertIsNotNone(gs.render(ENTRY, {"entry"}, gate))
+
+
 class TestTokenSafety(unittest.TestCase):
     TOKEN = "8123456789:AAFtest_token_value_that_must_never_leak"
 

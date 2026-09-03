@@ -51,6 +51,12 @@ run_fault "bot token left in the log on failure" \
 run_fault "Telegram message not URL-encoded" \
           '"&text=" + Uri.EscapeDataString(text ?? "")' '"&text=" + (text ?? "")'
 
+run_fault "publisher suffix no longer stripped (wires duplicate into the channel)" \
+          "            var cut = t.LastIndexOf(\" - \", StringComparison.Ordinal);
+            if (cut > 20)
+                t = t.Substring(0, cut);" \
+          "            var cut = -1; if (cut > 20) t = t.Substring(0, cut);"
+
 run_fault "the Fed shorthand dropped again" \
           '" FED ",' ""
 

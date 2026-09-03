@@ -49,6 +49,23 @@ public static class NewsTest
               "a feed with no items yields nothing");
 
         // ---- direction. Gold rises on fear and easing, falls on calm and tightening.
+        // The SAME story filed by three wires arrives as three strings, because
+        // Google News appends " - Publisher" to every headline. Before this was
+        // stripped, the duplicate check compared the raw titles, found them
+        // different, and posted all three into a live channel.
+        var a = GoldNewsWatch.NormalisePublic(
+            "Vance: US probing airstrike that Iran says hit a wedding party - Military Times");
+        var b = GoldNewsWatch.NormalisePublic(
+            "Vance: US probing airstrike that Iran says hit a wedding party - Al-Monitor");
+        var c = GoldNewsWatch.NormalisePublic(
+            "Vance: US probing airstrike that Iran says hit a wedding party - Reuters");
+        Check(a == b && b == c, "one story from three wires normalises to ONE key");
+        Check(GoldNewsWatch.NormalisePublic("Gold hits record high - CNBC") !=
+              GoldNewsWatch.NormalisePublic("Gold falls on strong dollar - CNBC"),
+              "two different stories from one wire stay different");
+        Check(GoldNewsWatch.NormalisePublic("A - B").Length > 0,
+              "a short hyphenated headline is not emptied by the suffix strip");
+
         var war = GoldNewsWatch.Score("Israel strikes Iranian nuclear site, Tehran vows retaliation");
         Check(war.Direction > 0 && war.Impact >= 4.0,
               string.Format("escalation reads BULLISH for gold (dir {0:+0.0;-0.0}, impact {1:F1})",

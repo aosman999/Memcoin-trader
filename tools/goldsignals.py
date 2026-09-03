@@ -98,6 +98,82 @@ RISK_LINE = "Utilize risk management techniques to protect capital."
 # Turn it back on with "show_account_type": true in the config.
 SHOW_ACCOUNT_TYPE = False
 
+# News filtering. The cBot's own threshold decides what is worth WRITING DOWN;
+# these decide what is worth INTERRUPTING A CHANNEL FOR, which is a much higher
+# bar. Both are tunable from the config file without touching cTrader.
+NEWS_MIN_IMPACT = 6.0        # the cBot's default alert floor is 3.0
+NEWS_MAX_PER_HOUR = 3        # a hard ceiling, whatever the wires are doing
+
+# Words that carry no meaning for deciding whether two headlines are the same
+# story. Without stripping these, "US probing airstrike in Iran" and "US and
+# Iran to hold talks" look similar because they share "us", "in", "to".
+_STOP = frozenset("""a an and are as at be but by for from has have in into is
+it its of on or over that the to was were will with after before amid says say
+said report reports new news latest update updates world""".split())
+
+
+def story_key(title):
+    """The significant words of a headline, with the publisher suffix removed.
+
+    Google News appends " - Publisher" to every title, so the SAME story filed
+    by Reuters, Al-Monitor and Military Times arrives as three different
+    strings. Deduplicating on the raw title therefore does nothing, which is
+    exactly what happened: the channel got the same airstrike three times."""
+    t = (title or "").strip()
+    cut = t.rfind(" - ")
+    if cut > 20:                       # keep short titles that merely contain " - "
+        t = t[:cut]
+    words = []
+    for w in t.lower().replace("'", "").split():
+        w = "".join(ch for ch in w if ch.isalnum())
+        if len(w) > 2 and w not in _STOP:
+            words.append(w)
+    return frozenset(words)
+
+
+def same_story(a, b, overlap=0.6):
+    """Two headlines are the same story when most of their meaningful words
+    agree. Not string equality: the wires rewrite the wording, they do not
+    rewrite the facts."""
+    if not a or not b:
+        return False
+    shared = len(a & b)
+    return shared / float(min(len(a), len(b))) >= overlap
+
+
+class NewsGate(object):
+    """Decides whether a headline is worth a notification. Keeps a short memory
+    of what has already been posted so a story doing the rounds of the wires
+    lands once."""
+
+    def __init__(self, min_impact=None, max_per_hour=None, now=time.time):
+        self.min_impact = NEWS_MIN_IMPACT if min_impact is None else min_impact
+        self.max_per_hour = NEWS_MAX_PER_HOUR if max_per_hour is None else max_per_hour
+        self.now = now
+        self.recent = []                        # (timestamp, story_key)
+
+    def allow(self, ev):
+        try:
+            impact = float(ev.get("impact"))
+        except (TypeError, ValueError):
+            impact = 0.0
+        if impact < self.min_impact:
+            return False, "below the impact threshold"
+
+        t = self.now()
+        self.recent = [(ts, k) for ts, k in self.recent if t - ts < 3600]
+
+        key = story_key(ev.get("headline"))
+        for _, seen in self.recent:
+            if same_story(key, seen):
+                return False, "the same story already went out"
+
+        if self.max_per_hour > 0 and len(self.recent) >= self.max_per_hour:
+            return False, "hourly news limit reached"
+
+        self.recent.append((t, key))
+        return True, None
+
 # Strategy words that must never appear in a posted message. Checked by a test,
 # because this is the kind of thing that comes back the moment a formatter is
 # edited without thinking about it.
@@ -326,12 +402,16 @@ FORMATTERS = {
 }
 
 
-def render(ev, want):
+def render(ev, want, gate=None):
     """One event -> the text to post, or None. `want` is the set of event types
     the operator has switched on."""
     kind = ev.get("t")
     if kind not in want:
         return None
+    if kind == "news" and gate is not None:
+        ok, why = gate.allow(ev)
+        if not ok:
+            return None
     fn = FORMATTERS.get(kind)
     if fn is None:
         return None
@@ -775,6 +855,10 @@ def main(argv=None):
                     help="comma-separated event types to post")
     ap.add_argument("--poll", type=float, default=2.0,
                     help="seconds between checks of the feed")
+    ap.add_argument("--news-min-impact", type=float, default=None,
+                    help="only post headlines scoring at least this (default 6)")
+    ap.add_argument("--news-max-per-hour", type=int, default=None,
+                    help="hard ceiling on news messages per hour (0 = no limit)")
     ap.add_argument("--tradingview-port", type=int, default=0,
                     help="listen for TradingView alert webhooks on this port")
     ap.add_argument("--once", action="store_true",
@@ -804,6 +888,12 @@ def main(argv=None):
               % (config_path, os.path.abspath(__file__)))
         tg.dry_run = True
 
+    gate = NewsGate(
+        min_impact=args.news_min_impact
+        if args.news_min_impact is not None else cfg.get("news_min_impact"),
+        max_per_hour=args.news_max_per_hour
+        if args.news_max_per_hour is not None else cfg.get("news_max_per_hour"))
+
     state = load_state(state_path)
     offset = state.get("offset", 0)
     if args.from_start:
@@ -818,6 +908,10 @@ def main(argv=None):
         print("  (that file does not exist yet — it appears the first time "
               "GoldICT runs with 'Write the signal feed' on. Waiting.)")
     print("  posting: %s" % ", ".join(sorted(want)))
+    print("  news: impact >= %.1f, at most %s per hour, repeats of the same "
+          "story suppressed"
+          % (gate.min_impact,
+             gate.max_per_hour if gate.max_per_hour > 0 else "unlimited"))
     print("  mode: %s" % ("DRY RUN — nothing is sent" if tg.dry_run else "posting to Telegram"))
 
     if args.tradingview_port:
@@ -831,7 +925,7 @@ def main(argv=None):
             except ValueError:
                 print("skipping unparseable feed line: %s" % line[:120])
                 continue
-            text = render(ev, want)
+            text = render(ev, want, gate)
             if text:
                 tg.send(text)
         if lines:

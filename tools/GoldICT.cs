@@ -337,7 +337,11 @@ namespace cAlgo.Robots
         [Parameter("Economic calendar URL", DefaultValue = "https://nfs.faireconomy.media/ff_calendar_thisweek.json", Group = "News")]
         public string CalendarUrl { get; set; }
 
-        [Parameter("Alert threshold (higher = fewer, stronger alerts)", DefaultValue = 3.0, MinValue = 1.0, MaxValue = 20.0, Group = "News")]
+        // 3.0 is one strong word. In a live channel that meant every routine
+        // wire story about the Middle East. The channel-side gate in
+        // goldsignals.py raises the bar again for what is worth a notification;
+        // this one decides what is worth writing down at all.
+        [Parameter("Alert threshold (higher = fewer, stronger alerts)", DefaultValue = 5.0, MinValue = 1.0, MaxValue = 20.0, Group = "News")]
         public double AlertThreshold { get; set; }
 
         [Parameter("Protect open trades before an event", DefaultValue = true, Group = "News")]
@@ -1850,10 +1854,20 @@ namespace cAlgo.Robots
             return t.Trim();
         }
 
+        // Google News appends " - Publisher" to every headline, so the SAME
+        // story filed by Reuters, Al-Monitor and Military Times arrives as three
+        // different strings and the duplicate check lets all three through. It
+        // did, into a live channel. Strip the suffix before comparing.
+        public static string NormalisePublic(string title) { return Normalise(title); }
+
         private static string Normalise(string title)
         {
+            var t = (title ?? "").Trim();
+            var cut = t.LastIndexOf(" - ", StringComparison.Ordinal);
+            if (cut > 20)
+                t = t.Substring(0, cut);
             var sb = new System.Text.StringBuilder();
-            foreach (var ch in title.ToUpperInvariant())
+            foreach (var ch in t.ToUpperInvariant())
                 if (char.IsLetterOrDigit(ch)) sb.Append(ch);
             return sb.ToString();
         }
