@@ -2853,5 +2853,23 @@ indication. A single-instrument tape cannot carry it. Everything above is the
 ENTRY MODEL ONLY, and the notes are explicit that the entry model without the
 confirmation is not the method. These are floors, not verdicts.
 
-Holdout certification on virgin seeds is also still outstanding — every number
-here is from seeds 1-30, which have now been used for selection.
+### Holdout certification — seeds 101-140, never used for anything
+
+Seeds 1-30 above chose which models ship. They cannot also certify them, so the
+shipping configuration was re-run untouched on 40 seeds that have never been
+seen by any decision on this project.
+
+| tape | trades | win | mean R | median equity | losing runs |
+|---|---|---|---|---|---|
+| MSS + breaker + void, mixed | 29,253 | 62.6% | **+0.123** | $4,126 | 12/40 |
+| its matched random control | 14,835 | 55.6% | −0.006 | $2,618 | 37/40 |
+| MSS + breaker + void, M1 | 38,985 | 63.6% | **+0.169** | $4,827 | 1/40 |
+| its matched random control | 21,948 | 55.4% | +0.016 | $2,583 | 34/40 |
+| MSS + breaker + void, M2 | 34,743 | 63.3% | **+0.186** | $5,166 | 4/40 |
+| its matched random control | 20,016 | 54.6% | +0.001 | $2,503 | 37/40 |
+
+Against the selection seeds (+0.107 / +0.183 / +0.201) the holdout gives
++0.123 / +0.169 / +0.186 — a touch better on mixed, a touch worse on the two
+single models, no meaningful shrinkage in any of them. **CERTIFIED.**
+
+All of it is SIMULATED. No live-market claim is made anywhere above.

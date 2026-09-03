@@ -33,6 +33,7 @@ step "5/6  GoldNewsWatch + GoldICT + GoldDataDump: compile + behaviour tests + n
 ./tools/verify/build-check.sh tools/GoldDataDump.cs || fail=1
 ./tools/verify/build-check.sh tools/GoldICT.cs || fail=1
 ./tools/verify/news-test.sh || fail=1
+python3 tools/verify/news-drift.py || fail=1
 
 step "6/6  python unit tests"
 python3 -m unittest discover -s tests || fail=1

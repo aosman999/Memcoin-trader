@@ -87,6 +87,25 @@
 // on its own.
 //
 // Add to an XAUUSD m5 chart. Needs AccessRights.FullAccess for the feeds.
+// ============================ TELEGRAM SETUP ===========================
+//   1. In Telegram, message @BotFather, send /newbot, pick a name. It replies
+//      with a token like 8123456789:AAF...  That token IS a credential — do not
+//      paste it into a chat, a screenshot, or any file in this repo.
+//   2. Send any message to your new bot. It cannot message you first.
+//   3. Open https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates in a browser and
+//      find  "chat":{"id":123456789  — that number is your chat id.
+//   4. Put the token in TelegramBotToken and the number in TelegramChatId.
+//   Every trade, every news alert and the day guard then arrive on your phone.
+//   The token is stripped from everything this bot prints, so the log stays
+//   safe to share — see Redact().
+//
+// ============================== INSTALLING ==============================
+//   cTrader > Automate > New, paste this file over the template, Build, then
+//   add it to an XAUUSD m5 chart.
+//   IMPORTANT: cTrader keeps the parameters saved on an EXISTING instance.
+//   Pasting new code does not change an instance you already have running —
+//   remove it from the chart and add it again, or the old settings stick.
+//
 using System;
 using System.Collections.Generic;
 using System.Linq;
