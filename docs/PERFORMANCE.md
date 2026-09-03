@@ -2873,3 +2873,118 @@ Against the selection seeds (+0.107 / +0.183 / +0.201) the holdout gives
 single models, no meaningful shrinkage in any of them. **CERTIFIED.**
 
 All of it is SIMULATED. No live-market claim is made anywhere above.
+
+## The stop floor was overriding the structure, and the timeframe was untested
+
+Prompted by the owner asking why the bot ran on m5 when ICT is taught on 15m,
+30m, 1h and 4h. It was a fair question with no good answer: m5 came from
+GoldEdgeNews and was never re-tested for these models.
+
+### The timeframe sweep
+
+20 seeds. Max hold and the re-entry gap are wall-clock, so they were scaled to
+the same number of BARS at every timeframe — otherwise an H1 trade gets 10 bars
+before a forced exit and the comparison is rigged. Tape length scaled too.
+
+| chart | mixed | M2 | win | losing runs |
+|---|---|---|---|---|
+| m5 | +0.095 | +0.218 | 61-65% | 5/20, 1/20 |
+| m15 | +0.307 | +0.405 | 72% | 0/20 |
+| m30 | +0.448 | +0.576 | 76-78% | 0/20 |
+| h1 | +0.619 | +0.701 | 79-80% | 0/20 |
+
+Monotone, 6x from end to end, with matched random controls flat throughout. A
+result that clean is a reason for suspicion, not celebration.
+
+### First suspect: cost amortisation. REFUTED.
+
+The stop is clamped to a fraction of PRICE, so wider stops make the fixed $0.92
+round trip a smaller share of risk. If that were the story, the fix would be
+bigger stops, not a slower chart.
+
+| | m5 | h1 | gap |
+|---|---|---|---|
+| mixed, normal cost | +0.095 | +0.619 | 0.52 |
+| mixed, ZERO cost | +0.103 | +0.614 | 0.51 |
+| M2, normal cost | +0.218 | +0.701 | 0.48 |
+| M2, ZERO cost | +0.214 | +0.700 | 0.49 |
+
+Deleting spread and commission entirely moves m5 by +0.008R. Not cost.
+
+### Second suspect: the stop floor. CONFIRMED, and it is a defect.
+
+Instrumenting where each stop actually comes from:
+
+| | set by STRUCTURE | set by the FLOOR |
+|---|---|---|
+| m5, 0.4% floor (as shipped) | **2.2%** | 97.8% |
+| h1, 0.4% floor (as shipped) | 70.4% | 22.9% |
+
+The 0.4% floor is ~$17 on gold. On m5 the distance from entry to the swing that
+defines the risk is usually SMALLER than that, so the floor won, and the stop
+stopped being "beyond the structure" and became an arbitrary fraction of price.
+The model said "risk to the low of that candle"; the bot said "risk $17".
+
+Freeing the floor to 0.05%:
+
+| | as shipped | freed | structural stops |
+|---|---|---|---|
+| m5 mixed | +0.095 | **+0.286** | 2.2% -> 89.1% |
+| m5 M2 | +0.218 | **+0.492** | 3.6% -> 72.9% |
+
+Both effects were real: the clamp was crippling the fast charts AND the slower
+charts carry more signal on top of that. Re-swept with the floor freed:
+
+| chart | mixed | M2 | median equity (mixed / M2) | control |
+|---|---|---|---|---|
+| m5 | +0.286 | +0.492 | $4,918 / $10,241 | -0.008 / +0.087 |
+| **m15** | **+0.440** | **+0.682** | **$13,539 / $32,685** | +0.001 / +0.089 |
+| m30 | +0.528 | +0.793 | $11,822 / $27,020 | +0.051 / +0.154 |
+| h1 | +0.652 | +0.826 | $9,600 / $17,668 | +0.114 / +0.165 |
+
+h1 has the best mean R; **m15 makes the most money** because it trades 2.5x more
+often, and its random control stays flattest (17-19 of 20 runs red vs h1's 9-12).
+The h1 control drifting up is a warning that the h1 gap is measured on fewer,
+noisier observations.
+
+**ADOPTED: m15, MinStopPercent 0.05.**
+
+### Multi-timeframe, built and REJECTED
+
+The owner asked for top-down ICT explicitly. It was built (`ict_mtf.py`):
+higher-timeframe bias from structure (higher highs AND higher lows, or the
+mirror), the notes' "if there is no obvious indication, PASS" as a hard rule,
+and premium/discount as a separate layer. No lookahead — the HTF bar consulted
+is the last one CLOSED when the entry bar opened.
+
+Measured against the best single-chart configuration, not a hobbled one:
+
+| entry m15 | trades | win | mean R | median | losing |
+|---|---|---|---|---|---|
+| single chart, mixed | 25,056 | 72.2% | +0.440 | $13,539 | 0/20 |
+| HTF bias H1 | 7,266 | 71.7% | +0.462 | $4,999 | 0/20 |
+| HTF bias + premium/discount H1 | 1,308 | 69.5% | +0.462 | $3,237 | 1/20 |
+| HTF bias H4 | 7,080 | 71.4% | +0.447 | $4,884 | 0/20 |
+| single chart, M2 | 26,907 | 72.5% | +0.682 | $32,685 | 0/20 |
+| HTF bias H1 | 8,598 | 74.6% | +0.758 | $7,172 | 0/20 |
+| HTF bias + premium/discount H1 | 1,221 | 72.9% | +0.617 | $3,261 | 1/20 |
+
+Comparing final equity at equal risk punishes the filter for taking fewer
+trades, which is arithmetic rather than a quality failure. So it was re-run at
+matched opportunity — a third of the trades can carry three times the size:
+
+| mixed | trades | mean R | median |
+|---|---|---|---|
+| single chart, 1% risk | 25,056 | +0.440 | $13,539 |
+| HTF bias, 1% risk | 7,266 | +0.462 | $4,999 |
+| HTF bias, 3% risk | 8,325 | +0.438 | $12,142 |
+| single chart, 3% risk | 25,986 | +0.435 | $231,597 |
+
+At 3x the risk the filtered version still does not reach the unfiltered one at
+1%, and per-trade quality does not improve (+0.438 vs +0.440). The "PASS with no
+clear bias" rule does most of the cutting — 160-314 setups per run — and it is
+the most canonical part of the method.
+
+**REJECTED.** Neutral on quality, expensive on opportunity. The code stays in
+the scratchpad so the finding is checkable and so the switch is one edit away if
+the owner wants it against the evidence.

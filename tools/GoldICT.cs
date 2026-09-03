@@ -167,7 +167,15 @@ namespace cAlgo.Robots
         [Parameter("Minutes between entries on the same side", DefaultValue = 15, MinValue = 0, MaxValue = 600, Group = "Risk")]
         public int GapMinutes { get; set; }
 
-        [Parameter("Stop: MIN % of price", DefaultValue = 0.4, MinValue = 0.05, MaxValue = 5.0, Group = "Risk")]
+        // 0.4% was carried over from the older bot and never re-tested for these
+        // models. It is about $17 on gold, which is WIDER than the swing that
+        // defines the risk on most setups -- so it was overriding the structure
+        // rather than protecting it. Measured: at m5 only 2.2% of stops were
+        // being set by the structure and 97.8% by this floor. The model said
+        // "risk to the low of that candle" and the bot said "risk $17, wherever
+        // that lands". Freeing it took m5 from +0.095R to +0.286R and m15 from
+        // hobbled to +0.440R, with 89-95% of stops finally structural.
+        [Parameter("Stop: MIN % of price", DefaultValue = 0.05, MinValue = 0.01, MaxValue = 5.0, Group = "Risk")]
         public double MinStopPercent { get; set; }
 
         [Parameter("Stop: MAX % of price", DefaultValue = 1.4, MinValue = 0.1, MaxValue = 10.0, Group = "Risk")]
@@ -436,10 +444,19 @@ namespace cAlgo.Robots
             Print("NOT MODELLED: the notes' Interest Rate Triad / USDX confirmation step. " +
                   "This is the entry model only, and the notes say the entry model without " +
                   "the confirmation is not the method. Treat the numbers as a floor.");
+            Print("SINGLE TIMEFRAME on purpose. Higher-timeframe bias filtering was built and " +
+                  "measured (H1 and H4, with and without premium/discount) against this exact " +
+                  "configuration: mean R went +0.440 -> +0.462 while trade count fell 71%. " +
+                  "Given 3x the risk to compensate it still trailed. Premium/discount was " +
+                  "worse again and was the only setting that produced losing runs. Canonical, " +
+                  "and it did not earn its place.");
 
-            if (Bars.TimeFrame != TimeFrame.Minute5)
-                Print("NOTE: every number above was measured on 5-MINUTE bars; you are on {0}. " +
-                      "The structure lookbacks are in BARS, so they mean a different span here.",
+            if (Bars.TimeFrame != TimeFrame.Minute15)
+                Print("NOTE: certified on the 15-MINUTE chart; you are on {0}. Timeframe was " +
+                      "swept: m5 +0.286R, m15 +0.440R, m30 +0.528R, h1 +0.652R on mean R, but " +
+                      "m15 compounds best (median $13.5k vs h1 $9.6k) and separates most " +
+                      "cleanly from its random control. The structure lookbacks are in BARS, " +
+                      "so they mean a different span on your chart.",
                       Bars.TimeFrame);
 
             OpenFeed();

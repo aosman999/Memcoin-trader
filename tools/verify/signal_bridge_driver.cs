@@ -230,7 +230,7 @@ public static class BridgeSim
         b.OrderblockLookback = 24; b.OrderblockValidWithin = 12;
         b.VoidDisplacementAtr = 1.5; b.SetupExpiryBars = 36;
         b.RiskPercent = 1.0; b.MaxConcurrentSignals = 2; b.GapMinutes = 15;
-        b.MinStopPercent = 0.4; b.MaxStopPercent = 1.4; b.StopBufferPercent = 5.0;
+        b.MinStopPercent = 0.05; b.MaxStopPercent = 1.4; b.StopBufferPercent = 5.0;
         b.MaxHoldMinutes = 600; b.DayGuardPercent = 15.0;
         b.SessionFromHour = 0; b.SessionToHour = 24;
         b.TakeProfitCount = 3; b.LadderNearFraction = 0.5; b.LadderFarMultiple = 1.5;
