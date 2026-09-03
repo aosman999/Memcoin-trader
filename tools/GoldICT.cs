@@ -150,7 +150,7 @@ namespace cAlgo.Robots
         // value gap costs NOTHING while more than doubling the trades. No
         // single rule here is load-bearing -- what generates the edge is the
         // displacement requirement they all share.
-        [Parameter("Top-down: higher chart marks the zone", DefaultValue = false, Group = "Top-down")]
+        [Parameter("Top-down: higher chart marks the zone", DefaultValue = true, Group = "Top-down")]
         public bool UseTopDown { get; set; }
 
         [Parameter("Zone chart", DefaultValue = "Hour4", Group = "Top-down")]
@@ -529,7 +529,8 @@ namespace cAlgo.Robots
                   "and it did not earn its place.");
 
             if (Bars.TimeFrame != TimeFrame.Minute15)
-                Print("NOTE: certified on the 15-MINUTE chart; you are on {0}. Timeframe was " +
+                Print("NOTE: certified on the 15-MINUTE chart (with h4 zones when top-down is " +
+                      "on); you are on {0}. Timeframe was " +
                       "swept: m5 +0.286R, m15 +0.440R, m30 +0.528R, h1 +0.652R on mean R, but " +
                       "m15 compounds best (median $13.5k vs h1 $9.6k) and separates most " +
                       "cleanly from its random control. The structure lookbacks are in BARS, " +
