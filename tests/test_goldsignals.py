@@ -338,6 +338,25 @@ class TestSetupFlow(unittest.TestCase):
         self.assertEqual(fake.calls, ["getMe"],
                          "a rejected token should stop before anything else")
 
+    def test_a_certificate_failure_is_not_blamed_on_the_token(self):
+        # The owner hit this: Python could not verify Telegram's certificate and
+        # the wizard said "that token did not work", sending him to re-copy a
+        # credential that was fine. A transport failure and an auth failure are
+        # different problems with different fixes.
+        class TlsFake(FakeTelegram):
+            def __call__(self, req, timeout=None):
+                raise IOError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify "
+                              "failed: self-signed certificate in certificate chain")
+
+        rc = gs.cmd_setup(self.cfg, ask=self.answers("123:ABC"),
+                          out=self.out.append, opener=TlsFake())
+        text = "\n".join(self.out)
+        self.assertEqual(rc, 1)
+        self.assertNotIn("did not work", text)
+        self.assertIn("certificate", text.lower())
+        self.assertIn("Install Certificates", text)
+        self.assertFalse(os.path.exists(self.cfg))
+
     def test_the_token_is_never_echoed_back(self):
         gs.cmd_setup(self.cfg, ask=self.answers("8123456789:AAsecret", "", "1", ""),
                      out=self.out.append, opener=FakeTelegram())

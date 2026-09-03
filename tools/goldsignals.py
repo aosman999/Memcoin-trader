@@ -490,6 +490,26 @@ def serve_tradingview(port, tg, log=print):
 # and a file path lined up without a typo. So the program does it, checks each
 # piece as it goes, and says which one is wrong instead of just going quiet.
 
+class TlsError(RuntimeError):
+    """Python could not verify Telegram's certificate. Nothing to do with the
+    token, and the fix is on this machine."""
+
+    HELP = (
+        "\n  Python on this Mac cannot verify Telegram's certificate. Your token\n"
+        "  is probably fine — this is a certificate problem on the machine.\n"
+        "\n"
+        "  Check which of the two it is:\n"
+        "      curl -sS -o /dev/null -w '%{http_code}\\n' https://api.telegram.org/\n"
+        "\n"
+        "  If curl prints a number, macOS is fine and Python is missing its root\n"
+        "  certificates. Find and run the installer that ships with Python:\n"
+        "      find /Applications -name 'Install Certificates.command'\n"
+        "      open '/Applications/Python 3.x/Install Certificates.command'\n"
+        "\n"
+        "  If curl fails too, something is intercepting HTTPS on this network —\n"
+        "  antivirus with SSL scanning, a VPN, or a corporate proxy.\n")
+
+
 def api(token, method, params=None, opener=None):
     """One Telegram API call. Returns the parsed 'result', or raises with the
     token stripped out of the message."""
@@ -506,6 +526,10 @@ def api(token, method, params=None, opener=None):
                 close()
     except Exception as exc:
         msg = str(exc).replace(token, "<token>")
+        # A TLS failure is not a bad token, and saying so sends people off
+        # re-copying a credential that was fine. Name the actual problem.
+        if "CERTIFICATE_VERIFY_FAILED" in msg or "SSLCertVerification" in msg:
+            raise TlsError(msg)
         raise RuntimeError("%s: %s" % (type(exc).__name__, msg))
     parsed = json.loads(body)
     if not parsed.get("ok"):
@@ -578,6 +602,10 @@ def cmd_setup(config_path, feed_default=DEFAULT_FEED, ask=input, out=print,
         return 1
     try:
         me = api(token, "getMe", opener=opener)
+    except TlsError as exc:
+        out("  Could not reach Telegram: %s" % exc)
+        out(TlsError.HELP)
+        return 1
     except Exception as exc:
         out("  That token did not work: %s" % exc)
         out("  Check you copied all of it, including the part after the colon.")
@@ -687,6 +715,10 @@ def cmd_check(config_path, out=print, opener=None):
     try:
         me = api(token, "getMe", opener=opener)
         out("  [OK] token works — @%s" % me.get("username", "?"))
+    except TlsError as exc:
+        out("  [X] cannot reach Telegram at all: %s" % exc)
+        out(TlsError.HELP)
+        return 1
     except Exception as exc:
         out("  [X] token rejected: %s" % exc)
         return 1

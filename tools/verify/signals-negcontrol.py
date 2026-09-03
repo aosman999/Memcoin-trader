@@ -115,6 +115,11 @@ FAULTS = [
      '    out("  OK — the token belongs to @%s." % me.get("username", "?"))',
      '    out("  OK — token %s belongs to @%s." % (token, me.get("username", "?")))'),
 
+    ("a certificate failure blamed on the token again",
+     '        if "CERTIFICATE_VERIFY_FAILED" in msg or "SSLCertVerification" in msg:\n'
+     '            raise TlsError(msg)',
+     '        pass'),
+
     ("the event filter is ignored, so --only does nothing",
      "    if kind not in want:\n        return None",
      "    if False:\n        return None"),
