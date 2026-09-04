@@ -1024,19 +1024,23 @@ ALL_EVENTS = ["entry", "tp", "sl", "close", "setup", "news", "vacuum",
               "guard", "start", "stop", "heartbeat"]
 
 
-def report_missed(missed, tg):
-    """One honest summary instead of a burst of expired signals.
+def report_missed(missed, tg, announce=False):
+    """What happened while nobody was watching.
 
-    It goes to the channel because silence would be worse: subscribers who
-    later see the trades in a ledger would have no idea why they were never
-    posted. It is explicitly labelled as history."""
+    ALWAYS printed to the console, so the operator can see it. Posted to the
+    channel only when `announce` is on, which it is NOT by default: the owner's
+    call, and a reasonable one -- a channel that says "3 trades were taken and
+    you did not get them" is advertising its own downtime to subscribers who
+    are better served by simply not hearing about trades they could not have
+    taken. The record still exists in cTrader's history and in the feed file.
+    """
     kinds = {}
     for ev in missed:
         kinds[ev.get("t")] = kinds.get(ev.get("t"), 0) + 1
     entries = kinds.get("entry", 0)
     print("skipped %d event(s) that happened while this was not running: %s"
           % (len(missed), ", ".join("%s x%d" % kv for kv in sorted(kinds.items()))))
-    if entries <= 0:
+    if entries <= 0 or not announce:
         # Backlogged news and heartbeats are simply dropped. Announcing "you
         # missed 40 headlines" is itself the noise this is meant to prevent.
         return
@@ -1080,6 +1084,9 @@ def main(argv=None):
                     help="only post headlines scoring at least this (default 6)")
     ap.add_argument("--news-max-per-hour", type=int, default=None,
                     help="ceiling on ORDINARY news per hour (0 = no limit)")
+    ap.add_argument("--announce-missed", action="store_true",
+                    help="tell the channel when trades were taken while this "
+                         "was not running (default: stay silent, console only)")
     ap.add_argument("--max-event-age", type=float, default=30.0,
                     help="minutes; a trade event older than this is reported as "
                          "history instead of posted as a signal (0 = post "
@@ -1124,6 +1131,9 @@ def main(argv=None):
         urgent_impact=args.news_urgent_impact
         if args.news_urgent_impact is not None else cfg.get("news_urgent_impact"))
 
+    announce_missed = bool(args.announce_missed
+                          or cfg.get("announce_missed_trades", False))
+
     state = load_state(state_path)
     offset = state.get("offset", 0)
     if args.from_start:
@@ -1155,8 +1165,10 @@ def main(argv=None):
         print("  (that file does not exist yet — it appears the first time "
               "GoldICT runs with 'Write the signal feed' on. Waiting.)")
     print("  posting: %s" % ", ".join(sorted(want)))
-    print("  anything older than %.0f min is skipped; missed TRADES are "
-          "summarised, backlogged news is dropped" % args.max_event_age)
+    print("  anything older than %.0f min is skipped; missed trades are %s"
+          % (args.max_event_age,
+             "announced in the channel" if announce_missed
+             else "noted here only, never in the channel"))
     print("  news: impact >= %.1f to post at all; ordinary news at most %s per "
           "hour;\n        impact >= %.1f sent IMMEDIATELY whatever the cap; "
           "repeats suppressed"
@@ -1184,7 +1196,7 @@ def main(argv=None):
             if text:
                 tg.send(text)
         if missed:
-            report_missed(missed, tg)
+            report_missed(missed, tg, announce=announce_missed)
         if lines:
             state["offset"] = offset
             save_state(state_path, state)

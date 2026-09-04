@@ -217,11 +217,13 @@ FAULTS = [
      "    return age is not None and age > max_age_minutes",
      "    return age is None or age > max_age_minutes"),
 
-    ("the channel is never told what it missed",
-     "    tg.send(\n"
-     "        \"\\u23f8 Missed while the signal service was offline: %d trade(s) were \"",
-     "    return\n    tg.send(\n"
-     "        \"\\u23f8 Missed while the signal service was offline: %d trade(s) were \""),
+    ("missed trades announced in the channel when they should be silent",
+     "    if entries <= 0 or not announce:",
+     "    if entries <= 0:"),
+
+    ("the operator is not told either, so downtime is invisible everywhere",
+     '    print("skipped %d event(s) that happened while this was not running: %s"',
+     '    return\n    print("skipped %d event(s) that happened while this was not running: %s"'),
 
     ("a vacuum window re-announced every time it is extended",
      "        if self._vacuum_until is not None and ref < self._vacuum_until:\n"

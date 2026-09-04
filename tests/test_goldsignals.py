@@ -696,7 +696,34 @@ class TestStaleEvents(unittest.TestCase):
     def test_zero_disables_the_check(self):
         self.assertFalse(gs.too_stale(self.ev("entry", 9999), 0))
 
-    def test_the_channel_is_told_what_it_missed(self):
+    def test_the_channel_is_told_nothing_by_default(self):
+        # The owner's call: a channel that says "3 trades were taken and you did
+        # not get them" is advertising its own downtime to subscribers who could
+        # not have taken those trades anyway.
+        sent = []
+
+        class Fake(object):
+            def send(self_inner, text):
+                sent.append(text)
+                return True
+
+        gs.report_missed([self.ev("entry", 200), self.ev("entry", 200)], Fake())
+        self.assertEqual(sent, [])
+
+    def test_the_operator_is_told_even_when_the_channel_is_not(self):
+        import contextlib
+        import io
+        buf = io.StringIO()
+
+        class Fake(object):
+            def send(self_inner, text):
+                return True
+
+        with contextlib.redirect_stdout(buf):
+            gs.report_missed([self.ev("entry", 200)], Fake())
+        self.assertIn("skipped", buf.getvalue().lower())
+
+    def test_the_channel_can_be_told_if_asked(self):
         sent = []
 
         class Fake(object):
@@ -705,7 +732,7 @@ class TestStaleEvents(unittest.TestCase):
                 return True
 
         gs.report_missed([self.ev("entry", 200), self.ev("entry", 200),
-                          self.ev("tp", 190)], Fake())
+                          self.ev("tp", 190)], Fake(), announce=True)
         self.assertEqual(len(sent), 1, "one summary, not one message per event")
         self.assertIn("2 trade(s)", sent[0])
         self.assertIn("offline", sent[0])
