@@ -101,8 +101,15 @@ SHOW_ACCOUNT_TYPE = False
 # News filtering. The cBot's own threshold decides what is worth WRITING DOWN;
 # these decide what is worth INTERRUPTING A CHANNEL FOR, which is a much higher
 # bar. Both are tunable from the config file without touching cTrader.
-NEWS_MIN_IMPACT = 6.0        # the cBot's default alert floor is 3.0
-NEWS_MAX_PER_HOUR = 3        # a hard ceiling, whatever the wires are doing
+NEWS_MIN_IMPACT = 6.0        # below this, nothing is posted at all
+NEWS_MAX_PER_HOUR = 3        # ceiling for ORDINARY news
+NEWS_URGENT_IMPACT = 9.0     # at or above this, send immediately, cap or no cap
+
+# The cap exists so routine wire traffic cannot fill a channel. It must not be
+# the reason a war headline waits behind three stories about the oil price. So
+# there are two tiers: ordinary news is rationed, major news is not. Duplicate
+# suppression still applies to BOTH -- being important does not make a story
+# worth sending three times because three outlets filed it.
 
 # Words that carry no meaning for deciding whether two headlines are the same
 # story. Without stripping these, "US probing airstrike in Iran" and "US and
@@ -146,11 +153,14 @@ class NewsGate(object):
     of what has already been posted so a story doing the rounds of the wires
     lands once."""
 
-    def __init__(self, min_impact=None, max_per_hour=None, now=time.time):
+    def __init__(self, min_impact=None, max_per_hour=None, urgent_impact=None,
+                 now=time.time):
         self.min_impact = NEWS_MIN_IMPACT if min_impact is None else min_impact
         self.max_per_hour = NEWS_MAX_PER_HOUR if max_per_hour is None else max_per_hour
+        self.urgent_impact = (NEWS_URGENT_IMPACT if urgent_impact is None
+                              else urgent_impact)
         self.now = now
-        self.recent = []                        # (timestamp, story_key)
+        self.recent = []                        # (timestamp, story_key, urgent)
 
     def allow(self, ev):
         try:
@@ -161,18 +171,23 @@ class NewsGate(object):
             return False, "below the impact threshold"
 
         t = self.now()
-        self.recent = [(ts, k) for ts, k in self.recent if t - ts < 3600]
+        self.recent = [r for r in self.recent if t - r[0] < 3600]
 
         key = story_key(ev.get("headline"))
-        for _, seen in self.recent:
+        for _, seen, _u in self.recent:
             if same_story(key, seen):
                 return False, "the same story already went out"
 
-        if self.max_per_hour > 0 and len(self.recent) >= self.max_per_hour:
-            return False, "hourly news limit reached"
+        urgent = impact >= self.urgent_impact
+        if not urgent and self.max_per_hour > 0:
+            # Only ORDINARY items count against the ordinary allowance. A major
+            # story neither waits for room nor uses up someone else's.
+            ordinary = sum(1 for _ts, _k, u in self.recent if not u)
+            if ordinary >= self.max_per_hour:
+                return False, "hourly limit for ordinary news reached"
 
-        self.recent.append((t, key))
-        return True, None
+        self.recent.append((t, key, urgent))
+        return True, "urgent" if urgent else None
 
 # Strategy words that must never appear in a posted message. Checked by a test,
 # because this is the kind of thing that comes back the moment a formatter is
@@ -412,6 +427,8 @@ def render(ev, want, gate=None):
         ok, why = gate.allow(ev)
         if not ok:
             return None
+        if why == "urgent":
+            return "\U0001f6a8 MAJOR\n" + format_news(ev)
     fn = FORMATTERS.get(kind)
     if fn is None:
         return None
@@ -620,6 +637,43 @@ def release_lock(path):
         os.remove(path)
     except (ValueError, OSError):
         pass
+
+
+# --------------------------------------------------------------- stale events
+# The bot resumes from where it stopped, which is right for not losing a trade
+# and WRONG for posting one. A "Buy gold" for a trade cTrader opened three hours
+# ago -- and has since closed -- invites a follower into a price that is gone.
+# So anything that happened while nobody was watching is reported as history,
+# not as a signal.
+
+def event_age_minutes(ev, now=None):
+    """Minutes since the event, or None if it carries no usable timestamp."""
+    stamp = ev.get("utc")
+    if not stamp:
+        return None
+    try:
+        when = datetime.strptime(stamp, "%Y-%m-%dT%H:%M:%SZ").replace(
+            tzinfo=timezone.utc)
+    except (ValueError, TypeError):
+        return None
+    ref = now or datetime.now(timezone.utc)
+    return (ref - when).total_seconds() / 60.0
+
+
+ACTIONABLE = ("entry", "setup", "tp", "sl", "close", "vacuum")
+
+
+def too_stale(ev, max_age_minutes, now=None):
+    """True when this event is old enough that posting it would mislead.
+
+    Only the ACTIONABLE kinds are suppressed. A stale heartbeat is merely dull;
+    a stale entry is a follower buying a price that no longer exists."""
+    if max_age_minutes <= 0:
+        return False
+    if ev.get("t") not in ACTIONABLE:
+        return False
+    age = event_age_minutes(ev, now)
+    return age is not None and age > max_age_minutes
 
 
 def load_state(path):
@@ -945,6 +999,29 @@ ALL_EVENTS = ["entry", "tp", "sl", "close", "setup", "news", "vacuum",
               "guard", "start", "stop", "heartbeat"]
 
 
+def report_missed(missed, tg):
+    """One honest summary instead of a burst of expired signals.
+
+    It goes to the channel because silence would be worse: subscribers who
+    later see the trades in a ledger would have no idea why they were never
+    posted. It is explicitly labelled as history."""
+    kinds = {}
+    for ev in missed:
+        kinds[ev.get("t")] = kinds.get(ev.get("t"), 0) + 1
+    entries = kinds.get("entry", 0)
+    print("skipped %d event(s) that happened while this was not running: %s"
+          % (len(missed), ", ".join("%s x%d" % kv for kv in sorted(kinds.items()))))
+    if entries <= 0:
+        return
+    tg.send(
+        "\u23f8 Missed while the signal service was offline: %d trade(s) were "
+        "taken by the bot and are NOT posted above.\n"
+        "They are not shown as signals because their entry prices are hours "
+        "old — acting on them now would mean entering at a price that has "
+        "gone.\n"
+        "%s" % (entries, RISK_LINE))
+
+
 def load_config(path):
     if not os.path.exists(path):
         return {}
@@ -975,7 +1052,14 @@ def main(argv=None):
     ap.add_argument("--news-min-impact", type=float, default=None,
                     help="only post headlines scoring at least this (default 6)")
     ap.add_argument("--news-max-per-hour", type=int, default=None,
-                    help="hard ceiling on news messages per hour (0 = no limit)")
+                    help="ceiling on ORDINARY news per hour (0 = no limit)")
+    ap.add_argument("--max-event-age", type=float, default=30.0,
+                    help="minutes; a trade event older than this is reported as "
+                         "history instead of posted as a signal (0 = post "
+                         "everything however old)")
+    ap.add_argument("--news-urgent-impact", type=float, default=None,
+                    help="at or above this, send immediately whatever the cap "
+                         "(default 9)")
     ap.add_argument("--tradingview-port", type=int, default=0,
                     help="listen for TradingView alert webhooks on this port")
     ap.add_argument("--once", action="store_true",
@@ -1009,7 +1093,9 @@ def main(argv=None):
         min_impact=args.news_min_impact
         if args.news_min_impact is not None else cfg.get("news_min_impact"),
         max_per_hour=args.news_max_per_hour
-        if args.news_max_per_hour is not None else cfg.get("news_max_per_hour"))
+        if args.news_max_per_hour is not None else cfg.get("news_max_per_hour"),
+        urgent_impact=args.news_urgent_impact
+        if args.news_urgent_impact is not None else cfg.get("news_urgent_impact"))
 
     state = load_state(state_path)
     offset = state.get("offset", 0)
@@ -1037,16 +1123,21 @@ def main(argv=None):
         print("  (that file does not exist yet — it appears the first time "
               "GoldICT runs with 'Write the signal feed' on. Waiting.)")
     print("  posting: %s" % ", ".join(sorted(want)))
-    print("  news: impact >= %.1f, at most %s per hour, repeats of the same "
-          "story suppressed"
+    print("  trade events older than %.0f min are reported as history, not "
+          "posted as signals" % args.max_event_age)
+    print("  news: impact >= %.1f to post at all; ordinary news at most %s per "
+          "hour;\n        impact >= %.1f sent IMMEDIATELY whatever the cap; "
+          "repeats suppressed"
           % (gate.min_impact,
-             gate.max_per_hour if gate.max_per_hour > 0 else "unlimited"))
+             gate.max_per_hour if gate.max_per_hour > 0 else "unlimited",
+             gate.urgent_impact))
     print("  mode: %s" % ("DRY RUN — nothing is sent" if tg.dry_run else "posting to Telegram"))
 
     if args.tradingview_port:
         serve_tradingview(args.tradingview_port, tg)
 
     while True:
+        missed = []
         lines, offset = read_new_lines(feed, offset)
         for line in lines:
             try:
@@ -1054,9 +1145,14 @@ def main(argv=None):
             except ValueError:
                 print("skipping unparseable feed line: %s" % line[:120])
                 continue
+            if too_stale(ev, args.max_event_age):
+                missed.append(ev)
+                continue
             text = render(ev, want, gate)
             if text:
                 tg.send(text)
+        if missed:
+            report_missed(missed, tg)
         if lines:
             state["offset"] = offset
             save_state(state_path, state)

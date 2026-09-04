@@ -138,10 +138,25 @@ FAULTS = [
      "        if impact < self.min_impact:\n            return False, \"below the impact threshold\"",
      "        pass"),
 
-    ("the hourly ceiling removed",
-     "        if self.max_per_hour > 0 and len(self.recent) >= self.max_per_hour:\n"
-     "            return False, \"hourly news limit reached\"",
+    ("major news held behind the ordinary hourly cap",
+     "        urgent = impact >= self.urgent_impact\n"
+     "        if not urgent and self.max_per_hour > 0:",
+     "        urgent = False\n        if self.max_per_hour > 0:"),
+
+    ("major news eats the ordinary allowance",
+     "            ordinary = sum(1 for _ts, _k, u in self.recent if not u)",
+     "            ordinary = len(self.recent)"),
+
+    ("major news exempted from duplicate suppression too",
+     "        for _, seen, _u in self.recent:\n"
+     "            if same_story(key, seen):\n"
+     "                return False, \"the same story already went out\"",
      "        pass"),
+
+    ("the hourly ceiling removed",
+     "            if ordinary >= self.max_per_hour:\n"
+     "                return False, \"hourly limit for ordinary news reached\"",
+     "            pass"),
 
     ("the gate skipped entirely when rendering news",
      "    if kind == \"news\" and gate is not None:",
@@ -185,6 +200,25 @@ FAULTS = [
      "            if int((fh.read() or \"0\").strip()) != os.getpid():\n"
      "                return                  # someone else's lock, leave it alone",
      "        pass"),
+
+    ("expired trades posted as if they were live signals",
+     "            if too_stale(ev, args.max_event_age):\n"
+     "                missed.append(ev)\n                continue",
+     "            pass"),
+
+    ("staleness applied to everything, hiding that the service was down",
+     "    if ev.get(\"t\") not in ACTIONABLE:\n        return False",
+     "    pass"),
+
+    ("an event with no timestamp treated as stale and dropped",
+     "    return age is not None and age > max_age_minutes",
+     "    return age is None or age > max_age_minutes"),
+
+    ("the channel is never told what it missed",
+     "    tg.send(\n"
+     "        \"\\u23f8 Missed while the signal service was offline: %d trade(s) were \"",
+     "    return\n    tg.send(\n"
+     "        \"\\u23f8 Missed while the signal service was offline: %d trade(s) were \""),
 
     ("the event filter is ignored, so --only does nothing",
      "    if kind not in want:\n        return None",

@@ -11,6 +11,7 @@ import os
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
 import goldsignals as gs  # noqa: E402
@@ -185,9 +186,19 @@ class TestNewsGate(unittest.TestCase):
     """The channel got the same airstrike three times, from three wires, at the
     lowest possible impact score. Both halves of that were bugs."""
 
-    def ev(self, headline, impact=9.0):
+    # ORDINARY news by default, deliberately below the urgent threshold. A
+    # fixture that is urgent by accident exempts itself from the hourly cap,
+    # so the tests for that cap silently stop testing anything.
+    ORDINARY = 7.0
+
+    def ev(self, headline, impact=None):
         return {"t": "news", "source": "x", "headline": headline,
-                "impact": impact, "lean": "leans gold UP"}
+                "impact": self.ORDINARY if impact is None else impact,
+                "lean": "leans gold UP"}
+
+    def test_the_fixture_is_not_accidentally_urgent(self):
+        self.assertLess(self.ORDINARY, gs.NEWS_URGENT_IMPACT)
+        self.assertGreaterEqual(self.ORDINARY, gs.NEWS_MIN_IMPACT)
 
     def test_the_same_story_from_two_wires_goes_out_once(self):
         gate = gs.NewsGate()
@@ -230,6 +241,41 @@ class TestNewsGate(unittest.TestCase):
         self.assertFalse(allowed)
         self.assertIn("impact", why)
         self.assertTrue(gate.allow(self.ev("A real escalation", impact=7.0))[0])
+
+    def test_major_news_is_not_held_behind_routine_news(self):
+        # The cap exists so wire traffic cannot fill a channel. It must not be
+        # the reason a war headline waits behind three stories about the oil
+        # price -- which is exactly what a single-tier limit would do.
+        gate = gs.NewsGate(min_impact=6.0, max_per_hour=2, urgent_impact=9.0)
+        self.assertTrue(gate.allow(self.ev("routine one about the fed", 6.5))[0])
+        self.assertTrue(gate.allow(self.ev("routine two about opec quotas", 6.5))[0])
+        self.assertFalse(gate.allow(self.ev("routine three about tariffs", 6.5))[0])
+        allowed, why = gate.allow(self.ev("iran launches missiles at israel", 12.0))
+        self.assertTrue(allowed, "a major event was held behind routine news")
+        self.assertEqual(why, "urgent")
+
+    def test_major_news_does_not_use_up_the_ordinary_allowance(self):
+        gate = gs.NewsGate(min_impact=6.0, max_per_hour=2, urgent_impact=9.0)
+        self.assertTrue(gate.allow(self.ev("war breaks out in the strait", 12.0))[0])
+        self.assertTrue(gate.allow(self.ev("routine one about the fed", 6.5))[0])
+        self.assertTrue(gate.allow(self.ev("routine two about opec quotas", 6.5))[0])
+
+    def test_major_news_is_still_deduplicated(self):
+        # Being important does not make a story worth sending three times
+        # because three outlets filed it.
+        gate = gs.NewsGate(min_impact=6.0, urgent_impact=9.0)
+        self.assertTrue(gate.allow(self.ev(
+            "Iran launches missiles at Israeli bases - Reuters", 12.0))[0])
+        self.assertFalse(gate.allow(self.ev(
+            "Iran launches missiles at Israeli bases - CNN", 12.0))[0])
+
+    def test_a_major_headline_is_marked_as_such(self):
+        gate = gs.NewsGate(min_impact=6.0, urgent_impact=9.0)
+        text = gs.render(self.ev("war breaks out in the strait", 12.0), {"news"}, gate)
+        self.assertIn("MAJOR", text)
+        gate2 = gs.NewsGate(min_impact=6.0, urgent_impact=9.0)
+        ordinary = gs.render(self.ev("routine story about the fed", 6.5), {"news"}, gate2)
+        self.assertNotIn("MAJOR", ordinary)
 
     def test_a_busy_news_hour_cannot_flood_the_channel(self):
         gate = gs.NewsGate(min_impact=1.0, max_per_hour=2)
@@ -570,6 +616,120 @@ class TestRateLimiting(unittest.TestCase):
 
     def test_no_retry_after_returns_none(self):
         self.assertIsNone(gs.Telegram.retry_after(IOError("plain failure")))
+
+
+class TestStaleEvents(unittest.TestCase):
+    """The owner's terminal bot was stopped while cTrader took three trades.
+    Resuming from the saved offset is right for not LOSING them and wrong for
+    POSTING them: a "Buy gold" whose entry price is three hours old invites a
+    follower into a price that no longer exists."""
+
+    def ev(self, kind, minutes_ago):
+        when = datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)
+        return {"t": kind, "utc": when.strftime("%Y-%m-%dT%H:%M:%SZ")}
+
+    def test_a_fresh_trade_is_posted(self):
+        self.assertFalse(gs.too_stale(self.ev("entry", 2), 30))
+
+    def test_a_stale_trade_is_not_posted(self):
+        self.assertTrue(gs.too_stale(self.ev("entry", 180), 30))
+
+    def test_every_actionable_kind_is_covered(self):
+        # A stale stop or take profit is just as misleading as a stale entry.
+        for kind in ("entry", "setup", "tp", "sl", "close"):
+            self.assertTrue(gs.too_stale(self.ev(kind, 180), 30),
+                            "%s should be suppressed when stale" % kind)
+
+    def test_dull_events_are_not_suppressed(self):
+        # A late heartbeat is merely dull. Suppressing it would hide the fact
+        # that the service had been down, which is the opposite of the point.
+        for kind in ("heartbeat", "start", "stop", "news", "guard"):
+            self.assertFalse(gs.too_stale(self.ev(kind, 180), 30))
+
+    def test_an_event_with_no_timestamp_is_never_suppressed(self):
+        # Fail towards posting. Losing a real signal is worse than a late one.
+        self.assertFalse(gs.too_stale({"t": "entry"}, 30))
+        self.assertFalse(gs.too_stale({"t": "entry", "utc": "nonsense"}, 30))
+
+    def test_zero_disables_the_check(self):
+        self.assertFalse(gs.too_stale(self.ev("entry", 9999), 0))
+
+    def test_the_channel_is_told_what_it_missed(self):
+        sent = []
+
+        class Fake(object):
+            def send(self_inner, text):
+                sent.append(text)
+                return True
+
+        gs.report_missed([self.ev("entry", 200), self.ev("entry", 200),
+                          self.ev("tp", 190)], Fake())
+        self.assertEqual(len(sent), 1, "one summary, not one message per event")
+        self.assertIn("2 trade(s)", sent[0])
+        self.assertIn("offline", sent[0])
+
+    def test_no_summary_when_nothing_tradeable_was_missed(self):
+        sent = []
+
+        class Fake(object):
+            def send(self_inner, text):
+                sent.append(text)
+                return True
+
+        gs.report_missed([self.ev("heartbeat", 200)], Fake())
+        self.assertEqual(sent, [])
+
+
+class TestStaleEventsEndToEnd(unittest.TestCase):
+    """too_stale() being correct is not the same as the loop CALLING it. This
+    drives the real main loop over a real feed file, because a negative control
+    that deletes the call has to fail something."""
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.feed = os.path.join(self.dir, "signals.jsonl")
+        self.state = os.path.join(self.dir, "state.json")
+
+    def write(self, rows):
+        with open(self.feed, "w", encoding="utf-8") as fh:
+            for r in rows:
+                fh.write(json.dumps(r) + "\n")
+
+    def entry(self, minutes_ago, price):
+        when = datetime.now(timezone.utc) - timedelta(minutes=minutes_ago)
+        return {"t": "entry", "utc": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "symbol": "XAUUSD", "demo": True, "signal": 1, "model": "M",
+                "side": "BUY", "entry": price, "level": price, "stop": price - 10,
+                "tps": [price + 5, price + 10, price + 15], "risk_pct": 1.0,
+                "detail": "d"}
+
+    def run_once(self, extra=None):
+        import contextlib
+        import io
+        buf = io.StringIO()
+        argv = ["--feed", self.feed, "--state", self.state, "--once",
+                "--dry-run", "--from-start",
+                "--config", os.path.join(self.dir, "no-such-config.json")]
+        with contextlib.redirect_stdout(buf):
+            gs.main(argv + (extra or []))
+        return buf.getvalue()
+
+    def test_a_stale_entry_is_not_posted_but_a_fresh_one_is(self):
+        self.write([self.entry(240, 4000.0), self.entry(1, 4500.0)])
+        out = self.run_once()
+        self.assertIn("4500.00", out, "the fresh signal should have been posted")
+        self.assertNotIn("4000.00", out,
+                         "a four-hour-old entry was posted as a live signal")
+
+    def test_the_console_says_what_it_skipped(self):
+        self.write([self.entry(240, 4000.0)])
+        out = self.run_once()
+        self.assertIn("skipped", out.lower())
+
+    def test_disabling_the_age_check_posts_everything(self):
+        self.write([self.entry(240, 4000.0)])
+        out = self.run_once(["--max-event-age", "0"])
+        self.assertIn("4000.00", out)
 
 
 class TestOnlyOneCopy(unittest.TestCase):
