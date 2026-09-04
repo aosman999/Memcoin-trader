@@ -640,11 +640,17 @@ class TestStaleEvents(unittest.TestCase):
             self.assertTrue(gs.too_stale(self.ev(kind, 180), 30),
                             "%s should be suppressed when stale" % kind)
 
-    def test_dull_events_are_not_suppressed(self):
-        # A late heartbeat is merely dull. Suppressing it would hide the fact
-        # that the service had been down, which is the opposite of the point.
+    def test_stale_news_and_heartbeats_are_suppressed_too(self):
+        # The first version exempted these, and the result was twelve
+        # backlogged messages landing at once the moment the bot restarted.
+        # A three-hour-old headline has already been overtaken.
         for kind in ("heartbeat", "start", "stop", "news", "guard"):
-            self.assertFalse(gs.too_stale(self.ev(kind, 180), 30))
+            self.assertTrue(gs.too_stale(self.ev(kind, 180), 30),
+                            "%s should be dropped when hours old" % kind)
+
+    def test_fresh_events_of_every_kind_still_post(self):
+        for kind in ("heartbeat", "news", "entry", "tp", "guard"):
+            self.assertFalse(gs.too_stale(self.ev(kind, 2), 30))
 
     def test_an_event_with_no_timestamp_is_never_suppressed(self):
         # Fail towards posting. Losing a real signal is worse than a late one.

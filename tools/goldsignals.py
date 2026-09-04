@@ -660,17 +660,20 @@ def event_age_minutes(ev, now=None):
     return (ref - when).total_seconds() / 60.0
 
 
+# Events whose absence needs explaining, so the summary can name them.
 ACTIONABLE = ("entry", "setup", "tp", "sl", "close", "vacuum")
 
 
 def too_stale(ev, max_age_minutes, now=None):
-    """True when this event is old enough that posting it would mislead.
+    """True when this event is too old to post.
 
-    Only the ACTIONABLE kinds are suppressed. A stale heartbeat is merely dull;
-    a stale entry is a follower buying a price that no longer exists."""
+    This applies to EVERY kind, not just trades. The first version exempted
+    news and heartbeats on the theory that suppressing them would hide that the
+    service had been down -- but the summary already says that, and the effect
+    of the exemption was twelve backlogged messages arriving at once the moment
+    the bot came back. Nobody needs a three-hour-old heartbeat or a headline
+    that has already been overtaken."""
     if max_age_minutes <= 0:
-        return False
-    if ev.get("t") not in ACTIONABLE:
         return False
     age = event_age_minutes(ev, now)
     return age is not None and age > max_age_minutes
@@ -1012,6 +1015,8 @@ def report_missed(missed, tg):
     print("skipped %d event(s) that happened while this was not running: %s"
           % (len(missed), ", ".join("%s x%d" % kv for kv in sorted(kinds.items()))))
     if entries <= 0:
+        # Backlogged news and heartbeats are simply dropped. Announcing "you
+        # missed 40 headlines" is itself the noise this is meant to prevent.
         return
     tg.send(
         "\u23f8 Missed while the signal service was offline: %d trade(s) were "
@@ -1114,8 +1119,13 @@ def main(argv=None):
               "bug in the bot, and is not. This one is stopping.\n"
               "\n"
               "To stop every copy and start fresh:\n"
-              "    pkill -f goldsignals.py\n"
-              "    python3 %s" % (holder, os.path.abspath(__file__)))
+              "    pkill -f goldsignals\n"
+              "    python3 %s\n"
+              "\n"
+              "Note the pattern has NO .py — a copy started from a file macOS\n"
+              "named 'goldsignals (1).py' does not match 'goldsignals.py' and\n"
+              "survives the kill, which is how two copies stay alive."
+              % (holder, os.path.abspath(__file__)))
         return 1
 
     print("goldsignals watching %s" % feed)
@@ -1123,8 +1133,8 @@ def main(argv=None):
         print("  (that file does not exist yet — it appears the first time "
               "GoldICT runs with 'Write the signal feed' on. Waiting.)")
     print("  posting: %s" % ", ".join(sorted(want)))
-    print("  trade events older than %.0f min are reported as history, not "
-          "posted as signals" % args.max_event_age)
+    print("  anything older than %.0f min is skipped; missed TRADES are "
+          "summarised, backlogged news is dropped" % args.max_event_age)
     print("  news: impact >= %.1f to post at all; ordinary news at most %s per "
           "hour;\n        impact >= %.1f sent IMMEDIATELY whatever the cap; "
           "repeats suppressed"

@@ -206,9 +206,12 @@ FAULTS = [
      "                missed.append(ev)\n                continue",
      "            pass"),
 
-    ("staleness applied to everything, hiding that the service was down",
-     "    if ev.get(\"t\") not in ACTIONABLE:\n        return False",
-     "    pass"),
+    ("stale news exempted again, so a backlog floods on restart",
+     "    age = event_age_minutes(ev, now)\n"
+     "    return age is not None and age > max_age_minutes",
+     "    if ev.get('t') == 'news':\n        return False\n"
+     "    age = event_age_minutes(ev, now)\n"
+     "    return age is not None and age > max_age_minutes"),
 
     ("an event with no timestamp treated as stale and dropped",
      "    return age is not None and age > max_age_minutes",
