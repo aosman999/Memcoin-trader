@@ -2099,7 +2099,14 @@ namespace cAlgo.Robots
             }
             if (UseVacuumWindow && loudest >= AlertThreshold)
             {
+                // Extending a window that is already open is not news. The news
+                // agent polls every few minutes, so re-announcing on every poll
+                // produced a "heads up until 15:50 / 15:53 / 15:56 / 15:59"
+                // every three minutes for as long as the wires stayed busy.
+                var announce = VacuumIsNew(now, _vacuumUntil);
                 _vacuumUntil = now.AddMinutes(VacuumWindowMinutes);
+                if (!announce)
+                    return;
                 Emit("vacuum", "until", Q(_vacuumUntil.ToString("yyyy-MM-ddTHH:mm:ssZ")),
                      "needs_atr", VacuumDisplacementAtr.ToString("F1", System.Globalization.CultureInfo.InvariantCulture));
                 Print("VACUUM WINDOW armed until {0:HH:mm} UTC — a displacement bar now only " +
@@ -2107,6 +2114,15 @@ namespace cAlgo.Robots
                       "events as what creates these.",
                       _vacuumUntil, VacuumDisplacementAtr, VoidDisplacementAtr);
             }
+        }
+
+        // Pulled out so it can be tested: the vacuum path itself sits behind the
+        // news poller, which needs a network, so the harness can never reach it.
+        // A window that is still open is being EXTENDED, and an extension is not
+        // an announcement.
+        public static bool VacuumIsNew(DateTime now, DateTime armedUntil)
+        {
+            return now > armedUntil;
         }
 
         // A scheduled event is close. Tier 1 and 2 only — medium-impact prints

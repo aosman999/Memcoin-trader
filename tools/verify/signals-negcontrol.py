@@ -223,6 +223,16 @@ FAULTS = [
      "    return\n    tg.send(\n"
      "        \"\\u23f8 Missed while the signal service was offline: %d trade(s) were \""),
 
+    ("a vacuum window re-announced every time it is extended",
+     "        if self._vacuum_until is not None and ref < self._vacuum_until:\n"
+     "            return False                       # still inside one already posted",
+     "        pass"),
+
+    ("the repeat-vacuum check never called when rendering",
+     "    if kind == \"vacuum\" and gate is not None and not gate.allow_vacuum(ev):\n"
+     "        return None",
+     "    pass"),
+
     ("the event filter is ignored, so --only does nothing",
      "    if kind not in want:\n        return None",
      "    if False:\n        return None"),

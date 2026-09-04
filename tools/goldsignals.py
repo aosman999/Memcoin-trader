@@ -161,6 +161,26 @@ class NewsGate(object):
                               else urgent_impact)
         self.now = now
         self.recent = []                        # (timestamp, story_key, urgent)
+        self._vacuum_until = None
+
+    def allow_vacuum(self, ev, now=None):
+        """A vacuum window that is merely being EXTENDED is not a new event.
+
+        The cBot re-arms it on every news poll, so without this the channel got
+        "heads up until 15:50", then 15:53, then 15:56, three minutes apart,
+        for as long as the wires stayed busy. Only the window OPENING is worth
+        saying. Fixed in the cBot too; this makes the channel quiet without
+        waiting for that to be reinstalled."""
+        until = ev.get("until")
+        ref = now or datetime.now(timezone.utc)
+        if self._vacuum_until is not None and ref < self._vacuum_until:
+            return False                       # still inside one already posted
+        try:
+            self._vacuum_until = datetime.strptime(
+                until, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            self._vacuum_until = None
+        return True
 
     def allow(self, ev):
         try:
@@ -422,6 +442,8 @@ def render(ev, want, gate=None):
     the operator has switched on."""
     kind = ev.get("t")
     if kind not in want:
+        return None
+    if kind == "vacuum" and gate is not None and not gate.allow_vacuum(ev):
         return None
     if kind == "news" and gate is not None:
         ok, why = gate.allow(ev)

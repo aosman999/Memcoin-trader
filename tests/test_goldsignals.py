@@ -277,6 +277,42 @@ class TestNewsGate(unittest.TestCase):
         ordinary = gs.render(self.ev("routine story about the fed", 6.5), {"news"}, gate2)
         self.assertNotIn("MAJOR", ordinary)
 
+    def test_a_vacuum_window_being_extended_is_not_reannounced(self):
+        # The cBot re-arms on every news poll, so the channel got
+        # "heads up until 15:50", 15:53, 15:56, 15:59 -- three minutes apart,
+        # for as long as the wires stayed busy. Only the OPENING is news.
+        gate = gs.NewsGate()
+        now = datetime.now(timezone.utc)
+
+        def vac(minutes_ahead):
+            when = now + timedelta(minutes=minutes_ahead)
+            return {"t": "vacuum", "until": when.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "needs_atr": 1.1}
+
+        self.assertTrue(gate.allow_vacuum(vac(90), now=now))
+        self.assertFalse(gate.allow_vacuum(vac(93), now=now + timedelta(minutes=3)))
+        self.assertFalse(gate.allow_vacuum(vac(96), now=now + timedelta(minutes=6)))
+
+    def test_a_vacuum_window_reopening_after_a_gap_is_announced(self):
+        gate = gs.NewsGate()
+        now = datetime.now(timezone.utc)
+
+        def vac(base, minutes_ahead):
+            when = base + timedelta(minutes=minutes_ahead)
+            return {"t": "vacuum", "until": when.strftime("%Y-%m-%dT%H:%M:%SZ")}
+
+        self.assertTrue(gate.allow_vacuum(vac(now, 90), now=now))
+        later = now + timedelta(minutes=200)     # the first window has expired
+        self.assertTrue(gate.allow_vacuum(vac(later, 90), now=later))
+
+    def test_render_suppresses_the_repeat_vacuum(self):
+        gate = gs.NewsGate()
+        now = datetime.now(timezone.utc)
+        ev = {"t": "vacuum",
+              "until": (now + timedelta(minutes=90)).strftime("%Y-%m-%dT%H:%M:%SZ")}
+        self.assertIsNotNone(gs.render(ev, {"vacuum"}, gate))
+        self.assertIsNone(gs.render(ev, {"vacuum"}, gate))
+
     def test_a_busy_news_hour_cannot_flood_the_channel(self):
         gate = gs.NewsGate(min_impact=1.0, max_per_hour=2)
         self.assertTrue(gate.allow(self.ev("story one about iran nuclear"))[0])

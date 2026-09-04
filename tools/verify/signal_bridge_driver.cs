@@ -549,6 +549,20 @@ public static class BridgeSim
                                         : r.Num("price") > r.Num("level") + 0.011));
             Check(falseTp3 == 0, "and none of those claims a level the market never reached");
 
+            // ---- 7c. a vacuum window that is merely extended must not be
+            //          re-announced. The channel got "heads up until 15:50",
+            //          15:53, 15:56, 15:59 -- one per news poll.
+            var t0 = new DateTime(2026, 9, 4, 15, 0, 0, DateTimeKind.Utc);
+            var armed = t0.AddMinutes(90);
+            Check(GoldICT.VacuumIsNew(t0, DateTime.MinValue),
+                  "the first vacuum window IS announced");
+            Check(!GoldICT.VacuumIsNew(t0.AddMinutes(3), armed),
+                  "extending an open window is NOT announced again");
+            Check(!GoldICT.VacuumIsNew(t0.AddMinutes(89), armed),
+                  "still not announced a minute before it lapses");
+            Check(GoldICT.VacuumIsNew(t0.AddMinutes(91), armed),
+                  "a window reopening after the last one lapsed IS announced");
+
             // ---- 8. no credential can reach the feed
             var leaked = rows.Any(r => r.S.Values.Any(v => v.Contains(":AA")) ||
                                        r.S.Values.Any(v => v.Length > 40 && v.Contains(":")));

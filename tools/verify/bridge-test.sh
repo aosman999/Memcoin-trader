@@ -86,6 +86,10 @@ run_fault "position ids left out, so the feed cannot be reconciled" \
     "                    ids.Add(res.Position.Id);" \
     "                    { }"
 
+run_fault "vacuum window re-announced on every news poll" \
+    "            return now > armedUntil;" \
+    "            return true;"
+
 run_fault "feed written even when it is switched off" \
     "            if (!EmitSignalFeed || _feedBroken)
                 return;" \
